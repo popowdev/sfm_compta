@@ -231,6 +231,26 @@ export const companyExpenses = mysqlTable('company_expenses', {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const subventions = mysqlTable('subventions', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  motif: varchar('motif', { length: 200 }).notNull(),
+  requesterName: varchar('requester_name', { length: 120 }).notNull(),
+  amountRequested: decimal('amount_requested', { precision: 14, scale: 2 }).notNull(),
+  amountGranted: decimal('amount_granted', { precision: 14, scale: 2 }),
+  status: mysqlEnum('status', ['pending', 'approved', 'rejected', 'paid'])
+    .notNull()
+    .default('pending'),
+  requestedByUserId: int('requested_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  notes: text('notes'),
+  decidedAt: timestamp('decided_at'),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const sessions = mysqlTable('sessions', {
   id: varchar('id', { length: 64 }).primaryKey(),
   userId: int('user_id')
@@ -262,10 +282,15 @@ export const companiesRelations = relations(companies, ({ many }) => ({
   shareholders: many(shareholders),
   roles: many(companyRoles),
   expenses: many(companyExpenses),
+  subventions: many(subventions),
 }));
 
 export const companyExpensesRelations = relations(companyExpenses, ({ one }) => ({
   company: one(companies, { fields: [companyExpenses.companyId], references: [companies.id] }),
+}));
+
+export const subventionsRelations = relations(subventions, ({ one }) => ({
+  company: one(companies, { fields: [subventions.companyId], references: [companies.id] }),
 }));
 
 export const companyRolesRelations = relations(companyRoles, ({ one, many }) => ({
@@ -309,6 +334,7 @@ export type Grade = typeof companyRoles.$inferSelect;
 export type RolePermission = typeof rolePermissions.$inferSelect;
 export type Declaration = typeof declarations.$inferSelect;
 export type CompanyExpense = typeof companyExpenses.$inferSelect;
+export type Subvention = typeof subventions.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type TaxBracketRow = typeof taxBrackets.$inferSelect;
 export type FiscalConfigRow = typeof fiscalConfig.$inferSelect;

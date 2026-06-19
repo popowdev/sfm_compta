@@ -7,6 +7,7 @@ import Companies from '@/pages/Companies';
 import Fiscal from '@/pages/Fiscal';
 import Modules from '@/pages/Modules';
 import IrsDeclarations from '@/pages/IrsDeclarations';
+import IrsSubventions from '@/pages/IrsSubventions';
 import EntrepriseIndex from '@/pages/EntrepriseIndex';
 import ModulePage from '@/pages/ModulePage';
 import CompanySettings from '@/pages/CompanySettings';
@@ -55,6 +56,14 @@ function ProtectedApp() {
           element={
             <IrsRoute>
               <IrsDeclarations />
+            </IrsRoute>
+          }
+        />
+        <Route
+          path="/subventions"
+          element={
+            <IrsRoute>
+              <IrsSubventions />
             </IrsRoute>
           }
         />

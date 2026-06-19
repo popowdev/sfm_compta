@@ -6,12 +6,14 @@ import { getMyCompanies, type MyModule } from '@/lib/me';
 import { moduleIcon } from '@/lib/moduleIcons';
 import Declarations from '@/pages/Declarations';
 import Depenses from '@/pages/Depenses';
+import Subventions from '@/pages/Subventions';
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
 const CONTENT: Partial<Record<string, ComponentType>> = {
   declarations: Declarations,
   depenses: Depenses,
+  subventions: Subventions,
 };
 
 function Placeholder({ mod }: { mod: MyModule }) {

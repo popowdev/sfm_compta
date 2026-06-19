@@ -6,6 +6,7 @@ import {
   Building2,
   Scale,
   FileText,
+  HandCoins,
   SlidersHorizontal,
   Settings,
   ChevronDown,
@@ -124,6 +125,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             items: [
               { to: '/entreprises', label: 'Entreprises', Icon: Building2 },
               { to: '/declarations', label: 'Déclarations', Icon: FileText },
+              { to: '/subventions', label: 'Subventions', Icon: HandCoins },
               { to: '/bareme', label: 'Barème fiscal', Icon: Scale },
             ],
           },

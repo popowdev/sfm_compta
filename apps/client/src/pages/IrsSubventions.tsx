@@ -1,0 +1,168 @@
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fmtMoney } from '@/lib/declarations';
+import {
+  getAllSubventions,
+  decideSubvention,
+  type Subvention,
+  type SubventionStatus,
+} from '@/lib/subventions';
+import { SUB_STATUS } from '@/pages/Subventions';
+
+const actionBtn =
+  'rounded-md border border-input px-2 py-1 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50';
+
+export default function IrsSubventions() {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({ queryKey: ['irs-subventions'], queryFn: getAllSubventions });
+  const [grants, setGrants] = useState<Record<number, string>>({});
+
+  const decide = useMutation({
+    mutationFn: (v: { id: number; status: SubventionStatus; amountGranted?: number | null }) =>
+      decideSubvention(v.id, { status: v.status, amountGranted: v.amountGranted }),
+    onSuccess: (_data, v) => {
+      queryClient.invalidateQueries({ queryKey: ['irs-subventions'] });
+      setGrants((g) => {
+        const next = { ...g };
+        delete next[v.id];
+        return next;
+      });
+    },
+  });
+
+  const list = data ?? [];
+  const pending = list.filter((s) => s.status === 'pending').length;
+  const granted = list
+    .filter((s) => s.status === 'approved' || s.status === 'paid')
+    .reduce((sum, s) => sum + (s.amountGranted ?? 0), 0);
+
+  const grantValue = (s: Subvention) =>
+    grants[s.id] ?? String(s.amountGranted ?? s.amountRequested);
+
+  return (
+    <div className="p-8">
+      <h1 className="text-2xl font-bold tracking-tight">Subventions</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Toutes les demandes de subvention des entreprises du serveur.
+      </p>
+
+      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div className="rounded-xl border bg-card p-4">
+          <div className="text-xs text-muted-foreground">Demandes</div>
+          <div className="text-2xl font-bold">{list.length}</div>
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <div className="text-xs text-muted-foreground">En attente</div>
+          <div className="text-2xl font-bold text-amber-400">{pending}</div>
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <div className="text-xs text-muted-foreground">Total accordé</div>
+          <div className="text-2xl font-bold text-primary">{fmtMoney(granted)} $</div>
+        </div>
+      </div>
+
+      <div className="mt-6 overflow-hidden rounded-xl border bg-card">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse whitespace-nowrap text-sm">
+            <thead>
+              <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="px-4 py-3 text-left font-semibold">Entreprise</th>
+                <th className="px-4 py-3 text-left font-semibold">Motif</th>
+                <th className="px-4 py-3 text-left font-semibold">Demandeur</th>
+                <th className="px-4 py-3 text-right font-semibold">Demandé</th>
+                <th className="px-4 py-3 text-right font-semibold">Accordé</th>
+                <th className="px-4 py-3 text-left font-semibold">Statut</th>
+                <th className="px-4 py-3 text-right font-semibold">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((s) => (
+                <tr key={s.id} className="border-b last:border-b-0">
+                  <td className="px-4 py-3 font-medium">{s.companyName}</td>
+                  <td className="px-4 py-3">{s.motif}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{s.requesterName}</td>
+                  <td className="px-4 py-3 text-right">{fmtMoney(s.amountRequested)} $</td>
+                  <td className="px-4 py-3 text-right">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={grantValue(s)}
+                      onChange={(e) => setGrants((g) => ({ ...g, [s.id]: e.target.value }))}
+                      className="h-8 w-28 rounded-md border border-input bg-background px-2 text-right text-sm outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded-md px-2 py-0.5 text-xs font-medium ${SUB_STATUS[s.status].cls}`}
+                    >
+                      {SUB_STATUS[s.status].label}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex justify-end gap-1">
+                      {s.status !== 'approved' && s.status !== 'paid' && (
+                        <button
+                          className={actionBtn}
+                          disabled={decide.isPending}
+                          onClick={() =>
+                            decide.mutate({
+                              id: s.id,
+                              status: 'approved',
+                              amountGranted: Number(grantValue(s)) || s.amountRequested,
+                            })
+                          }
+                        >
+                          Accorder
+                        </button>
+                      )}
+                      {s.status !== 'paid' && (
+                        <button
+                          className={actionBtn}
+                          disabled={decide.isPending}
+                          onClick={() =>
+                            decide.mutate({
+                              id: s.id,
+                              status: 'paid',
+                              amountGranted: Number(grantValue(s)) || s.amountRequested,
+                            })
+                          }
+                        >
+                          Verser
+                        </button>
+                      )}
+                      {s.status !== 'rejected' && (
+                        <button
+                          className={actionBtn}
+                          disabled={decide.isPending}
+                          onClick={() => decide.mutate({ id: s.id, status: 'rejected' })}
+                        >
+                          Refuser
+                        </button>
+                      )}
+                      {s.status !== 'pending' && (
+                        <button
+                          className={actionBtn}
+                          disabled={decide.isPending}
+                          onClick={() => decide.mutate({ id: s.id, status: 'pending', amountGranted: null })}
+                        >
+                          Rouvrir
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {list.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-4 text-muted-foreground">
+                    Aucune demande de subvention.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}

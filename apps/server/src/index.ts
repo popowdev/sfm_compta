@@ -17,6 +17,7 @@ import { membersRouter } from './routes/members';
 import { meRouter } from './routes/me';
 import { meDeclarationsRouter, irsDeclarationsRouter } from './routes/declarations';
 import { meExpensesRouter } from './routes/expenses';
+import { meSubventionsRouter, irsSubventionsRouter } from './routes/subventions';
 import { adminModulesRouter } from './routes/adminModules';
 import { fiscalRouter } from './routes/fiscal';
 import { createSocketServer } from './realtime/socket';
@@ -47,7 +48,9 @@ app.use('/api/companies/:companyId/members', membersRouter);
 app.use('/api/me', meRouter);
 app.use('/api/me/companies/:companyId/declarations', meDeclarationsRouter);
 app.use('/api/me/companies/:companyId/expenses', meExpensesRouter);
+app.use('/api/me/companies/:companyId/subventions', meSubventionsRouter);
 app.use('/api/declarations', irsDeclarationsRouter);
+app.use('/api/subventions', irsSubventionsRouter);
 app.use('/api/admin/modules', adminModulesRouter);
 app.use('/api/fiscal', fiscalRouter);
 
