@@ -1,7 +1,9 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SessionUser } from '@rp-compta/shared';
+import { SOCKET_EVENTS } from '@rp-compta/shared';
 import { apiFetch, ApiError } from '@/lib/api';
+import { getSocket } from '@/lib/socket';
 
 interface AuthState {
   user: SessionUser | null;
@@ -26,6 +28,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     retry: false,
   });
+
+  useEffect(() => {
+    if (!data) return;
+    const socket = getSocket();
+    const onRevoked = () => queryClient.setQueryData(['me'], null);
+    socket.on(SOCKET_EVENTS.sessionRevoked, onRevoked);
+    return () => {
+      socket.off(SOCKET_EVENTS.sessionRevoked, onRevoked);
+    };
+  }, [data, queryClient]);
 
   const logout = async () => {
     await apiFetch<{ ok: boolean }>('/api/auth/logout', { method: 'POST' });

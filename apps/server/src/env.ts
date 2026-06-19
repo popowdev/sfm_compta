@@ -15,6 +15,7 @@ const envSchema = z.object({
   DB_NAME: z.string().default('rp-compta'),
 
   SESSION_SECRET: z.string().min(16).default('dev-only-secret-change-me-please!'),
+  INTERNAL_API_KEY: z.string().optional(),
 
   DISCORD_CLIENT_ID: z.string().optional(),
   DISCORD_CLIENT_SECRET: z.string().optional(),
