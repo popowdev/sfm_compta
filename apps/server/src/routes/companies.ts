@@ -8,6 +8,7 @@ import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { slugify, uniqueSlug } from '../services/companies';
 import { getEffectiveModules, isModuleBlocked } from '../services/modules';
+import { emitInvalidate } from '../realtime/socket';
 
 export const companiesRouter = Router();
 
@@ -65,6 +66,7 @@ companiesRouter.post(
       return newId;
     });
     const created = await db.select().from(companies).where(eq(companies.id, id)).limit(1);
+    emitInvalidate('irs', [['companies']]);
     res.status(201).json(created[0]);
   }),
 );
@@ -88,6 +90,7 @@ companiesRouter.patch(
       await db.update(companies).set(parsed.data).where(eq(companies.id, id));
     }
     const updated = await db.select().from(companies).where(eq(companies.id, id)).limit(1);
+    emitInvalidate('irs', [['companies']]);
     res.json(updated[0]);
   }),
 );
@@ -132,6 +135,7 @@ companiesRouter.put(
       .insert(companyModules)
       .values({ companyId: id, moduleKey, enabled: parsed.data.enabled })
       .onDuplicateKeyUpdate({ set: { enabled: parsed.data.enabled } });
+    emitInvalidate(['irs', `company:${id}`], [['company-modules', id], ['companies']]);
     res.json({ ok: true });
   }),
 );

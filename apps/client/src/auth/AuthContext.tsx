@@ -33,9 +33,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!data) return;
     const socket = getSocket();
     const onRevoked = () => queryClient.setQueryData(['me'], null);
+    const onInvalidate = (keys: unknown) => {
+      if (!Array.isArray(keys)) return;
+      for (const key of keys) {
+        if (Array.isArray(key)) queryClient.invalidateQueries({ queryKey: key });
+      }
+    };
     socket.on(SOCKET_EVENTS.sessionRevoked, onRevoked);
+    socket.on(SOCKET_EVENTS.dataInvalidate, onInvalidate);
     return () => {
       socket.off(SOCKET_EVENTS.sessionRevoked, onRevoked);
+      socket.off(SOCKET_EVENTS.dataInvalidate, onInvalidate);
     };
   }, [data, queryClient]);
 

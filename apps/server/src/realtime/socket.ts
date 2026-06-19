@@ -1,7 +1,11 @@
 import type { Server as HttpServer } from 'node:http';
 import { Server as IOServer } from 'socket.io';
+import { and, eq } from 'drizzle-orm';
+import { SOCKET_EVENTS } from '@rp-compta/shared';
 import { env } from '../env';
 import { logger } from '../logger';
+import { db } from '../db';
+import { userAppRoles, memberships } from '../db/schema';
 import { getSessionUser, SESSION_COOKIE } from '../auth/session';
 
 let io: IOServer | null = null;
@@ -25,14 +29,33 @@ export function createSocketServer(httpServer: HttpServer): IOServer {
     const sid = readCookie(socket.handshake.headers.cookie, SESSION_COOKIE);
     if (sid) {
       const user = await getSessionUser(sid);
-      if (user) socket.data.userId = user.id;
+      if (user) {
+        socket.data.userId = user.id;
+        const roleRows = await db
+          .select({ role: userAppRoles.role })
+          .from(userAppRoles)
+          .where(eq(userAppRoles.userId, user.id));
+        socket.data.appRoles = roleRows.map((r) => r.role);
+        const memRows = await db
+          .select({ companyId: memberships.companyId })
+          .from(memberships)
+          .where(and(eq(memberships.userId, user.id), eq(memberships.active, true)));
+        socket.data.companyIds = memRows.map((r) => r.companyId);
+      }
     }
     next();
   });
 
   io.on('connection', (socket) => {
     const userId = socket.data.userId as number | undefined;
-    if (userId) socket.join(`user:${userId}`);
+    if (userId) {
+      socket.join(`user:${userId}`);
+      const appRoles = (socket.data.appRoles as string[] | undefined) ?? [];
+      if (appRoles.includes('irs') || appRoles.includes('staff')) socket.join('irs');
+      for (const cid of (socket.data.companyIds as number[] | undefined) ?? []) {
+        socket.join(`company:${cid}`);
+      }
+    }
     socket.on('disconnect', (reason) => logger.debug({ id: socket.id, reason }, 'socket déconnecté'));
   });
 
@@ -41,4 +64,8 @@ export function createSocketServer(httpServer: HttpServer): IOServer {
 
 export function getIo(): IOServer | null {
   return io;
+}
+
+export function emitInvalidate(rooms: string | string[], keys: (string | number)[][]): void {
+  io?.to(rooms).emit(SOCKET_EVENTS.dataInvalidate, keys);
 }
