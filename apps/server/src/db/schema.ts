@@ -104,9 +104,25 @@ export const companyModules = mysqlTable(
   }),
 );
 
+export const sessions = mysqlTable('sessions', {
+  id: varchar('id', { length: 64 }).primaryKey(),
+  userId: int('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const usersRelations = relations(users, ({ many }) => ({
   appRoles: many(userAppRoles),
   memberships: many(memberships),
+  sessions: many(sessions),
+}));
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, { fields: [sessions.userId], references: [users.id] }),
 }));
 
 export const userAppRolesRelations = relations(userAppRoles, ({ one }) => ({
@@ -134,3 +150,4 @@ export type NewCompany = typeof companies.$inferInsert;
 export type Membership = typeof memberships.$inferSelect;
 export type NewMembership = typeof memberships.$inferInsert;
 export type CompanyModule = typeof companyModules.$inferSelect;
+export type Session = typeof sessions.$inferSelect;

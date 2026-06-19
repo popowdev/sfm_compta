@@ -8,10 +8,13 @@ import rateLimit from 'express-rate-limit';
 import { env } from './env';
 import { logger } from './logger';
 import { healthRouter } from './routes/health';
+import { authRouter } from './routes/auth';
 import { createSocketServer } from './realtime/socket';
+import { purgeExpiredSessions } from './auth/session';
 
 const app = express();
 app.disable('x-powered-by');
+app.set('trust proxy', 1);
 
 app.use(helmet());
 app.use(cors({ origin: env.CLIENT_ORIGIN, credentials: true }));
@@ -21,11 +24,19 @@ app.use(pinoHttp({ logger }));
 
 app.use('/api', rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: true, legacyHeaders: false }));
 
+const authLimiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false });
+
 app.use('/health', healthRouter);
 app.use('/api/health', healthRouter);
+app.use('/api/auth', authLimiter, authRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'not_found' });
+});
+
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error({ err }, 'unhandled error');
+  res.status(500).json({ error: 'internal_error' });
 });
 
 const httpServer = createServer(app);
@@ -34,3 +45,10 @@ createSocketServer(httpServer);
 httpServer.listen(env.PORT, () => {
   logger.info(`RP Compta API → http://127.0.0.1:${env.PORT} (${env.NODE_ENV})`);
 });
+
+setInterval(
+  () => {
+    void purgeExpiredSessions().catch((err) => logger.error({ err }, 'purge sessions failed'));
+  },
+  60 * 60 * 1000,
+).unref();

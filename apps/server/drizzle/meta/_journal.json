@@ -15,6 +15,13 @@
       "when": 1781887623466,
       "tag": "0001_fast_falcon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1781888172629,
+      "tag": "0002_abnormal_masque",
+      "breakpoints": true
     }
   ]
 }
