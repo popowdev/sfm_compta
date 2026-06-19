@@ -44,11 +44,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const isIrs = hasAppAccess(roles, 'irs');
   const roleLabel = roles.includes('staff') ? 'Staff' : roles.includes('irs') ? 'Agent IRS' : null;
 
-  const items: NavItem[] = [
-    { to: '/', label: 'Tableau de bord', Icon: LayoutDashboard, end: true },
-    ...(isIrs ? [{ to: '/entreprises', label: 'Entreprises', Icon: Building2 }] : []),
+  const groups: { title: string | null; items: NavItem[] }[] = [
+    { title: null, items: [{ to: '/', label: 'Tableau de bord', Icon: LayoutDashboard, end: true }] },
+    ...(isIrs
+      ? [{ title: 'IRS', items: [{ to: '/entreprises', label: 'Entreprises', Icon: Building2 }] }]
+      : []),
     ...(roles.includes('staff')
-      ? [{ to: '/modules', label: 'Modules', Icon: SlidersHorizontal }]
+      ? [{ title: 'Staff', items: [{ to: '/modules', label: 'Modules', Icon: SlidersHorizontal }] }]
       : []),
   ];
 
@@ -77,18 +79,32 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </button>
         </div>
 
-        <nav className="flex-1 space-y-1 px-2 py-2">
-          {items.map((it) => (
-            <NavLink
-              key={it.to}
-              to={it.to}
-              end={it.end}
-              title={collapsed ? it.label : undefined}
-              className={({ isActive }) => navClass(isActive, collapsed)}
-            >
-              <it.Icon className="h-[18px] w-[18px] shrink-0" />
-              {!collapsed && <span>{it.label}</span>}
-            </NavLink>
+        <nav className="flex-1 overflow-auto px-2 py-2">
+          {groups.map((g, gi) => (
+            <div key={g.title ?? `g${gi}`} className={gi > 0 ? 'pt-2' : ''}>
+              {g.title &&
+                (collapsed ? (
+                  <div className="mx-2 my-2 border-t border-sidebar-accent" />
+                ) : (
+                  <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {g.title}
+                  </div>
+                ))}
+              <div className="space-y-1">
+                {g.items.map((it) => (
+                  <NavLink
+                    key={it.to}
+                    to={it.to}
+                    end={it.end}
+                    title={collapsed ? it.label : undefined}
+                    className={({ isActive }) => navClass(isActive, collapsed)}
+                  >
+                    <it.Icon className="h-[18px] w-[18px] shrink-0" />
+                    {!collapsed && <span>{it.label}</span>}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
 
