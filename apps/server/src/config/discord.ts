@@ -54,14 +54,22 @@ export async function fetchDiscordUser(accessToken: string): Promise<DiscordUser
   return (await res.json()) as DiscordUser;
 }
 
-export async function fetchGuildMemberRoles(accessToken: string, guildId: string): Promise<string[]> {
+export interface DiscordGuildMember {
+  roles: string[];
+  nick: string | null;
+}
+
+export async function fetchGuildMember(
+  accessToken: string,
+  guildId: string,
+): Promise<DiscordGuildMember> {
   const res = await fetch(`${DISCORD_API}/users/@me/guilds/${guildId}/member`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (res.status === 404) return [];
+  if (res.status === 404) return { roles: [], nick: null };
   if (!res.ok) throw new Error(`discord member fetch failed: ${res.status}`);
-  const data = (await res.json()) as { roles?: string[] };
-  return data.roles ?? [];
+  const data = (await res.json()) as { roles?: string[]; nick?: string | null };
+  return { roles: data.roles ?? [], nick: data.nick ?? null };
 }
 
 export function discordAvatarUrl(userId: string, avatar: string | null): string | null {

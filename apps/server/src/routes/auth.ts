@@ -10,7 +10,7 @@ import {
   buildAuthorizeUrl,
   exchangeCode,
   fetchDiscordUser,
-  fetchGuildMemberRoles,
+  fetchGuildMember,
   discordAvatarUrl,
 } from '../config/discord';
 import {
@@ -54,14 +54,17 @@ authRouter.get('/discord/callback', async (req, res) => {
     const token = await exchangeCode(code);
     const discordUser = await fetchDiscordUser(token.access_token);
 
-    const whitelistConfigured = Boolean(env.DISCORD_GUILD_ID && env.DISCORD_WHITELIST_ROLE_ID);
-    let whitelisted = false;
-    if (whitelistConfigured) {
-      const roles = await fetchGuildMemberRoles(token.access_token, env.DISCORD_GUILD_ID!);
-      whitelisted = roles.includes(env.DISCORD_WHITELIST_ROLE_ID!);
+    let roles: string[] = [];
+    let nick: string | null = null;
+    if (env.DISCORD_GUILD_ID) {
+      const member = await fetchGuildMember(token.access_token, env.DISCORD_GUILD_ID);
+      roles = member.roles;
+      nick = member.nick;
     }
+    const whitelistConfigured = Boolean(env.DISCORD_GUILD_ID && env.DISCORD_WHITELIST_ROLE_ID);
+    const whitelisted = whitelistConfigured && roles.includes(env.DISCORD_WHITELIST_ROLE_ID!);
 
-    const displayName = discordUser.global_name ?? discordUser.username;
+    const displayName = nick ?? discordUser.global_name ?? discordUser.username;
     const avatarUrl = discordAvatarUrl(discordUser.id, discordUser.avatar);
     const now = new Date();
 
