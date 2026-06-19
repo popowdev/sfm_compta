@@ -49,6 +49,7 @@ export const companies = mysqlTable('companies', {
   logoUrl: varchar('logo_url', { length: 255 }),
   fivemJob: varchar('fivem_job', { length: 64 }).unique(),
   externalLink: varchar('external_link', { length: 255 }),
+  valuation: decimal('valuation', { precision: 14, scale: 2 }).notNull().default('0'),
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at')
     .notNull()
@@ -104,6 +105,25 @@ export const companyModules = mysqlTable(
     uqCompanyModule: unique('uq_company_module').on(t.companyId, t.moduleKey),
   }),
 );
+
+export const shareholders = mysqlTable('shareholders', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 120 }).notNull(),
+  percentage: decimal('percentage', { precision: 5, scale: 2 }).notNull(),
+  shareType: varchar('share_type', { length: 40 }).notNull().default('ordinaire'),
+  anonymous: boolean('anonymous').notNull().default(false),
+  publicName: varchar('public_name', { length: 120 }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`)
+    .onUpdateNow(),
+});
 
 export const moduleSettings = mysqlTable('module_settings', {
   moduleKey: mysqlEnum('module_key', MODULE_KEYS).primaryKey(),
@@ -162,6 +182,11 @@ export const userAppRolesRelations = relations(userAppRoles, ({ one }) => ({
 export const companiesRelations = relations(companies, ({ many }) => ({
   memberships: many(memberships),
   modules: many(companyModules),
+  shareholders: many(shareholders),
+}));
+
+export const shareholdersRelations = relations(shareholders, ({ one }) => ({
+  company: one(companies, { fields: [shareholders.companyId], references: [companies.id] }),
 }));
 
 export const membershipsRelations = relations(memberships, ({ one }) => ({
@@ -180,6 +205,7 @@ export type NewCompany = typeof companies.$inferInsert;
 export type Membership = typeof memberships.$inferSelect;
 export type NewMembership = typeof memberships.$inferInsert;
 export type CompanyModule = typeof companyModules.$inferSelect;
+export type Shareholder = typeof shareholders.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type TaxBracketRow = typeof taxBrackets.$inferSelect;
 export type FiscalConfigRow = typeof fiscalConfig.$inferSelect;

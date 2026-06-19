@@ -7,7 +7,25 @@ export interface Company {
   slug: string;
   logoUrl: string | null;
   fivemJob: string | null;
+  valuation: string;
   active: boolean;
+}
+
+export interface Shareholder {
+  id: number;
+  name: string;
+  percentage: number;
+  shareType: string;
+  anonymous: boolean;
+  publicName: string | null;
+}
+
+export interface ShareholderInput {
+  name: string;
+  percentage: number;
+  shareType?: string;
+  anonymous?: boolean;
+  publicName?: string | null;
 }
 
 export interface ModuleState {
@@ -32,3 +50,18 @@ export const toggleModule = (id: number, key: ModuleKey, enabled: boolean) =>
     method: 'PUT',
     body: JSON.stringify({ enabled }),
   });
+
+export const updateCompany = (id: number, body: Partial<{ valuation: number; active: boolean }>) =>
+  apiFetch<Company>(`/api/companies/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+export const getShareholders = (companyId: number) =>
+  apiFetch<Shareholder[]>(`/api/companies/${companyId}/shareholders`);
+
+export const addShareholder = (companyId: number, body: ShareholderInput) =>
+  apiFetch<{ ok: boolean }>(`/api/companies/${companyId}/shareholders`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+
+export const deleteShareholder = (companyId: number, id: number) =>
+  apiFetch<{ ok: boolean }>(`/api/companies/${companyId}/shareholders/${id}`, { method: 'DELETE' });

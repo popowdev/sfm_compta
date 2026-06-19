@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, ChevronRight } from 'lucide-react';
+import { Plus, ChevronRight, Trash2 } from 'lucide-react';
 import type { ModuleKey } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -9,9 +9,20 @@ import {
   createCompany,
   getCompanyModules,
   toggleModule,
+  getShareholders,
+  addShareholder,
+  deleteShareholder,
+  updateCompany,
   type Company,
   type ModuleState,
 } from '@/lib/companies';
+
+const inputCls =
+  'h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
+
+function fmt(n: number): string {
+  return n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 function initials(name: string): string {
   return (
@@ -51,42 +62,236 @@ function ModulesPanel({ company }: { company: Company }) {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-1 text-base font-semibold">{company.name}</div>
-      <p className="mb-5 text-sm text-muted-foreground">
-        Active ou désactive les modules de comptabilité de cette entreprise.
-      </p>
-      <div className="space-y-5">
-        {groups.map((g) => (
-          <div key={g.group}>
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {g.group}
+    <div className="space-y-5 p-6">
+      {groups.map((g) => (
+        <div key={g.group}>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {g.group}
+          </div>
+          <div className="overflow-hidden rounded-lg border">
+            {g.items.map((m, i) => (
+              <div
+                key={m.key}
+                className={`flex items-center justify-between px-4 py-3 ${i > 0 ? 'border-t' : ''}`}
+              >
+                <span className="flex items-center gap-2 text-sm">
+                  <span className={m.blocked ? 'text-muted-foreground' : ''}>{m.label}</span>
+                  {m.blocked && (
+                    <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-400">
+                      maintenance
+                    </span>
+                  )}
+                </span>
+                <Switch
+                  checked={m.enabled && !m.blocked}
+                  disabled={toggle.isPending || m.blocked}
+                  onChange={() => toggle.mutate({ key: m.key, enabled: !m.enabled })}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ShareholdersPanel({ company }: { company: Company }) {
+  const queryClient = useQueryClient();
+  const valuation = Number(company.valuation) || 0;
+  const [valDraft, setValDraft] = useState(String(valuation));
+  useEffect(() => setValDraft(String(Number(company.valuation) || 0)), [company.valuation, company.id]);
+
+  const { data: list } = useQuery({
+    queryKey: ['shareholders', company.id],
+    queryFn: () => getShareholders(company.id),
+  });
+
+  const saveVal = useMutation({
+    mutationFn: () => updateCompany(company.id, { valuation: Number(valDraft) || 0 }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['companies'] }),
+  });
+  const remove = useMutation({
+    mutationFn: (id: number) => deleteShareholder(company.id, id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['shareholders', company.id] }),
+  });
+
+  const [name, setName] = useState('');
+  const [pct, setPct] = useState('');
+  const [anon, setAnon] = useState(false);
+  const [pub, setPub] = useState('');
+  const add = useMutation({
+    mutationFn: () =>
+      addShareholder(company.id, {
+        name: name.trim(),
+        percentage: Number(pct) || 0,
+        anonymous: anon,
+        publicName: anon ? pub.trim() || null : null,
+      }),
+    onSuccess: () => {
+      setName('');
+      setPct('');
+      setAnon(false);
+      setPub('');
+      queryClient.invalidateQueries({ queryKey: ['shareholders', company.id] });
+    },
+  });
+
+  const total = (list ?? []).reduce((s, x) => s + x.percentage, 0);
+  const perPart = valuation / 100;
+
+  return (
+    <div className="space-y-5 p-6">
+      <div className="rounded-lg border p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Valorisation
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <input
+            type="number"
+            value={valDraft}
+            onChange={(e) => setValDraft(e.target.value)}
+            className={`${inputCls} w-44`}
+          />
+          <span className="text-sm text-muted-foreground">$ total</span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={saveVal.isPending || Number(valDraft) === valuation}
+            onClick={() => saveVal.mutate()}
+          >
+            Enregistrer
+          </Button>
+          <span className="ml-auto text-sm text-muted-foreground">
+            Valeur d'une part (1%) : <span className="font-medium text-foreground">{fmt(perPart)} $</span>
+          </span>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-lg border">
+        <div className="flex items-center gap-3 border-b px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <span className="flex-1">Actionnaire</span>
+          <span className="w-16 text-right">Parts</span>
+          <span className="w-28 text-right">Valeur</span>
+          <span className="w-9" />
+        </div>
+        {(list ?? []).map((s) => (
+          <div key={s.id} className="flex items-center gap-3 border-b px-4 py-3 last:border-b-0">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium">{s.name}</div>
+              <div className="text-xs text-muted-foreground">
+                {s.shareType}
+                {s.anonymous && (
+                  <span className="ml-2 text-amber-400">anonyme · {s.publicName || 'Investisseur privé'}</span>
+                )}
+              </div>
             </div>
-            <div className="overflow-hidden rounded-lg border">
-              {g.items.map((m, i) => (
-                <div
-                  key={m.key}
-                  className={`flex items-center justify-between px-4 py-3 ${i > 0 ? 'border-t' : ''}`}
-                >
-                  <span className="flex items-center gap-2 text-sm">
-                    <span className={m.blocked ? 'text-muted-foreground' : ''}>{m.label}</span>
-                    {m.blocked && (
-                      <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-400">
-                        maintenance
-                      </span>
-                    )}
-                  </span>
-                  <Switch
-                    checked={m.enabled && !m.blocked}
-                    disabled={toggle.isPending || m.blocked}
-                    onChange={() => toggle.mutate({ key: m.key, enabled: !m.enabled })}
-                  />
-                </div>
-              ))}
-            </div>
+            <span className="w-16 text-right text-sm">{s.percentage}%</span>
+            <span className="w-28 text-right text-sm">{fmt((valuation * s.percentage) / 100)} $</span>
+            <button
+              type="button"
+              onClick={() => remove.mutate(s.id)}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+              aria-label="Supprimer"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
           </div>
         ))}
+        {(list ?? []).length === 0 && (
+          <div className="px-4 py-4 text-sm text-muted-foreground">Aucun actionnaire.</div>
+        )}
+        <div className="flex items-center justify-between border-t px-4 py-2 text-xs">
+          <span className="text-muted-foreground">Total des parts attribuées</span>
+          <span className={`font-semibold ${total > 100 ? 'text-destructive' : 'text-foreground'}`}>
+            {total}%
+          </span>
+        </div>
       </div>
+
+      <form
+        className="rounded-lg border p-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (name.trim() && pct) add.mutate();
+        }}
+      >
+        <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Ajouter un actionnaire
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <input
+            placeholder="Nom"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className={`${inputCls} flex-1`}
+          />
+          <input
+            type="number"
+            placeholder="%"
+            value={pct}
+            onChange={(e) => setPct(e.target.value)}
+            className={`${inputCls} w-20`}
+          />
+          <Button type="submit" disabled={!name.trim() || !pct || add.isPending}>
+            <Plus className="h-4 w-4" />
+            Ajouter
+          </Button>
+        </div>
+        <label className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+          <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} />
+          Rendre anonyme côté public
+        </label>
+        {anon && (
+          <input
+            placeholder="Nom public (ex. Investisseur privé)"
+            value={pub}
+            onChange={(e) => setPub(e.target.value)}
+            className={`${inputCls} mt-2 w-full`}
+          />
+        )}
+      </form>
+    </div>
+  );
+}
+
+function TabBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+        active
+          ? 'border-primary text-foreground'
+          : 'border-transparent text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CompanyDetail({ company }: { company: Company }) {
+  const [tab, setTab] = useState<'modules' | 'shareholders'>('modules');
+  return (
+    <div>
+      <div className="flex items-center gap-1 border-b px-3">
+        <TabBtn active={tab === 'modules'} onClick={() => setTab('modules')}>
+          Modules
+        </TabBtn>
+        <TabBtn active={tab === 'shareholders'} onClick={() => setTab('shareholders')}>
+          Actionnaires
+        </TabBtn>
+      </div>
+      {tab === 'modules' ? <ModulesPanel company={company} /> : <ShareholdersPanel company={company} />}
     </div>
   );
 }
@@ -94,14 +299,16 @@ function ModulesPanel({ company }: { company: Company }) {
 export default function Companies() {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
-  const [selected, setSelected] = useState<Company | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const companies = useQuery({ queryKey: ['companies'], queryFn: getCompanies });
+  const selected = companies.data?.find((c) => c.id === selectedId) ?? null;
+
   const create = useMutation({
     mutationFn: () => createCompany({ name: name.trim() }),
     onSuccess: (c) => {
       setName('');
-      setSelected(c);
+      setSelectedId(c.id);
       queryClient.invalidateQueries({ queryKey: ['companies'] });
     },
   });
@@ -110,7 +317,7 @@ export default function Companies() {
     <div className="p-8">
       <h1 className="text-2xl font-bold tracking-tight">Entreprises</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Crée les entreprises du serveur et configure leurs modules.
+        Crée les entreprises du serveur, configure leurs modules et leurs actionnaires.
       </p>
 
       <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[1.1fr_1fr]">
@@ -126,7 +333,7 @@ export default function Companies() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Nom de l'entreprise"
-              className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
+              className={`${inputCls} flex-1`}
             />
             <Button type="submit" disabled={!name.trim() || create.isPending}>
               <Plus className="h-4 w-4" />
@@ -144,9 +351,9 @@ export default function Companies() {
             {companies.data?.map((c) => (
               <button
                 key={c.id}
-                onClick={() => setSelected(c)}
+                onClick={() => setSelectedId(c.id)}
                 className={`flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-accent ${
-                  selected?.id === c.id ? 'bg-accent' : ''
+                  selectedId === c.id ? 'bg-accent' : ''
                 }`}
               >
                 <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg border bg-background text-xs font-semibold text-primary">
@@ -169,7 +376,7 @@ export default function Companies() {
                 </span>
                 <ChevronRight
                   className={`h-4 w-4 shrink-0 ${
-                    selected?.id === c.id ? 'text-primary' : 'text-muted-foreground'
+                    selectedId === c.id ? 'text-primary' : 'text-muted-foreground'
                   }`}
                 />
               </button>
@@ -179,10 +386,10 @@ export default function Companies() {
 
         <div className="rounded-xl border bg-card">
           {selected ? (
-            <ModulesPanel company={selected} />
+            <CompanyDetail company={selected} />
           ) : (
             <div className="p-6 text-sm text-muted-foreground">
-              Sélectionne une entreprise pour gérer ses modules.
+              Sélectionne une entreprise pour gérer ses modules et actionnaires.
             </div>
           )}
         </div>

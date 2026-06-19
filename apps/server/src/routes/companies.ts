@@ -76,6 +76,7 @@ const patchSchema = z.object({
   fivemJob: z.string().max(64).nullable().optional(),
   logoUrl: z.string().url().max(255).nullable().optional(),
   active: z.boolean().optional(),
+  valuation: z.number().min(0).optional(),
 });
 
 companiesRouter.patch(
@@ -86,8 +87,13 @@ companiesRouter.patch(
     const parsed = patchSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     if (!(await findActiveCompany(id))) return res.status(404).json({ error: 'not_found' });
-    if (Object.keys(parsed.data).length > 0) {
-      await db.update(companies).set(parsed.data).where(eq(companies.id, id));
+    const { valuation, ...rest } = parsed.data;
+    const updates = {
+      ...rest,
+      ...(valuation !== undefined ? { valuation: String(valuation) } : {}),
+    };
+    if (Object.keys(updates).length > 0) {
+      await db.update(companies).set(updates).where(eq(companies.id, id));
     }
     const updated = await db.select().from(companies).where(eq(companies.id, id)).limit(1);
     emitInvalidate('irs', [['companies']]);
