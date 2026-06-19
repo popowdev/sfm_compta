@@ -1,0 +1,2 @@
+ALTER TABLE `memberships` ADD `company_role_id` int;--> statement-breakpoint
+ALTER TABLE `memberships` ADD CONSTRAINT `memberships_company_role_id_company_roles_id_fk` FOREIGN KEY (`company_role_id`) REFERENCES `company_roles`(`id`) ON DELETE set null ON UPDATE no action;

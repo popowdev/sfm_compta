@@ -10,7 +10,7 @@ import {
   decimal,
   unique,
 } from 'drizzle-orm/mysql-core';
-import { APP_ROLES, COMPANY_ROLES, MODULE_KEYS } from '@rp-compta/shared';
+import { APP_ROLES, MODULE_KEYS } from '@rp-compta/shared';
 
 export const users = mysqlTable('users', {
   id: int('id').autoincrement().primaryKey(),
@@ -71,7 +71,9 @@ export const memberships = mysqlTable(
     userId: int('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    role: mysqlEnum('role', COMPANY_ROLES).notNull().default('employe'),
+    companyRoleId: int('company_role_id').references(() => companyRoles.id, {
+      onDelete: 'set null',
+    }),
     active: boolean('active').notNull().default(true),
     createdAt: timestamp('created_at')
       .notNull()
@@ -234,6 +236,10 @@ export const shareholdersRelations = relations(shareholders, ({ one }) => ({
 export const membershipsRelations = relations(memberships, ({ one }) => ({
   company: one(companies, { fields: [memberships.companyId], references: [companies.id] }),
   user: one(users, { fields: [memberships.userId], references: [users.id] }),
+  grade: one(companyRoles, {
+    fields: [memberships.companyRoleId],
+    references: [companyRoles.id],
+  }),
 }));
 
 export const companyModulesRelations = relations(companyModules, ({ one }) => ({

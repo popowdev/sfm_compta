@@ -18,6 +18,7 @@ import {
   type ModuleState,
 } from '@/lib/companies';
 import { getGrades, createGrade, deleteGrade, setGradePermission } from '@/lib/grades';
+import { getMembers, addMember, setMemberGrade, removeMember } from '@/lib/members';
 
 const inputCls =
   'h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
@@ -488,6 +489,137 @@ function GradesPanel({ company }: { company: Company }) {
   );
 }
 
+function MembersPanel({ company }: { company: Company }) {
+  const queryClient = useQueryClient();
+  const members = useQuery({ queryKey: ['members', company.id], queryFn: () => getMembers(company.id) });
+  const gradesQ = useQuery({ queryKey: ['grades', company.id], queryFn: () => getGrades(company.id) });
+  const grades = gradesQ.data?.grades ?? [];
+
+  const [discordId, setDiscordId] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [gradeId, setGradeId] = useState<number | ''>('');
+
+  useEffect(() => {
+    if (gradeId === '' && grades[0]) setGradeId(grades[0].id);
+  }, [grades, gradeId]);
+
+  const add = useMutation({
+    mutationFn: () =>
+      addMember(company.id, {
+        discordId: discordId.trim(),
+        displayName: displayName.trim(),
+        gradeId: Number(gradeId),
+      }),
+    onSuccess: () => {
+      setDiscordId('');
+      setDisplayName('');
+      queryClient.invalidateQueries({ queryKey: ['members', company.id] });
+    },
+  });
+  const setGrade = useMutation({
+    mutationFn: (v: { mid: number; gradeId: number }) => setMemberGrade(company.id, v.mid, v.gradeId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['members', company.id] }),
+  });
+  const remove = useMutation({
+    mutationFn: (mid: number) => removeMember(company.id, mid),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['members', company.id] }),
+  });
+
+  const selectCls = `${inputCls} w-36 cursor-pointer`;
+
+  return (
+    <div className="space-y-5 p-6">
+      <div className="overflow-hidden rounded-lg border">
+        {(members.data ?? []).map((m) => (
+          <div key={m.membershipId} className="flex items-center gap-3 border-b px-4 py-3 last:border-b-0">
+            <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border bg-background text-xs font-semibold text-primary">
+              {m.avatarUrl ? (
+                <img src={m.avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                initials(m.displayName)
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium">{m.displayName}</div>
+              <div className="truncate font-mono text-xs text-muted-foreground">{m.discordId}</div>
+            </div>
+            <select
+              value={m.gradeId ?? ''}
+              onChange={(e) => setGrade.mutate({ mid: m.membershipId, gradeId: Number(e.target.value) })}
+              className={selectCls}
+            >
+              {!m.gradeId && <option value="">— sans grade —</option>}
+              {grades.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => remove.mutate(m.membershipId)}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+              aria-label="Retirer"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+        {(members.data ?? []).length === 0 && (
+          <div className="px-4 py-4 text-sm text-muted-foreground">Aucun membre.</div>
+        )}
+      </div>
+
+      <form
+        className="rounded-lg border p-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (discordId.trim() && displayName.trim() && gradeId) add.mutate();
+        }}
+      >
+        <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Ajouter un membre
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <input
+            placeholder="ID Discord"
+            value={discordId}
+            onChange={(e) => setDiscordId(e.target.value)}
+            className={`${inputCls} w-48`}
+          />
+          <input
+            placeholder="Nom affiché"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            className={`${inputCls} flex-1`}
+          />
+          <select value={gradeId} onChange={(e) => setGradeId(Number(e.target.value))} className={selectCls}>
+            {grades.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+          <Button
+            type="submit"
+            disabled={!discordId.trim() || !displayName.trim() || !gradeId || add.isPending}
+          >
+            <Plus className="h-4 w-4" />
+            Ajouter
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          ID Discord (clic droit sur le membre → « Copier l'identifiant »). Le compte sera lié à sa
+          prochaine connexion.
+        </p>
+        {add.isError && (
+          <p className="mt-1 text-xs text-destructive">Échec — vérifie l'ID Discord.</p>
+        )}
+      </form>
+    </div>
+  );
+}
+
 function TabBtn({
   active,
   onClick,
@@ -513,15 +645,20 @@ function TabBtn({
 }
 
 function CompanyDetail({ company }: { company: Company }) {
-  const [tab, setTab] = useState<'modules' | 'grades' | 'shareholders' | 'infos'>('modules');
+  const [tab, setTab] = useState<
+    'modules' | 'grades' | 'members' | 'shareholders' | 'infos'
+  >('modules');
   return (
     <div>
-      <div className="flex items-center gap-1 border-b px-3">
+      <div className="flex items-center gap-1 overflow-x-auto border-b px-3">
         <TabBtn active={tab === 'modules'} onClick={() => setTab('modules')}>
           Modules
         </TabBtn>
         <TabBtn active={tab === 'grades'} onClick={() => setTab('grades')}>
           Grades
+        </TabBtn>
+        <TabBtn active={tab === 'members'} onClick={() => setTab('members')}>
+          Membres
         </TabBtn>
         <TabBtn active={tab === 'shareholders'} onClick={() => setTab('shareholders')}>
           Actionnaires
@@ -532,6 +669,7 @@ function CompanyDetail({ company }: { company: Company }) {
       </div>
       {tab === 'modules' && <ModulesPanel company={company} />}
       {tab === 'grades' && <GradesPanel company={company} />}
+      {tab === 'members' && <MembersPanel company={company} />}
       {tab === 'shareholders' && <ShareholdersPanel company={company} />}
       {tab === 'infos' && <CompanyInfoPanel company={company} />}
     </div>

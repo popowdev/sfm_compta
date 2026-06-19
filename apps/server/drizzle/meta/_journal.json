@@ -50,6 +50,20 @@
       "when": 1781895942143,
       "tag": "0006_adorable_madelyne_pryor",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1781898247363,
+      "tag": "0007_jittery_ender_wiggin",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1781898272010,
+      "tag": "0008_slippery_post",
+      "breakpoints": true
     }
   ]
 }
