@@ -104,6 +104,18 @@ export const companyModules = mysqlTable(
   }),
 );
 
+export const moduleSettings = mysqlTable('module_settings', {
+  moduleKey: mysqlEnum('module_key', MODULE_KEYS).primaryKey(),
+  label: varchar('label', { length: 100 }),
+  groupName: varchar('group_name', { length: 80 }),
+  blocked: boolean('blocked').notNull().default(false),
+  sortOrder: int('sort_order'),
+  updatedAt: timestamp('updated_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`)
+    .onUpdateNow(),
+});
+
 export const sessions = mysqlTable('sessions', {
   id: varchar('id', { length: 64 }).primaryKey(),
   userId: int('user_id')

@@ -15,6 +15,7 @@ export interface ModuleState {
   label: string;
   group: string;
   enabled: boolean;
+  blocked: boolean;
   config: unknown | null;
 }
 

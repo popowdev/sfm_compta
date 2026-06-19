@@ -4,6 +4,7 @@ import { hasAppAccess } from '@rp-compta/shared';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import Companies from '@/pages/Companies';
+import Modules from '@/pages/Modules';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppLayout } from '@/components/AppLayout';
 import { useAuth } from '@/auth/AuthContext';
@@ -11,6 +12,12 @@ import { useAuth } from '@/auth/AuthContext';
 function IrsRoute({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   if (!hasAppAccess(user?.appRoles ?? [], 'irs')) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+function StaffRoute({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  if (!(user?.appRoles ?? []).includes('staff')) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -25,6 +32,14 @@ function ProtectedApp() {
             <IrsRoute>
               <Companies />
             </IrsRoute>
+          }
+        />
+        <Route
+          path="/modules"
+          element={
+            <StaffRoute>
+              <Modules />
+            </StaffRoute>
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />

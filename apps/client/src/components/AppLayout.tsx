@@ -1,6 +1,13 @@
 import { useState, type ComponentType, type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Building2, PanelLeftClose, PanelLeft, LogOut } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Building2,
+  SlidersHorizontal,
+  PanelLeftClose,
+  PanelLeft,
+  LogOut,
+} from 'lucide-react';
 import { hasAppAccess } from '@rp-compta/shared';
 import { useAuth } from '@/auth/AuthContext';
 
@@ -40,6 +47,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const items: NavItem[] = [
     { to: '/', label: 'Tableau de bord', Icon: LayoutDashboard, end: true },
     ...(isIrs ? [{ to: '/entreprises', label: 'Entreprises', Icon: Building2 }] : []),
+    ...(roles.includes('staff')
+      ? [{ to: '/modules', label: 'Modules', Icon: SlidersHorizontal }]
+      : []),
   ];
 
   return (

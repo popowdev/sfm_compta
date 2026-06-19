@@ -38,6 +38,14 @@ export interface ModuleDef {
   defaultEnabled: boolean;
 }
 
+export interface EffectiveModule {
+  key: ModuleKey;
+  label: string;
+  group: string;
+  blocked: boolean;
+  defaultEnabled: boolean;
+}
+
 export const MODULES: ModuleDef[] = [
   { key: 'declarations', label: 'Déclarations fiscales', group: 'Fiscalité', defaultEnabled: true },
   { key: 'bareme', label: 'Barème fiscal', group: 'Fiscalité', defaultEnabled: true },

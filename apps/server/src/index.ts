@@ -11,6 +11,7 @@ import { healthRouter } from './routes/health';
 import { authRouter } from './routes/auth';
 import { internalRouter } from './routes/internal';
 import { companiesRouter } from './routes/companies';
+import { adminModulesRouter } from './routes/adminModules';
 import { createSocketServer } from './realtime/socket';
 import { purgeExpiredSessions } from './auth/session';
 
@@ -33,6 +34,7 @@ app.use('/api/health', healthRouter);
 app.use('/api/auth', authLimiter, authRouter);
 app.use('/api/internal', internalRouter);
 app.use('/api/companies', companiesRouter);
+app.use('/api/admin/modules', adminModulesRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'not_found' });

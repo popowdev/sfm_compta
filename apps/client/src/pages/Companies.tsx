@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, ChevronRight } from 'lucide-react';
 import type { ModuleKey } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import {
   getCompanies,
   createCompany,
@@ -11,35 +12,6 @@ import {
   type Company,
   type ModuleState,
 } from '@/lib/companies';
-
-function Switch({
-  checked,
-  disabled,
-  onChange,
-}: {
-  checked: boolean;
-  disabled?: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={onChange}
-      className={`flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors disabled:opacity-50 ${
-        checked ? 'bg-primary' : 'bg-input'
-      }`}
-    >
-      <span
-        className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-          checked ? 'translate-x-4' : 'translate-x-0'
-        }`}
-      />
-    </button>
-  );
-}
 
 function initials(name: string): string {
   return (
@@ -94,14 +66,19 @@ function ModulesPanel({ company }: { company: Company }) {
               {g.items.map((m, i) => (
                 <div
                   key={m.key}
-                  className={`flex items-center justify-between px-4 py-3 ${
-                    i > 0 ? 'border-t' : ''
-                  }`}
+                  className={`flex items-center justify-between px-4 py-3 ${i > 0 ? 'border-t' : ''}`}
                 >
-                  <span className="text-sm">{m.label}</span>
+                  <span className="flex items-center gap-2 text-sm">
+                    <span className={m.blocked ? 'text-muted-foreground' : ''}>{m.label}</span>
+                    {m.blocked && (
+                      <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-400">
+                        maintenance
+                      </span>
+                    )}
+                  </span>
                   <Switch
-                    checked={m.enabled}
-                    disabled={toggle.isPending}
+                    checked={m.enabled && !m.blocked}
+                    disabled={toggle.isPending || m.blocked}
                     onChange={() => toggle.mutate({ key: m.key, enabled: !m.enabled })}
                   />
                 </div>

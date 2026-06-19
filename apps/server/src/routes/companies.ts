@@ -7,6 +7,7 @@ import { companies, companyModules, type Company } from '../db/schema';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { slugify, uniqueSlug } from '../services/companies';
+import { getEffectiveModules, isModuleBlocked } from '../services/modules';
 
 export const companiesRouter = Router();
 
@@ -99,10 +100,12 @@ companiesRouter.get(
     if (!(await findActiveCompany(id))) return res.status(404).json({ error: 'not_found' });
     const rows = await db.select().from(companyModules).where(eq(companyModules.companyId, id));
     const byKey = new Map(rows.map((r) => [r.moduleKey, r]));
-    const result = MODULES.map((m) => ({
+    const effective = await getEffectiveModules();
+    const result = effective.map((m) => ({
       key: m.key,
       label: m.label,
       group: m.group,
+      blocked: m.blocked,
       enabled: byKey.get(m.key)?.enabled ?? m.defaultEnabled,
       config: byKey.get(m.key)?.config ?? null,
     }));
@@ -124,6 +127,7 @@ companiesRouter.put(
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     if (!(await findActiveCompany(id))) return res.status(404).json({ error: 'not_found' });
     const moduleKey = key as ModuleKey;
+    if (await isModuleBlocked(moduleKey)) return res.status(409).json({ error: 'module_blocked' });
     await db
       .insert(companyModules)
       .values({ companyId: id, moduleKey, enabled: parsed.data.enabled })
