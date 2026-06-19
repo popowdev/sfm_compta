@@ -7,6 +7,7 @@ import { moduleIcon } from '@/lib/moduleIcons';
 import Declarations from '@/pages/Declarations';
 import Depenses from '@/pages/Depenses';
 import Subventions from '@/pages/Subventions';
+import Messagerie from '@/pages/Messagerie';
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
@@ -14,6 +15,7 @@ const CONTENT: Partial<Record<string, ComponentType>> = {
   declarations: Declarations,
   depenses: Depenses,
   subventions: Subventions,
+  messagerie: Messagerie,
 };
 
 function Placeholder({ mod }: { mod: MyModule }) {

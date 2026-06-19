@@ -251,6 +251,20 @@ export const subventions = mysqlTable('subventions', {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const messages = mysqlTable('messages', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  body: text('body').notNull(),
+  fromIrs: boolean('from_irs').notNull().default(false),
+  senderUserId: int('sender_user_id').references(() => users.id, { onDelete: 'set null' }),
+  senderName: varchar('sender_name', { length: 120 }).notNull(),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const sessions = mysqlTable('sessions', {
   id: varchar('id', { length: 64 }).primaryKey(),
   userId: int('user_id')
@@ -283,6 +297,11 @@ export const companiesRelations = relations(companies, ({ many }) => ({
   roles: many(companyRoles),
   expenses: many(companyExpenses),
   subventions: many(subventions),
+  messages: many(messages),
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  company: one(companies, { fields: [messages.companyId], references: [companies.id] }),
 }));
 
 export const companyExpensesRelations = relations(companyExpenses, ({ one }) => ({
@@ -335,6 +354,7 @@ export type RolePermission = typeof rolePermissions.$inferSelect;
 export type Declaration = typeof declarations.$inferSelect;
 export type CompanyExpense = typeof companyExpenses.$inferSelect;
 export type Subvention = typeof subventions.$inferSelect;
+export type Message = typeof messages.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type TaxBracketRow = typeof taxBrackets.$inferSelect;
 export type FiscalConfigRow = typeof fiscalConfig.$inferSelect;
