@@ -1,15 +1,15 @@
-import { sql } from 'drizzle-orm';
-import { mysqlTable, varchar, boolean, timestamp, int } from 'drizzle-orm/mysql-core';
-
-export const companies = mysqlTable('companies', {
-  id: int('id').autoincrement().primaryKey(),
-  name: varchar('name', { length: 150 }).notNull(),
-  slug: varchar('slug', { length: 150 }).notNull().unique(),
-  active: boolean('active').notNull().default(true),
-  createdAt: timestamp('created_at')
-    .notNull()
-    .default(sql`CURRENT_TIMESTAMP`),
-});
+import { sql, relations } from 'drizzle-orm';
+import {
+  mysqlTable,
+  mysqlEnum,
+  varchar,
+  boolean,
+  timestamp,
+  int,
+  json,
+  unique,
+} from 'drizzle-orm/mysql-core';
+import { APP_ROLES, COMPANY_ROLES, MODULE_KEYS } from '@rp-compta/shared';
 
 export const users = mysqlTable('users', {
   id: int('id').autoincrement().primaryKey(),
@@ -17,10 +17,120 @@ export const users = mysqlTable('users', {
   displayName: varchar('display_name', { length: 100 }).notNull(),
   avatarUrl: varchar('avatar_url', { length: 255 }),
   whitelisted: boolean('whitelisted').notNull().default(false),
+  lastWhitelistCheck: timestamp('last_whitelist_check'),
   createdAt: timestamp('created_at')
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`)
+    .onUpdateNow(),
 });
 
-export type Company = typeof companies.$inferSelect;
+export const userAppRoles = mysqlTable(
+  'user_app_roles',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    userId: int('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: mysqlEnum('role', APP_ROLES).notNull(),
+  },
+  (t) => ({
+    uqUserRole: unique('uq_user_role').on(t.userId, t.role),
+  }),
+);
+
+export const companies = mysqlTable('companies', {
+  id: int('id').autoincrement().primaryKey(),
+  name: varchar('name', { length: 150 }).notNull(),
+  slug: varchar('slug', { length: 150 }).notNull().unique(),
+  logoUrl: varchar('logo_url', { length: 255 }),
+  fivemJob: varchar('fivem_job', { length: 64 }).unique(),
+  externalLink: varchar('external_link', { length: 255 }),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`)
+    .onUpdateNow(),
+  deletedAt: timestamp('deleted_at'),
+});
+
+export const memberships = mysqlTable(
+  'memberships',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    companyId: int('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    userId: int('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: mysqlEnum('role', COMPANY_ROLES).notNull().default('employe'),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .onUpdateNow(),
+  },
+  (t) => ({
+    uqCompanyUser: unique('uq_company_user').on(t.companyId, t.userId),
+  }),
+);
+
+export const companyModules = mysqlTable(
+  'company_modules',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    companyId: int('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    moduleKey: mysqlEnum('module_key', MODULE_KEYS).notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    config: json('config'),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .onUpdateNow(),
+  },
+  (t) => ({
+    uqCompanyModule: unique('uq_company_module').on(t.companyId, t.moduleKey),
+  }),
+);
+
+export const usersRelations = relations(users, ({ many }) => ({
+  appRoles: many(userAppRoles),
+  memberships: many(memberships),
+}));
+
+export const userAppRolesRelations = relations(userAppRoles, ({ one }) => ({
+  user: one(users, { fields: [userAppRoles.userId], references: [users.id] }),
+}));
+
+export const companiesRelations = relations(companies, ({ many }) => ({
+  memberships: many(memberships),
+  modules: many(companyModules),
+}));
+
+export const membershipsRelations = relations(memberships, ({ one }) => ({
+  company: one(companies, { fields: [memberships.companyId], references: [companies.id] }),
+  user: one(users, { fields: [memberships.userId], references: [users.id] }),
+}));
+
+export const companyModulesRelations = relations(companyModules, ({ one }) => ({
+  company: one(companies, { fields: [companyModules.companyId], references: [companies.id] }),
+}));
+
 export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type Company = typeof companies.$inferSelect;
+export type NewCompany = typeof companies.$inferInsert;
+export type Membership = typeof memberships.$inferSelect;
+export type NewMembership = typeof memberships.$inferInsert;
+export type CompanyModule = typeof companyModules.$inferSelect;
