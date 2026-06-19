@@ -65,7 +65,7 @@ const createSchema = z.object({
     .min(15)
     .max(32)
     .regex(/^\d+$/),
-  displayName: z.string().min(1).max(100),
+  displayName: z.string().trim().min(1).max(100),
   gradeId: z.number().int().positive(),
 });
 

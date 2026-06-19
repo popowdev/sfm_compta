@@ -46,7 +46,10 @@ gradesRouter.get(
   }),
 );
 
-const createSchema = z.object({ name: z.string().min(1).max(60), rank: z.number().int().optional() });
+const createSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  rank: z.number().int().optional(),
+});
 
 gradesRouter.post(
   '/',
@@ -68,7 +71,7 @@ gradesRouter.post(
 );
 
 const patchSchema = z.object({
-  name: z.string().min(1).max(60).optional(),
+  name: z.string().trim().min(1).max(60).optional(),
   rank: z.number().int().optional(),
 });
 

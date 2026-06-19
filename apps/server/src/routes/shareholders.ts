@@ -26,7 +26,7 @@ async function companyExists(id: number): Promise<boolean> {
 }
 
 const createSchema = z.object({
-  name: z.string().min(1).max(120),
+  name: z.string().trim().min(1).max(120),
   percentage: z.number().min(0).max(100),
   shareType: z.string().min(1).max(40).optional(),
   anonymous: z.boolean().optional(),

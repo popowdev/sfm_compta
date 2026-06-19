@@ -64,7 +64,7 @@ companiesRouter.get(
 );
 
 const createSchema = z.object({
-  name: z.string().min(1).max(150),
+  name: z.string().trim().min(1).max(150),
   fivemJob: z.string().max(64).optional(),
   logoUrl: z.string().url().max(255).optional(),
 });
@@ -96,7 +96,7 @@ companiesRouter.post(
 );
 
 const patchSchema = z.object({
-  name: z.string().min(1).max(150).optional(),
+  name: z.string().trim().min(1).max(150).optional(),
   fivemJob: z.string().max(64).nullable().optional(),
   logoUrl: z.string().url().max(255).nullable().optional(),
   active: z.boolean().optional(),
