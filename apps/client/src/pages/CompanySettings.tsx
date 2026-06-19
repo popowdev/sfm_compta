@@ -1,0 +1,120 @@
+import { useParams, Navigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getMyCompanies, toggleMyModule, uploadMyCompanyLogo, type MyModule } from '@/lib/me';
+import { Switch } from '@/components/ui/switch';
+
+function initials(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase() ?? '')
+      .join('') || '?'
+  );
+}
+
+export default function CompanySettings() {
+  const { id } = useParams();
+  const companyId = Number(id);
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ['my-companies'], queryFn: getMyCompanies });
+
+  const upload = useMutation({
+    mutationFn: (file: File) => uploadMyCompanyLogo(companyId, file),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['my-companies'] }),
+  });
+  const toggle = useMutation({
+    mutationFn: (v: { key: MyModule['key']; enabled: boolean }) =>
+      toggleMyModule(companyId, v.key, v.enabled),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['my-companies'] }),
+  });
+
+  if (isLoading) return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
+  const mine = data?.find((c) => c.company.id === companyId);
+  if (!mine || !mine.canManage) return <Navigate to="/" replace />;
+
+  const groups: { group: string; items: MyModule[] }[] = [];
+  for (const m of mine.modules) {
+    let g = groups.find((x) => x.group === m.group);
+    if (!g) {
+      g = { group: m.group, items: [] };
+      groups.push(g);
+    }
+    g.items.push(m);
+  }
+
+  return (
+    <div className="max-w-3xl p-8">
+      <h1 className="text-2xl font-bold tracking-tight">Paramètres</h1>
+      <p className="mt-1 text-sm text-muted-foreground">{mine.company.name}</p>
+
+      <div className="mt-6 rounded-xl border bg-card p-5">
+        <div className="mb-3 text-sm font-semibold">Logo</div>
+        <div className="flex items-center gap-4">
+          <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border bg-background text-sm font-semibold text-primary">
+            {mine.company.logoUrl ? (
+              <img src={mine.company.logoUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              initials(mine.company.name)
+            )}
+          </div>
+          <label className="cursor-pointer">
+            <span className="inline-flex h-9 items-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
+              {upload.isPending ? 'Envoi…' : 'Changer le logo'}
+            </span>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) upload.mutate(f);
+                e.target.value = '';
+              }}
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-xl border bg-card">
+        <div className="border-b px-5 py-4 text-sm font-semibold">Modules de l'entreprise</div>
+        <div className="space-y-5 p-5">
+          {groups.map((g) => (
+            <div key={g.group}>
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {g.group}
+              </div>
+              <div className="overflow-hidden rounded-lg border">
+                {g.items.map((m, i) => (
+                  <div
+                    key={m.key}
+                    className={`flex items-center justify-between px-4 py-3 ${i > 0 ? 'border-t' : ''}`}
+                  >
+                    <span className="flex items-center gap-2 text-sm">
+                      <span className={m.blocked ? 'text-muted-foreground' : ''}>{m.label}</span>
+                      {m.blocked && (
+                        <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-400">
+                          maintenance
+                        </span>
+                      )}
+                    </span>
+                    <Switch
+                      checked={m.enabled && !m.blocked}
+                      disabled={toggle.isPending || m.blocked}
+                      onChange={() => toggle.mutate({ key: m.key, enabled: !m.enabled })}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <p className="mt-4 text-xs text-muted-foreground">
+        La gestion des grades et des membres arrivera prochainement côté patron.
+      </p>
+    </div>
+  );
+}

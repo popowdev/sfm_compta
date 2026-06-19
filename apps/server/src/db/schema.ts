@@ -136,6 +136,7 @@ export const companyRoles = mysqlTable('company_roles', {
   name: varchar('name', { length: 60 }).notNull(),
   rank: int('rank').notNull().default(0),
   isDefault: boolean('is_default').notNull().default(false),
+  canManage: boolean('can_manage').notNull().default(false),
   createdAt: timestamp('created_at')
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),

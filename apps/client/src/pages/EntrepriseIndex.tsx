@@ -1,0 +1,21 @@
+import { useParams, Navigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { getMyCompanies } from '@/lib/me';
+
+export default function EntrepriseIndex() {
+  const { id } = useParams();
+  const companyId = Number(id);
+  const { data, isLoading } = useQuery({ queryKey: ['my-companies'], queryFn: getMyCompanies });
+
+  if (isLoading) return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
+
+  const mine = data?.find((c) => c.company.id === companyId);
+  if (!mine) return <Navigate to="/" replace />;
+
+  const first = mine.modules.find((m) => m.enabled && !m.blocked && m.canView);
+  if (first) return <Navigate to={`/entreprise/${companyId}/m/${first.key}`} replace />;
+  if (mine.canManage) return <Navigate to={`/entreprise/${companyId}/parametres`} replace />;
+  return (
+    <div className="p-8 text-sm text-muted-foreground">Aucune page accessible pour ton grade.</div>
+  );
+}

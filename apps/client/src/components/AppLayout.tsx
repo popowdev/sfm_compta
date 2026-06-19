@@ -7,7 +7,8 @@ import {
   Scale,
   FileText,
   SlidersHorizontal,
-  Store,
+  Settings,
+  ChevronDown,
   PanelLeftClose,
   PanelLeft,
   LogOut,
@@ -17,12 +18,18 @@ import { useAuth } from '@/auth/AuthContext';
 import { getMyCompanies } from '@/lib/me';
 
 const STORAGE_KEY = 'rp-compta.sidebar.collapsed';
+const GROUPS_KEY = 'rp-compta.sidebar.groups';
 
 interface NavItem {
   to: string;
   label: string;
   Icon: ComponentType<{ className?: string }>;
   end?: boolean;
+}
+
+interface NavGroup {
+  title: string | null;
+  items: NavItem[];
 }
 
 function navClass(isActive: boolean, collapsed: boolean): string {
@@ -37,11 +44,24 @@ function navClass(isActive: boolean, collapsed: boolean): string {
 export function AppLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(STORAGE_KEY) === '1');
+  const [closedGroups, setClosedGroups] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(GROUPS_KEY) ?? '{}');
+    } catch {
+      return {};
+    }
+  });
 
   const toggle = () =>
     setCollapsed((c) => {
       const next = !c;
       localStorage.setItem(STORAGE_KEY, next ? '1' : '0');
+      return next;
+    });
+  const toggleGroup = (title: string) =>
+    setClosedGroups((g) => {
+      const next = { ...g, [title]: !g[title] };
+      localStorage.setItem(GROUPS_KEY, JSON.stringify(next));
       return next;
     });
 
@@ -51,7 +71,27 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const myCompanies = useQuery({ queryKey: ['my-companies'], queryFn: getMyCompanies });
 
-  const groups: { title: string | null; items: NavItem[] }[] = [
+  const companyGroups: NavGroup[] = (myCompanies.data ?? [])
+    .map((c) => {
+      const items: NavItem[] = c.modules
+        .filter((m) => m.enabled && !m.blocked && m.canView)
+        .map((m) => ({
+          to: `/entreprise/${c.company.id}/m/${m.key}`,
+          label: m.label,
+          Icon: FileText,
+        }));
+      if (c.canManage) {
+        items.push({
+          to: `/entreprise/${c.company.id}/parametres`,
+          label: 'Paramètres',
+          Icon: Settings,
+        });
+      }
+      return { title: c.company.name, items };
+    })
+    .filter((g) => g.items.length > 0);
+
+  const groups: NavGroup[] = [
     { title: null, items: [{ to: '/', label: 'Tableau de bord', Icon: LayoutDashboard, end: true }] },
     ...(isIrs
       ? [
@@ -68,18 +108,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     ...(roles.includes('staff')
       ? [{ title: 'Staff', items: [{ to: '/modules', label: 'Modules', Icon: SlidersHorizontal }] }]
       : []),
-    ...((myCompanies.data?.length ?? 0) > 0
-      ? [
-          {
-            title: 'Entreprise',
-            items: (myCompanies.data ?? []).map((c) => ({
-              to: `/entreprise/${c.company.id}`,
-              label: c.company.name,
-              Icon: Store,
-            })),
-          },
-        ]
-      : []),
+    ...companyGroups,
   ];
 
   return (
@@ -108,32 +137,44 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 overflow-auto px-2 py-2">
-          {groups.map((g, gi) => (
-            <div key={g.title ?? `g${gi}`} className={gi > 0 ? 'pt-2' : ''}>
-              {g.title &&
-                (collapsed ? (
-                  <div className="mx-2 my-2 border-t border-sidebar-accent" />
-                ) : (
-                  <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {g.title}
+          {groups.map((g, gi) => {
+            const isClosed = g.title !== null && !collapsed && closedGroups[g.title];
+            return (
+              <div key={g.title ?? `g${gi}`} className={gi > 0 ? 'pt-2' : ''}>
+                {g.title &&
+                  (collapsed ? (
+                    <div className="mx-2 my-2 border-t border-sidebar-accent" />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(g.title!)}
+                      className="flex w-full items-center justify-between px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <span className="truncate">{g.title}</span>
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 shrink-0 transition-transform ${isClosed ? '-rotate-90' : ''}`}
+                      />
+                    </button>
+                  ))}
+                {!isClosed && (
+                  <div className="space-y-1">
+                    {g.items.map((it) => (
+                      <NavLink
+                        key={it.to}
+                        to={it.to}
+                        end={it.end}
+                        title={collapsed ? it.label : undefined}
+                        className={({ isActive }) => navClass(isActive, collapsed)}
+                      >
+                        <it.Icon className="h-[18px] w-[18px] shrink-0" />
+                        {!collapsed && <span className="truncate">{it.label}</span>}
+                      </NavLink>
+                    ))}
                   </div>
-                ))}
-              <div className="space-y-1">
-                {g.items.map((it) => (
-                  <NavLink
-                    key={it.to}
-                    to={it.to}
-                    end={it.end}
-                    title={collapsed ? it.label : undefined}
-                    className={({ isActive }) => navClass(isActive, collapsed)}
-                  >
-                    <it.Icon className="h-[18px] w-[18px] shrink-0" />
-                    {!collapsed && <span>{it.label}</span>}
-                  </NavLink>
-                ))}
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </nav>
 
         <div className="border-t p-2">

@@ -1,8 +1,39 @@
 import { and, eq } from 'drizzle-orm';
 import type { ModuleKey } from '@rp-compta/shared';
 import { db } from '../db';
-import { memberships, companyModules, rolePermissions } from '../db/schema';
+import {
+  memberships,
+  companyModules,
+  rolePermissions,
+  companyRoles,
+  userAppRoles,
+} from '../db/schema';
 import { isModuleBlocked } from './modules';
+
+export async function isStaff(userId: number): Promise<boolean> {
+  const rows = await db
+    .select({ role: userAppRoles.role })
+    .from(userAppRoles)
+    .where(eq(userAppRoles.userId, userId));
+  return rows.some((r) => r.role === 'staff');
+}
+
+export async function canManageCompany(userId: number, companyId: number): Promise<boolean> {
+  if (await isStaff(userId)) return true;
+  const rows = await db
+    .select({ canManage: companyRoles.canManage })
+    .from(memberships)
+    .innerJoin(companyRoles, eq(memberships.companyRoleId, companyRoles.id))
+    .where(
+      and(
+        eq(memberships.userId, userId),
+        eq(memberships.companyId, companyId),
+        eq(memberships.active, true),
+      ),
+    )
+    .limit(1);
+  return rows[0]?.canManage ?? false;
+}
 
 export interface ModuleAccess {
   enabled: boolean;

@@ -9,20 +9,21 @@ interface DefaultGrade {
   rank: number;
   canView: boolean;
   canWrite: boolean;
+  canManage: boolean;
 }
 
 const DEFAULT_GRADES: DefaultGrade[] = [
-  { name: 'Patron', rank: 0, canView: true, canWrite: true },
-  { name: 'Co-patron', rank: 1, canView: true, canWrite: true },
-  { name: 'Gérant', rank: 2, canView: true, canWrite: false },
-  { name: 'Employé', rank: 3, canView: true, canWrite: false },
+  { name: 'Patron', rank: 0, canView: true, canWrite: true, canManage: true },
+  { name: 'Co-patron', rank: 1, canView: true, canWrite: true, canManage: true },
+  { name: 'Gérant', rank: 2, canView: true, canWrite: false, canManage: false },
+  { name: 'Employé', rank: 3, canView: true, canWrite: false, canManage: false },
 ];
 
 export async function seedCompanyRoles(companyId: number): Promise<void> {
   for (const g of DEFAULT_GRADES) {
     const inserted = await db
       .insert(companyRoles)
-      .values({ companyId, name: g.name, rank: g.rank, isDefault: true });
+      .values({ companyId, name: g.name, rank: g.rank, isDefault: true, canManage: g.canManage });
     const roleId = inserted[0].insertId;
     await db.insert(rolePermissions).values(
       MODULE_KEYS.map((key) => ({
@@ -65,7 +66,14 @@ export async function getGradesWithPermissions(companyId: number) {
         const p = perms.find((x) => x.companyRoleId === g.id && x.moduleKey === m.key);
         map[m.key] = { canView: p?.canView ?? false, canWrite: p?.canWrite ?? false };
       }
-      return { id: g.id, name: g.name, rank: g.rank, isDefault: g.isDefault, permissions: map };
+      return {
+        id: g.id,
+        name: g.name,
+        rank: g.rank,
+        isDefault: g.isDefault,
+        canManage: g.canManage,
+        permissions: map,
+      };
     }),
   };
 }

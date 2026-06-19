@@ -1,0 +1,1 @@
+ALTER TABLE `company_roles` ADD `can_manage` boolean DEFAULT false NOT NULL;

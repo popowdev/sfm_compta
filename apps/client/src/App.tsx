@@ -7,8 +7,9 @@ import Companies from '@/pages/Companies';
 import Fiscal from '@/pages/Fiscal';
 import Modules from '@/pages/Modules';
 import IrsDeclarations from '@/pages/IrsDeclarations';
-import EntrepriseSpace from '@/pages/EntrepriseSpace';
-import Declarations from '@/pages/Declarations';
+import EntrepriseIndex from '@/pages/EntrepriseIndex';
+import ModulePage from '@/pages/ModulePage';
+import CompanySettings from '@/pages/CompanySettings';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppLayout } from '@/components/AppLayout';
 import { useAuth } from '@/auth/AuthContext';
@@ -30,8 +31,9 @@ function ProtectedApp() {
     <AppLayout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/entreprise/:id" element={<EntrepriseSpace />} />
-        <Route path="/entreprise/:id/declarations" element={<Declarations />} />
+        <Route path="/entreprise/:id" element={<EntrepriseIndex />} />
+        <Route path="/entreprise/:id/m/:moduleKey" element={<ModulePage />} />
+        <Route path="/entreprise/:id/parametres" element={<CompanySettings />} />
         <Route
           path="/entreprises"
           element={

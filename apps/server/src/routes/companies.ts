@@ -1,41 +1,21 @@
-import { mkdirSync } from 'node:fs';
-import path from 'node:path';
-import { randomBytes } from 'node:crypto';
 import { Router } from 'express';
 import { z } from 'zod';
-import multer from 'multer';
 import { and, eq, isNull } from 'drizzle-orm';
 import { MODULE_KEYS, MODULES, type ModuleKey } from '@rp-compta/shared';
 import { db } from '../db';
 import { companies, companyModules, type Company } from '../db/schema';
-import { env } from '../env';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { slugify, uniqueSlug } from '../services/companies';
 import { getEffectiveModules, isModuleBlocked } from '../services/modules';
 import { seedCompanyRoles } from '../services/grades';
+import { companyLogoUpload, companyLogoUrl } from '../services/upload';
 import { emitInvalidate } from '../realtime/socket';
 
 export const companiesRouter = Router();
 
 companiesRouter.use(requireAuth, requireAppRole('irs'));
 
-const COMPANY_UPLOAD_DIR = path.join(env.UPLOAD_DIR, 'companies');
-mkdirSync(COMPANY_UPLOAD_DIR, { recursive: true });
-
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, COMPANY_UPLOAD_DIR),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase().slice(0, 6);
-      cb(null, `${randomBytes(12).toString('hex')}${ext}`);
-    },
-  }),
-  limits: { fileSize: 2 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    cb(null, ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.mimetype));
-  },
-});
 
 function parseId(value: string | undefined): number | null {
   const n = Number(value);
@@ -148,13 +128,13 @@ companiesRouter.get(
 
 companiesRouter.post(
   '/:id/logo',
-  upload.single('logo'),
+  companyLogoUpload.single('logo'),
   asyncHandler(async (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: 'bad_request' });
     if (!req.file) return res.status(400).json({ error: 'invalid_file' });
     if (!(await findActiveCompany(id))) return res.status(404).json({ error: 'not_found' });
-    const logoUrl = `/uploads/companies/${req.file.filename}`;
+    const logoUrl = companyLogoUrl(req.file.filename);
     await db.update(companies).set({ logoUrl }).where(eq(companies.id, id));
     emitInvalidate('irs', [['companies']]);
     const updated = await db.select().from(companies).where(eq(companies.id, id)).limit(1);
