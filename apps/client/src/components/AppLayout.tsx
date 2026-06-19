@@ -1,16 +1,19 @@
 import { useState, type ComponentType, type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   Building2,
   Scale,
   SlidersHorizontal,
+  Store,
   PanelLeftClose,
   PanelLeft,
   LogOut,
 } from 'lucide-react';
 import { hasAppAccess } from '@rp-compta/shared';
 import { useAuth } from '@/auth/AuthContext';
+import { getMyCompanies } from '@/lib/me';
 
 const STORAGE_KEY = 'rp-compta.sidebar.collapsed';
 
@@ -45,6 +48,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const isIrs = hasAppAccess(roles, 'irs');
   const roleLabel = roles.includes('staff') ? 'Staff' : roles.includes('irs') ? 'Agent IRS' : null;
 
+  const myCompanies = useQuery({ queryKey: ['my-companies'], queryFn: getMyCompanies });
+
   const groups: { title: string | null; items: NavItem[] }[] = [
     { title: null, items: [{ to: '/', label: 'Tableau de bord', Icon: LayoutDashboard, end: true }] },
     ...(isIrs
@@ -60,6 +65,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
       : []),
     ...(roles.includes('staff')
       ? [{ title: 'Staff', items: [{ to: '/modules', label: 'Modules', Icon: SlidersHorizontal }] }]
+      : []),
+    ...((myCompanies.data?.length ?? 0) > 0
+      ? [
+          {
+            title: 'Entreprise',
+            items: (myCompanies.data ?? []).map((c) => ({
+              to: `/entreprise/${c.company.id}`,
+              label: c.company.name,
+              Icon: Store,
+            })),
+          },
+        ]
       : []),
   ];
 

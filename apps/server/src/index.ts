@@ -14,6 +14,7 @@ import { companiesRouter } from './routes/companies';
 import { shareholdersRouter } from './routes/shareholders';
 import { gradesRouter } from './routes/grades';
 import { membersRouter } from './routes/members';
+import { meRouter } from './routes/me';
 import { adminModulesRouter } from './routes/adminModules';
 import { fiscalRouter } from './routes/fiscal';
 import { createSocketServer } from './realtime/socket';
@@ -41,6 +42,7 @@ app.use('/api/companies', companiesRouter);
 app.use('/api/companies/:companyId/shareholders', shareholdersRouter);
 app.use('/api/companies/:companyId/roles', gradesRouter);
 app.use('/api/companies/:companyId/members', membersRouter);
+app.use('/api/me', meRouter);
 app.use('/api/admin/modules', adminModulesRouter);
 app.use('/api/fiscal', fiscalRouter);
 

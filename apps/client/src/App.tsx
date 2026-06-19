@@ -6,6 +6,7 @@ import Dashboard from '@/pages/Dashboard';
 import Companies from '@/pages/Companies';
 import Fiscal from '@/pages/Fiscal';
 import Modules from '@/pages/Modules';
+import EntrepriseSpace from '@/pages/EntrepriseSpace';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppLayout } from '@/components/AppLayout';
 import { useAuth } from '@/auth/AuthContext';
@@ -27,6 +28,7 @@ function ProtectedApp() {
     <AppLayout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/entreprise/:id" element={<EntrepriseSpace />} />
         <Route
           path="/entreprises"
           element={
