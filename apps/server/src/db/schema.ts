@@ -125,6 +125,35 @@ export const shareholders = mysqlTable('shareholders', {
     .onUpdateNow(),
 });
 
+export const companyRoles = mysqlTable('company_roles', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 60 }).notNull(),
+  rank: int('rank').notNull().default(0),
+  isDefault: boolean('is_default').notNull().default(false),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const rolePermissions = mysqlTable(
+  'role_permissions',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    companyRoleId: int('company_role_id')
+      .notNull()
+      .references(() => companyRoles.id, { onDelete: 'cascade' }),
+    moduleKey: mysqlEnum('module_key', MODULE_KEYS).notNull(),
+    canView: boolean('can_view').notNull().default(false),
+    canWrite: boolean('can_write').notNull().default(false),
+  },
+  (t) => ({
+    uqRoleModule: unique('uq_role_module').on(t.companyRoleId, t.moduleKey),
+  }),
+);
+
 export const moduleSettings = mysqlTable('module_settings', {
   moduleKey: mysqlEnum('module_key', MODULE_KEYS).primaryKey(),
   label: varchar('label', { length: 100 }),
@@ -183,6 +212,19 @@ export const companiesRelations = relations(companies, ({ many }) => ({
   memberships: many(memberships),
   modules: many(companyModules),
   shareholders: many(shareholders),
+  roles: many(companyRoles),
+}));
+
+export const companyRolesRelations = relations(companyRoles, ({ one, many }) => ({
+  company: one(companies, { fields: [companyRoles.companyId], references: [companies.id] }),
+  permissions: many(rolePermissions),
+}));
+
+export const rolePermissionsRelations = relations(rolePermissions, ({ one }) => ({
+  role: one(companyRoles, {
+    fields: [rolePermissions.companyRoleId],
+    references: [companyRoles.id],
+  }),
 }));
 
 export const shareholdersRelations = relations(shareholders, ({ one }) => ({
@@ -206,6 +248,8 @@ export type Membership = typeof memberships.$inferSelect;
 export type NewMembership = typeof memberships.$inferInsert;
 export type CompanyModule = typeof companyModules.$inferSelect;
 export type Shareholder = typeof shareholders.$inferSelect;
+export type Grade = typeof companyRoles.$inferSelect;
+export type RolePermission = typeof rolePermissions.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type TaxBracketRow = typeof taxBrackets.$inferSelect;
 export type FiscalConfigRow = typeof fiscalConfig.$inferSelect;

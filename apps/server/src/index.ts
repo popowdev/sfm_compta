@@ -12,6 +12,7 @@ import { authRouter } from './routes/auth';
 import { internalRouter } from './routes/internal';
 import { companiesRouter } from './routes/companies';
 import { shareholdersRouter } from './routes/shareholders';
+import { gradesRouter } from './routes/grades';
 import { adminModulesRouter } from './routes/adminModules';
 import { fiscalRouter } from './routes/fiscal';
 import { createSocketServer } from './realtime/socket';
@@ -37,6 +38,7 @@ app.use('/api/auth', authLimiter, authRouter);
 app.use('/api/internal', internalRouter);
 app.use('/api/companies', companiesRouter);
 app.use('/api/companies/:companyId/shareholders', shareholdersRouter);
+app.use('/api/companies/:companyId/roles', gradesRouter);
 app.use('/api/admin/modules', adminModulesRouter);
 app.use('/api/fiscal', fiscalRouter);
 

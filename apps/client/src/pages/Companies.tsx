@@ -17,6 +17,7 @@ import {
   type Company,
   type ModuleState,
 } from '@/lib/companies';
+import { getGrades, createGrade, deleteGrade, setGradePermission } from '@/lib/grades';
 
 const inputCls =
   'h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
@@ -340,6 +341,153 @@ function CompanyInfoPanel({ company }: { company: Company }) {
   );
 }
 
+function GradesPanel({ company }: { company: Company }) {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({ queryKey: ['grades', company.id], queryFn: () => getGrades(company.id) });
+  const [selId, setSelId] = useState<number | null>(null);
+  const [newName, setNewName] = useState('');
+
+  useEffect(() => {
+    if (data && (selId === null || !data.grades.some((g) => g.id === selId))) {
+      setSelId(data.grades[0]?.id ?? null);
+    }
+  }, [data, selId]);
+
+  const create = useMutation({
+    mutationFn: () => createGrade(company.id, newName.trim()),
+    onSuccess: () => {
+      setNewName('');
+      queryClient.invalidateQueries({ queryKey: ['grades', company.id] });
+    },
+  });
+  const del = useMutation({
+    mutationFn: (rid: number) => deleteGrade(company.id, rid),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['grades', company.id] }),
+  });
+  const setPerm = useMutation({
+    mutationFn: (v: { rid: number; key: ModuleKey; canView: boolean; canWrite: boolean }) =>
+      setGradePermission(company.id, v.rid, v.key, v.canView, v.canWrite),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['grades', company.id] }),
+  });
+
+  if (!data) return <div className="p-6 text-sm text-muted-foreground">Chargement…</div>;
+  const selected = data.grades.find((g) => g.id === selId) ?? null;
+
+  const groups: { group: string; items: typeof data.modules }[] = [];
+  for (const m of data.modules) {
+    let g = groups.find((x) => x.group === m.group);
+    if (!g) {
+      g = { group: m.group, items: [] };
+      groups.push(g);
+    }
+    g.items.push(m);
+  }
+
+  return (
+    <div className="space-y-4 p-6">
+      <div className="flex flex-wrap items-center gap-2">
+        {data.grades.map((g) => (
+          <button
+            key={g.id}
+            type="button"
+            onClick={() => setSelId(g.id)}
+            className={`rounded-full border px-3 py-1 text-sm transition-colors ${
+              selId === g.id
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-input text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {g.name}
+          </button>
+        ))}
+        <form
+          className="flex items-center gap-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (newName.trim()) create.mutate();
+          }}
+        >
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Nouveau grade"
+            className={`${inputCls} h-8 w-36`}
+          />
+          <Button size="sm" variant="outline" type="submit" disabled={!newName.trim() || create.isPending}>
+            <Plus className="h-4 w-4" />
+          </Button>
+        </form>
+      </div>
+
+      {selected && (
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-sm font-semibold">{selected.name}</div>
+            {!selected.isDefault && (
+              <button
+                type="button"
+                onClick={() => del.mutate(selected.id)}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Supprimer le grade
+              </button>
+            )}
+          </div>
+          <div className="space-y-4">
+            {groups.map((grp) => (
+              <div key={grp.group}>
+                <div className="mb-2 flex items-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <span className="flex-1">{grp.group}</span>
+                  <span className="w-16 text-center">Voir</span>
+                  <span className="w-16 text-center">Écrire</span>
+                </div>
+                <div className="overflow-hidden rounded-lg border">
+                  {grp.items.map((m, i) => {
+                    const p = selected.permissions[m.key] ?? { canView: false, canWrite: false };
+                    return (
+                      <div key={m.key} className={`flex items-center px-4 py-2.5 ${i > 0 ? 'border-t' : ''}`}>
+                        <span className="flex-1 text-sm">{m.label}</span>
+                        <div className="flex w-16 justify-center">
+                          <Switch
+                            checked={p.canView}
+                            disabled={setPerm.isPending}
+                            onChange={() =>
+                              setPerm.mutate({
+                                rid: selected.id,
+                                key: m.key,
+                                canView: !p.canView,
+                                canWrite: !p.canView ? p.canWrite : false,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="flex w-16 justify-center">
+                          <Switch
+                            checked={p.canWrite}
+                            disabled={setPerm.isPending}
+                            onChange={() =>
+                              setPerm.mutate({
+                                rid: selected.id,
+                                key: m.key,
+                                canView: !p.canWrite ? true : p.canView,
+                                canWrite: !p.canWrite,
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TabBtn({
   active,
   onClick,
@@ -365,12 +513,15 @@ function TabBtn({
 }
 
 function CompanyDetail({ company }: { company: Company }) {
-  const [tab, setTab] = useState<'modules' | 'shareholders' | 'infos'>('modules');
+  const [tab, setTab] = useState<'modules' | 'grades' | 'shareholders' | 'infos'>('modules');
   return (
     <div>
       <div className="flex items-center gap-1 border-b px-3">
         <TabBtn active={tab === 'modules'} onClick={() => setTab('modules')}>
           Modules
+        </TabBtn>
+        <TabBtn active={tab === 'grades'} onClick={() => setTab('grades')}>
+          Grades
         </TabBtn>
         <TabBtn active={tab === 'shareholders'} onClick={() => setTab('shareholders')}>
           Actionnaires
@@ -380,6 +531,7 @@ function CompanyDetail({ company }: { company: Company }) {
         </TabBtn>
       </div>
       {tab === 'modules' && <ModulesPanel company={company} />}
+      {tab === 'grades' && <GradesPanel company={company} />}
       {tab === 'shareholders' && <ShareholdersPanel company={company} />}
       {tab === 'infos' && <CompanyInfoPanel company={company} />}
     </div>

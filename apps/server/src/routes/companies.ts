@@ -13,6 +13,7 @@ import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { slugify, uniqueSlug } from '../services/companies';
 import { getEffectiveModules, isModuleBlocked } from '../services/modules';
+import { seedCompanyRoles } from '../services/grades';
 import { emitInvalidate } from '../realtime/socket';
 
 export const companiesRouter = Router();
@@ -87,6 +88,7 @@ companiesRouter.post(
         .values(MODULES.map((m) => ({ companyId: newId, moduleKey: m.key, enabled: m.defaultEnabled })));
       return newId;
     });
+    await seedCompanyRoles(id);
     const created = await db.select().from(companies).where(eq(companies.id, id)).limit(1);
     emitInvalidate('irs', [['companies']]);
     res.status(201).json(created[0]);
