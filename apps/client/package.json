@@ -1,0 +1,40 @@
+{
+  "name": "@rp-compta/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"(lint client: tbd)\""
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.9.1",
+    "@rp-compta/shared": "workspace:*",
+    "@radix-ui/react-slot": "^1.1.0",
+    "@tanstack/react-query": "^5.59.16",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "dayjs": "^1.11.13",
+    "lucide-react": "^0.454.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.53.1",
+    "react-router-dom": "^6.27.0",
+    "recharts": "^2.13.2",
+    "socket.io-client": "^4.8.1",
+    "tailwind-merge": "^2.5.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}

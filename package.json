@@ -1,0 +1,29 @@
+{
+  "name": "rp-compta",
+  "version": "0.0.0",
+  "private": true,
+  "description": "RP Compta — plateforme de comptabilité fiscale centralisée (serveur RP FiveM)",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.33.2",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:server": "pnpm --filter @rp-compta/server dev",
+    "dev:client": "pnpm --filter @rp-compta/client dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,css,md}\"",
+    "db:push": "pnpm --filter @rp-compta/server db:push",
+    "db:generate": "pnpm --filter @rp-compta/server db:generate",
+    "db:migrate": "pnpm --filter @rp-compta/server db:migrate"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3"
+  }
+}

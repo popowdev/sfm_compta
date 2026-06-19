@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+build/
+*.tsbuildinfo
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+logs/
+npm-debug.log*
+pnpm-debug.log*
+
+# drizzle
+apps/server/drizzle/meta/_journal.json.lock
+
+# misc
+.DS_Store
+coverage/
+.vite/
+.idea/
+.vscode/*
+!.vscode/extensions.json
