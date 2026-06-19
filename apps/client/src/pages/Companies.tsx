@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Plus, ChevronRight } from 'lucide-react';
 import type { ModuleKey } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,16 +28,27 @@ function Switch({
       aria-checked={checked}
       disabled={disabled}
       onClick={onChange}
-      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+      className={`flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors disabled:opacity-50 ${
         checked ? 'bg-primary' : 'bg-input'
       }`}
     >
       <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-          checked ? 'translate-x-[18px]' : 'translate-x-0.5'
+        className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? 'translate-x-4' : 'translate-x-0'
         }`}
       />
     </button>
+  );
+}
+
+function initials(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase() ?? '')
+      .join('') || '?'
   );
 }
 
@@ -157,23 +168,33 @@ export default function Companies() {
               <button
                 key={c.id}
                 onClick={() => setSelected(c)}
-                className={`flex w-full items-center justify-between border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-accent ${
+                className={`flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-accent ${
                   selected?.id === c.id ? 'bg-accent' : ''
                 }`}
               >
-                <div>
-                  <div className="text-sm font-medium">{c.name}</div>
-                  <div className="text-xs text-muted-foreground">{c.slug}</div>
+                <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg border bg-background text-xs font-semibold text-primary">
+                  {c.logoUrl ? (
+                    <img src={c.logoUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    initials(c.name)
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{c.name}</div>
+                  <div className="truncate text-xs text-muted-foreground">{c.slug}</div>
                 </div>
                 <span
                   className={`rounded-md px-2 py-0.5 text-xs font-medium ${
-                    c.active
-                      ? 'bg-primary/10 text-primary'
-                      : 'bg-muted text-muted-foreground'
+                    c.active ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
                   }`}
                 >
                   {c.active ? 'active' : 'inactive'}
                 </span>
+                <ChevronRight
+                  className={`h-4 w-4 shrink-0 ${
+                    selected?.id === c.id ? 'text-primary' : 'text-muted-foreground'
+                  }`}
+                />
               </button>
             ))}
           </div>
