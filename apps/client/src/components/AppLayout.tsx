@@ -1,12 +1,22 @@
-import { type ReactNode } from 'react';
+import { useState, type ComponentType, type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Building2 } from 'lucide-react';
+import { LayoutDashboard, Building2, PanelLeftClose, PanelLeft, LogOut } from 'lucide-react';
 import { hasAppAccess } from '@rp-compta/shared';
 import { useAuth } from '@/auth/AuthContext';
-import { Button } from '@/components/ui/button';
 
-function navClass({ isActive }: { isActive: boolean }) {
-  const base = 'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors';
+const STORAGE_KEY = 'rp-compta.sidebar.collapsed';
+
+interface NavItem {
+  to: string;
+  label: string;
+  Icon: ComponentType<{ className?: string }>;
+  end?: boolean;
+}
+
+function navClass(isActive: boolean, collapsed: boolean): string {
+  const base = `flex items-center rounded-md text-sm font-medium transition-colors ${
+    collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2'
+  }`;
   return isActive
     ? `${base} bg-sidebar-accent text-sidebar-primary`
     : `${base} text-muted-foreground hover:bg-sidebar-accent hover:text-foreground`;
@@ -14,43 +24,100 @@ function navClass({ isActive }: { isActive: boolean }) {
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(STORAGE_KEY) === '1');
+
+  const toggle = () =>
+    setCollapsed((c) => {
+      const next = !c;
+      localStorage.setItem(STORAGE_KEY, next ? '1' : '0');
+      return next;
+    });
+
   const roles = user?.appRoles ?? [];
   const isIrs = hasAppAccess(roles, 'irs');
   const roleLabel = roles.includes('staff') ? 'Staff' : roles.includes('irs') ? 'Agent IRS' : null;
 
+  const items: NavItem[] = [
+    { to: '/', label: 'Tableau de bord', Icon: LayoutDashboard, end: true },
+    ...(isIrs ? [{ to: '/entreprises', label: 'Entreprises', Icon: Building2 }] : []),
+  ];
+
   return (
     <div className="flex min-h-screen bg-background text-foreground">
-      <aside className="flex w-60 shrink-0 flex-col border-r bg-sidebar">
-        <div className="flex h-16 items-center px-5">
-          <img src="/logo.png" alt="RP Compta" className="h-9 w-auto" />
-        </div>
-        <nav className="flex-1 space-y-1 px-3 py-2">
-          <NavLink to="/" end className={navClass}>
-            <LayoutDashboard className="h-[18px] w-[18px]" />
-            Tableau de bord
-          </NavLink>
-          {isIrs && (
-            <NavLink to="/entreprises" className={navClass}>
-              <Building2 className="h-[18px] w-[18px]" />
-              Entreprises
-            </NavLink>
-          )}
-        </nav>
-        <div className="border-t p-3">
-          <div className="mb-2 flex items-center gap-2 px-2">
-            {user?.avatarUrl && (
-              <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full" />
+      <aside
+        className={`flex shrink-0 flex-col border-r bg-sidebar transition-[width] duration-200 ${
+          collapsed ? 'w-16' : 'w-60'
+        }`}
+      >
+        <div
+          className={`flex h-16 items-center ${collapsed ? 'justify-center px-0' : 'justify-between px-5'}`}
+        >
+          {!collapsed && <img src="/logo.png" alt="RP Compta" className="h-9 w-auto" />}
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={collapsed ? 'Déplier le menu' : 'Replier le menu'}
+            className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+          >
+            {collapsed ? (
+              <PanelLeft className="h-[18px] w-[18px]" />
+            ) : (
+              <PanelLeftClose className="h-[18px] w-[18px]" />
             )}
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium">{user?.displayName}</div>
-              {roleLabel && <div className="text-xs text-primary">{roleLabel}</div>}
+          </button>
+        </div>
+
+        <nav className="flex-1 space-y-1 px-2 py-2">
+          {items.map((it) => (
+            <NavLink
+              key={it.to}
+              to={it.to}
+              end={it.end}
+              title={collapsed ? it.label : undefined}
+              className={({ isActive }) => navClass(isActive, collapsed)}
+            >
+              <it.Icon className="h-[18px] w-[18px] shrink-0" />
+              {!collapsed && <span>{it.label}</span>}
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="border-t p-2">
+          {collapsed ? (
+            <div className="flex flex-col items-center gap-2">
+              {user?.avatarUrl && <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full" />}
+              <button
+                type="button"
+                onClick={() => logout()}
+                title="Déconnexion"
+                className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             </div>
-          </div>
-          <Button variant="outline" size="sm" className="w-full" onClick={() => logout()}>
-            Déconnexion
-          </Button>
+          ) : (
+            <>
+              <div className="mb-2 flex items-center gap-2 px-2">
+                {user?.avatarUrl && (
+                  <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full" />
+                )}
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{user?.displayName}</div>
+                  {roleLabel && <div className="text-xs text-primary">{roleLabel}</div>}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => logout()}
+                className="h-9 w-full rounded-md border border-input text-sm font-medium text-card-foreground transition-colors hover:bg-accent"
+              >
+                Déconnexion
+              </button>
+            </>
+          )}
         </div>
       </aside>
+
       <main className="min-w-0 flex-1 overflow-auto">{children}</main>
     </div>
   );
