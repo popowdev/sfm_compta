@@ -16,6 +16,7 @@ const envSchema = z.object({
 
   SESSION_SECRET: z.string().min(16).default('dev-only-secret-change-me-please!'),
   INTERNAL_API_KEY: z.string().optional(),
+  UPLOAD_DIR: z.string().default('/var/www/rp-compta/uploads'),
 
   DISCORD_CLIENT_ID: z.string().optional(),
   DISCORD_CLIENT_SECRET: z.string().optional(),

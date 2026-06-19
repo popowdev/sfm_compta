@@ -13,6 +13,7 @@ import {
   addShareholder,
   deleteShareholder,
   updateCompany,
+  uploadCompanyLogo,
   type Company,
   type ModuleState,
 } from '@/lib/companies';
@@ -255,6 +256,90 @@ function ShareholdersPanel({ company }: { company: Company }) {
   );
 }
 
+function CompanyInfoPanel({ company }: { company: Company }) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState(company.name);
+  useEffect(() => setName(company.name), [company.name, company.id]);
+
+  const saveName = useMutation({
+    mutationFn: () => updateCompany(company.id, { name: name.trim() }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['companies'] }),
+  });
+  const setActive = useMutation({
+    mutationFn: (active: boolean) => updateCompany(company.id, { active }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['companies'] }),
+  });
+  const upload = useMutation({
+    mutationFn: (file: File) => uploadCompanyLogo(company.id, file),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['companies'] }),
+  });
+
+  return (
+    <div className="space-y-5 p-6">
+      <div>
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Logo
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border bg-background text-sm font-semibold text-primary">
+            {company.logoUrl ? (
+              <img src={company.logoUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              initials(company.name)
+            )}
+          </div>
+          <label className="cursor-pointer">
+            <span className="inline-flex h-9 items-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
+              {upload.isPending ? 'Envoi…' : 'Changer le logo'}
+            </span>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) upload.mutate(f);
+                e.target.value = '';
+              }}
+            />
+          </label>
+          {upload.isError && (
+            <span className="text-sm text-destructive">Échec (image &lt; 2 Mo).</span>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Nom
+        </div>
+        <div className="flex gap-2">
+          <input value={name} onChange={(e) => setName(e.target.value)} className={`${inputCls} flex-1`} />
+          <Button
+            variant="outline"
+            disabled={!name.trim() || name.trim() === company.name || saveName.isPending}
+            onClick={() => saveName.mutate()}
+          >
+            Enregistrer
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between rounded-lg border p-4">
+        <div>
+          <div className="text-sm font-medium">Entreprise active</div>
+          <div className="text-xs text-muted-foreground">Désactivée = suspendue / masquée.</div>
+        </div>
+        <Switch
+          checked={company.active}
+          disabled={setActive.isPending}
+          onChange={() => setActive.mutate(!company.active)}
+        />
+      </div>
+    </div>
+  );
+}
+
 function TabBtn({
   active,
   onClick,
@@ -280,7 +365,7 @@ function TabBtn({
 }
 
 function CompanyDetail({ company }: { company: Company }) {
-  const [tab, setTab] = useState<'modules' | 'shareholders'>('modules');
+  const [tab, setTab] = useState<'modules' | 'shareholders' | 'infos'>('modules');
   return (
     <div>
       <div className="flex items-center gap-1 border-b px-3">
@@ -290,8 +375,13 @@ function CompanyDetail({ company }: { company: Company }) {
         <TabBtn active={tab === 'shareholders'} onClick={() => setTab('shareholders')}>
           Actionnaires
         </TabBtn>
+        <TabBtn active={tab === 'infos'} onClick={() => setTab('infos')}>
+          Infos
+        </TabBtn>
       </div>
-      {tab === 'modules' ? <ModulesPanel company={company} /> : <ShareholdersPanel company={company} />}
+      {tab === 'modules' && <ModulesPanel company={company} />}
+      {tab === 'shareholders' && <ShareholdersPanel company={company} />}
+      {tab === 'infos' && <CompanyInfoPanel company={company} />}
     </div>
   );
 }

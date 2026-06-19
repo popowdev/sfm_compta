@@ -1,5 +1,5 @@
 import type { ModuleKey } from '@rp-compta/shared';
-import { apiFetch } from './api';
+import { apiFetch, ApiError } from './api';
 
 export interface Company {
   id: number;
@@ -51,8 +51,22 @@ export const toggleModule = (id: number, key: ModuleKey, enabled: boolean) =>
     body: JSON.stringify({ enabled }),
   });
 
-export const updateCompany = (id: number, body: Partial<{ valuation: number; active: boolean }>) =>
-  apiFetch<Company>(`/api/companies/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const updateCompany = (
+  id: number,
+  body: Partial<{ name: string; valuation: number; active: boolean; fivemJob: string | null }>,
+) => apiFetch<Company>(`/api/companies/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+export async function uploadCompanyLogo(id: number, file: File): Promise<Company> {
+  const fd = new FormData();
+  fd.append('logo', file);
+  const res = await fetch(`/api/companies/${id}/logo`, {
+    method: 'POST',
+    credentials: 'include',
+    body: fd,
+  });
+  if (!res.ok) throw new ApiError(res.status);
+  return (await res.json()) as Company;
+}
 
 export const getShareholders = (companyId: number) =>
   apiFetch<Shareholder[]>(`/api/companies/${companyId}/shareholders`);
