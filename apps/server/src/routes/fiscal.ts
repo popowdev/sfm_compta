@@ -7,7 +7,7 @@ import { emitInvalidate } from '../realtime/socket';
 
 export const fiscalRouter = Router();
 
-fiscalRouter.use(requireAuth, requireAppRole('irs'));
+fiscalRouter.use(requireAuth);
 
 fiscalRouter.get(
   '/',
@@ -29,6 +29,7 @@ const putSchema = z.object({
 
 fiscalRouter.put(
   '/',
+  requireAppRole('irs'),
   asyncHandler(async (req, res) => {
     const parsed = putSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });

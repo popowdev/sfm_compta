@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Building2,
   Scale,
+  FileText,
   SlidersHorizontal,
   Store,
   PanelLeftClose,
@@ -58,6 +59,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             title: 'IRS',
             items: [
               { to: '/entreprises', label: 'Entreprises', Icon: Building2 },
+              { to: '/declarations', label: 'Déclarations', Icon: FileText },
               { to: '/bareme', label: 'Barème fiscal', Icon: Scale },
             ],
           },

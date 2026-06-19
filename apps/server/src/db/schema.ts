@@ -8,6 +8,7 @@ import {
   int,
   json,
   decimal,
+  text,
   unique,
 } from 'drizzle-orm/mysql-core';
 import { APP_ROLES, MODULE_KEYS } from '@rp-compta/shared';
@@ -185,6 +186,30 @@ export const fiscalConfig = mysqlTable('fiscal_config', {
     .onUpdateNow(),
 });
 
+export const declarations = mysqlTable('declarations', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  weekLabel: varchar('week_label', { length: 60 }).notNull(),
+  declarantName: varchar('declarant_name', { length: 120 }).notNull(),
+  caNet: decimal('ca_net', { precision: 14, scale: 2 }).notNull(),
+  charges: decimal('charges', { precision: 14, scale: 2 }).notNull(),
+  benefit: decimal('benefit', { precision: 14, scale: 2 }).notNull(),
+  corporateTax: decimal('corporate_tax', { precision: 14, scale: 2 }).notNull(),
+  dividends: decimal('dividends', { precision: 14, scale: 2 }).notNull(),
+  dividendTax: decimal('dividend_tax', { precision: 14, scale: 2 }).notNull(),
+  totalTax: decimal('total_tax', { precision: 14, scale: 2 }).notNull(),
+  status: mysqlEnum('status', ['submitted', 'paid', 'cancelled']).notNull().default('submitted'),
+  declaredByUserId: int('declared_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  email: varchar('email', { length: 150 }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  paidAt: timestamp('paid_at'),
+});
+
 export const sessions = mysqlTable('sessions', {
   id: varchar('id', { length: 64 }).primaryKey(),
   userId: int('user_id')
@@ -256,6 +281,7 @@ export type CompanyModule = typeof companyModules.$inferSelect;
 export type Shareholder = typeof shareholders.$inferSelect;
 export type Grade = typeof companyRoles.$inferSelect;
 export type RolePermission = typeof rolePermissions.$inferSelect;
+export type Declaration = typeof declarations.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type TaxBracketRow = typeof taxBrackets.$inferSelect;
 export type FiscalConfigRow = typeof fiscalConfig.$inferSelect;

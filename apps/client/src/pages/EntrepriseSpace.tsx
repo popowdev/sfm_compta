@@ -1,4 +1,4 @@
-import { useParams, Navigate } from 'react-router-dom';
+import { useParams, Navigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getMyCompanies, type MyModule } from '@/lib/me';
 
@@ -64,21 +64,37 @@ export default function EntrepriseSpace() {
                 {g.group}
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {g.items.map((m) => (
-                  <div key={m.key} className="rounded-xl border bg-card p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-medium">{m.label}</div>
-                      <span
-                        className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
-                          m.canWrite ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
-                        }`}
-                      >
-                        {m.canWrite ? 'Écriture' : 'Lecture'}
-                      </span>
+                {g.items.map((m) => {
+                  const ready = m.key === 'declarations';
+                  const card = (
+                    <div
+                      className={`h-full rounded-xl border bg-card p-4 ${
+                        ready ? 'transition-colors hover:border-primary/40' : ''
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-medium">{m.label}</div>
+                        <span
+                          className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
+                            m.canWrite ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                          }`}
+                        >
+                          {m.canWrite ? 'Écriture' : 'Lecture'}
+                        </span>
+                      </div>
+                      <div className="mt-3 text-xs text-muted-foreground">
+                        {ready ? 'Ouvrir →' : 'Bientôt disponible'}
+                      </div>
                     </div>
-                    <div className="mt-3 text-xs text-muted-foreground">Bientôt disponible</div>
-                  </div>
-                ))}
+                  );
+                  return ready ? (
+                    <Link key={m.key} to={`/entreprise/${companyId}/declarations`}>
+                      {card}
+                    </Link>
+                  ) : (
+                    <div key={m.key}>{card}</div>
+                  );
+                })}
               </div>
             </div>
           ))}
