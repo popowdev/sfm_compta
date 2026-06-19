@@ -63,10 +63,10 @@ meDeclarationsRouter.get(
 const submitSchema = z.object({
   weekLabel: z.string().trim().min(1).max(60),
   declarantName: z.string().trim().min(1).max(120),
-  caNet: z.number().min(0),
-  charges: z.number().min(0),
-  benefit: z.number(),
-  dividends: z.number().min(0),
+  caNet: z.number().nonnegative().finite().max(999_999_999_999.99),
+  charges: z.number().nonnegative().finite().max(999_999_999_999.99),
+  benefit: z.number().finite().min(-999_999_999_999.99).max(999_999_999_999.99),
+  dividends: z.number().nonnegative().finite().max(999_999_999_999.99),
   email: z.string().email().max(150).optional().or(z.literal('')),
   notes: z.string().max(2000).optional(),
 });
