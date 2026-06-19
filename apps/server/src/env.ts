@@ -22,6 +22,10 @@ const envSchema = z.object({
   DISCORD_REDIRECT_URI: z.string().optional(),
   DISCORD_GUILD_ID: z.string().optional(),
   DISCORD_WHITELIST_ROLE_ID: z.string().optional(),
+  DISCORD_IRS_ROLE_ID: z.string().optional(),
+  DISCORD_STAFF_ROLE_ID: z.string().optional(),
+  DISCORD_GOUVERNEMENT_ROLE_ID: z.string().optional(),
+  ADMIN_DISCORD_IDS: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

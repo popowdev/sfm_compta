@@ -26,6 +26,32 @@ export const MODULE_KEYS = [
 ] as const;
 export type ModuleKey = (typeof MODULE_KEYS)[number];
 
+export interface ModuleDef {
+  key: ModuleKey;
+  label: string;
+  group: string;
+  defaultEnabled: boolean;
+}
+
+export const MODULES: ModuleDef[] = [
+  { key: 'declarations', label: 'Déclarations fiscales', group: 'Fiscalité', defaultEnabled: true },
+  { key: 'bareme', label: 'Barème fiscal', group: 'Fiscalité', defaultEnabled: true },
+  { key: 'dividendes', label: 'Dividendes', group: 'Fiscalité', defaultEnabled: false },
+  { key: 'subventions', label: 'Subventions', group: 'Fiscalité', defaultEnabled: true },
+  { key: 'actionnaires', label: 'Actionnaires', group: 'Actionnariat', defaultEnabled: false },
+  { key: 'exercices', label: 'Exercices comptables', group: 'Comptabilité', defaultEnabled: true },
+  { key: 'depenses', label: 'Dépenses', group: 'Comptabilité', defaultEnabled: true },
+  { key: 'caisse', label: 'Caisse / ventes', group: 'Commerce', defaultEnabled: false },
+  { key: 'clients', label: 'Clients & fidélité', group: 'Commerce', defaultEnabled: false },
+  { key: 'stocks', label: 'Stocks', group: 'Commerce', defaultEnabled: false },
+  { key: 'locations', label: 'Locations / événements', group: 'Commerce', defaultEnabled: false },
+  { key: 'rh', label: 'RH / employés', group: 'Ressources humaines', defaultEnabled: false },
+  { key: 'badgeuse', label: 'Badgeuse', group: 'Ressources humaines', defaultEnabled: false },
+  { key: 'tickets', label: 'Tickets / support', group: 'Communication', defaultEnabled: false },
+  { key: 'messagerie', label: 'Messagerie', group: 'Communication', defaultEnabled: true },
+  { key: 'stats', label: 'Statistiques', group: 'Pilotage', defaultEnabled: true },
+];
+
 export const sessionUserSchema = z.object({
   id: z.string(),
   discordId: z.string(),

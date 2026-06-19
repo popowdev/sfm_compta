@@ -10,6 +10,7 @@ import { logger } from './logger';
 import { healthRouter } from './routes/health';
 import { authRouter } from './routes/auth';
 import { internalRouter } from './routes/internal';
+import { companiesRouter } from './routes/companies';
 import { createSocketServer } from './realtime/socket';
 import { purgeExpiredSessions } from './auth/session';
 
@@ -31,6 +32,7 @@ app.use('/health', healthRouter);
 app.use('/api/health', healthRouter);
 app.use('/api/auth', authLimiter, authRouter);
 app.use('/api/internal', internalRouter);
+app.use('/api/companies', companiesRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'not_found' });
