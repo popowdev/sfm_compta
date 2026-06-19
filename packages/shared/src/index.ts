@@ -36,6 +36,7 @@ export interface ModuleDef {
   label: string;
   group: string;
   defaultEnabled: boolean;
+  companyPage: boolean;
 }
 
 export interface EffectiveModule {
@@ -47,22 +48,22 @@ export interface EffectiveModule {
 }
 
 export const MODULES: ModuleDef[] = [
-  { key: 'declarations', label: 'Déclarations fiscales', group: 'Fiscalité', defaultEnabled: true },
-  { key: 'bareme', label: 'Barème fiscal', group: 'Fiscalité', defaultEnabled: true },
-  { key: 'dividendes', label: 'Dividendes', group: 'Fiscalité', defaultEnabled: false },
-  { key: 'subventions', label: 'Subventions', group: 'Fiscalité', defaultEnabled: true },
-  { key: 'actionnaires', label: 'Actionnaires', group: 'Actionnariat', defaultEnabled: false },
-  { key: 'exercices', label: 'Exercices comptables', group: 'Comptabilité', defaultEnabled: true },
-  { key: 'depenses', label: 'Dépenses', group: 'Comptabilité', defaultEnabled: true },
-  { key: 'caisse', label: 'Caisse / ventes', group: 'Commerce', defaultEnabled: false },
-  { key: 'clients', label: 'Clients & fidélité', group: 'Commerce', defaultEnabled: false },
-  { key: 'stocks', label: 'Stocks', group: 'Commerce', defaultEnabled: false },
-  { key: 'locations', label: 'Locations / événements', group: 'Commerce', defaultEnabled: false },
-  { key: 'rh', label: 'RH / employés', group: 'Ressources humaines', defaultEnabled: false },
-  { key: 'badgeuse', label: 'Badgeuse', group: 'Ressources humaines', defaultEnabled: false },
-  { key: 'tickets', label: 'Tickets / support', group: 'Communication', defaultEnabled: false },
-  { key: 'messagerie', label: 'Messagerie', group: 'Communication', defaultEnabled: true },
-  { key: 'stats', label: 'Statistiques', group: 'Pilotage', defaultEnabled: true },
+  { key: 'declarations', label: 'Déclarations fiscales', group: 'Fiscalité', defaultEnabled: true, companyPage: true },
+  { key: 'subventions', label: 'Subventions', group: 'Fiscalité', defaultEnabled: true, companyPage: true },
+  { key: 'exercices', label: 'Exercices comptables', group: 'Comptabilité', defaultEnabled: true, companyPage: true },
+  { key: 'depenses', label: 'Dépenses', group: 'Comptabilité', defaultEnabled: true, companyPage: true },
+  { key: 'caisse', label: 'Caisse / ventes', group: 'Commerce', defaultEnabled: false, companyPage: true },
+  { key: 'clients', label: 'Clients & fidélité', group: 'Commerce', defaultEnabled: false, companyPage: true },
+  { key: 'stocks', label: 'Stocks', group: 'Commerce', defaultEnabled: false, companyPage: true },
+  { key: 'locations', label: 'Locations / événements', group: 'Commerce', defaultEnabled: false, companyPage: true },
+  { key: 'rh', label: 'RH / employés', group: 'Ressources humaines', defaultEnabled: false, companyPage: true },
+  { key: 'badgeuse', label: 'Badgeuse', group: 'Ressources humaines', defaultEnabled: false, companyPage: true },
+  { key: 'tickets', label: 'Tickets / support', group: 'Communication', defaultEnabled: false, companyPage: true },
+  { key: 'messagerie', label: 'Messagerie', group: 'Communication', defaultEnabled: true, companyPage: true },
+  { key: 'stats', label: 'Statistiques', group: 'Pilotage', defaultEnabled: true, companyPage: true },
+  { key: 'bareme', label: 'Barème fiscal', group: 'Fiscalité', defaultEnabled: true, companyPage: false },
+  { key: 'dividendes', label: 'Dividendes', group: 'Fiscalité', defaultEnabled: false, companyPage: false },
+  { key: 'actionnaires', label: 'Actionnaires', group: 'Actionnariat', defaultEnabled: false, companyPage: false },
 ];
 
 export interface TaxBracket {

@@ -13,9 +13,12 @@ import {
   PanelLeft,
   LogOut,
 } from 'lucide-react';
-import { hasAppAccess } from '@rp-compta/shared';
+import { hasAppAccess, MODULES } from '@rp-compta/shared';
 import { useAuth } from '@/auth/AuthContext';
 import { getMyCompanies } from '@/lib/me';
+import { moduleIcon } from '@/lib/moduleIcons';
+
+const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
 const STORAGE_KEY = 'rp-compta.sidebar.collapsed';
 const GROUPS_KEY = 'rp-compta.sidebar.groups';
@@ -74,11 +77,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const companyGroups: NavGroup[] = (myCompanies.data ?? [])
     .map((c) => {
       const items: NavItem[] = c.modules
-        .filter((m) => m.enabled && !m.blocked && m.canView)
+        .filter((m) => COMPANY_PAGE_KEYS.has(m.key) && m.enabled && !m.blocked && m.canView)
         .map((m) => ({
           to: `/entreprise/${c.company.id}/m/${m.key}`,
           label: m.label,
-          Icon: FileText,
+          Icon: moduleIcon(m.key),
         }));
       if (c.canManage) {
         items.push({

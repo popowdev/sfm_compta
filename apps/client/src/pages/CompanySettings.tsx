@@ -1,7 +1,11 @@
 import { useParams, Navigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { MODULES } from '@rp-compta/shared';
 import { getMyCompanies, toggleMyModule, uploadMyCompanyLogo, type MyModule } from '@/lib/me';
+import { moduleIcon } from '@/lib/moduleIcons';
 import { Switch } from '@/components/ui/switch';
+
+const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
 function initials(name: string): string {
   return (
@@ -35,7 +39,7 @@ export default function CompanySettings() {
   if (!mine || !mine.canManage) return <Navigate to="/" replace />;
 
   const groups: { group: string; items: MyModule[] }[] = [];
-  for (const m of mine.modules) {
+  for (const m of mine.modules.filter((m) => COMPANY_PAGE_KEYS.has(m.key))) {
     let g = groups.find((x) => x.group === m.group);
     if (!g) {
       g = { group: m.group, items: [] };
@@ -86,12 +90,15 @@ export default function CompanySettings() {
                 {g.group}
               </div>
               <div className="overflow-hidden rounded-lg border">
-                {g.items.map((m, i) => (
+                {g.items.map((m, i) => {
+                  const Icon = moduleIcon(m.key);
+                  return (
                   <div
                     key={m.key}
                     className={`flex items-center justify-between px-4 py-3 ${i > 0 ? 'border-t' : ''}`}
                   >
-                    <span className="flex items-center gap-2 text-sm">
+                    <span className="flex items-center gap-2.5 text-sm">
+                      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className={m.blocked ? 'text-muted-foreground' : ''}>{m.label}</span>
                       {m.blocked && (
                         <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-400">
@@ -105,7 +112,8 @@ export default function CompanySettings() {
                       onChange={() => toggle.mutate({ key: m.key, enabled: !m.enabled })}
                     />
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}
