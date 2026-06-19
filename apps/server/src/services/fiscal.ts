@@ -5,6 +5,19 @@ import { fiscalConfig, taxBrackets } from '../db/schema';
 
 const SINGLETON_ID = 1;
 
+const DEFAULT_BRACKETS: TaxBracket[] = [
+  { min: 0, max: 5000, rate: 1 },
+  { min: 5000, max: 10000, rate: 4 },
+  { min: 10000, max: 20000, rate: 9 },
+  { min: 20000, max: 30000, rate: 13 },
+  { min: 30000, max: 50000, rate: 18 },
+  { min: 50000, max: 80000, rate: 25 },
+  { min: 80000, max: 100000, rate: 35 },
+  { min: 100000, max: 200000, rate: 40 },
+  { min: 200000, max: 500000, rate: 45 },
+  { min: 500000, max: null, rate: 50 },
+];
+
 export async function getFiscalConfig(): Promise<FiscalConfig> {
   const cfgRows = await db
     .select()
@@ -31,8 +44,15 @@ export async function getFiscalConfig(): Promise<FiscalConfig> {
   }));
 
   if (bracketRows.length === 0) {
-    await db.insert(taxBrackets).values({ minAmount: '0', maxAmount: null, rate: '10', sortOrder: 0 });
-    brackets = [{ min: 0, max: null, rate: 10 }];
+    await db.insert(taxBrackets).values(
+      DEFAULT_BRACKETS.map((b, i) => ({
+        minAmount: String(b.min),
+        maxAmount: b.max === null ? null : String(b.max),
+        rate: String(b.rate),
+        sortOrder: i,
+      })),
+    );
+    brackets = DEFAULT_BRACKETS;
   }
 
   return { dividendTaxRate, brackets };
