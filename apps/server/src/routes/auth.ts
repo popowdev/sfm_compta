@@ -22,7 +22,7 @@ import {
 } from '../auth/session';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
-import { computeAppRoles, syncAppRoles } from '../services/roles';
+import { computeManagedRoles, syncManagedRoles } from '../services/roles';
 
 export const authRouter = Router();
 
@@ -89,7 +89,7 @@ authRouter.get('/discord/callback', async (req, res) => {
       userId = inserted[0].insertId;
     }
 
-    await syncAppRoles(userId, computeAppRoles(discordUser.id, roles));
+    await syncManagedRoles(userId, computeManagedRoles(discordUser.id, roles));
 
     if (whitelistConfigured && !whitelisted) return loginError('not_whitelisted');
 

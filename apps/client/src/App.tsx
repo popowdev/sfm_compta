@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { hasAppAccess } from '@rp-compta/shared';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import Companies from '@/pages/Companies';
@@ -9,7 +10,7 @@ import { useAuth } from '@/auth/AuthContext';
 
 function IrsRoute({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  if (!user?.appRoles.includes('irs')) return <Navigate to="/" replace />;
+  if (!hasAppAccess(user?.appRoles ?? [], 'irs')) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 

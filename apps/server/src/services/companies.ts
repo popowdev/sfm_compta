@@ -1,7 +1,6 @@
 import { eq } from 'drizzle-orm';
-import { MODULES } from '@rp-compta/shared';
 import { db } from '../db';
-import { companies, companyModules } from '../db/schema';
+import { companies } from '../db/schema';
 
 export function slugify(name: string): string {
   const base = name
@@ -26,10 +25,4 @@ export async function uniqueSlug(base: string): Promise<string> {
     if (!existing[0]) return slug;
     slug = `${base}-${i++}`;
   }
-}
-
-export async function seedCompanyModules(companyId: number): Promise<void> {
-  await db
-    .insert(companyModules)
-    .values(MODULES.map((m) => ({ companyId, moduleKey: m.key, enabled: m.defaultEnabled })));
 }

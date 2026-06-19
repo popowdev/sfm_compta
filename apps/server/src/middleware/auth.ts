@@ -27,7 +27,8 @@ export function requireAppRole(...roles: AppRole[]) {
       .select({ role: userAppRoles.role })
       .from(userAppRoles)
       .where(eq(userAppRoles.userId, req.user.id));
-    const granted = rows.some((r) => roles.includes(r.role));
+    const userRoles = rows.map((r) => r.role);
+    const granted = userRoles.includes('staff') || roles.some((r) => userRoles.includes(r));
     if (!granted) return res.status(403).json({ error: 'forbidden' });
     next();
   });

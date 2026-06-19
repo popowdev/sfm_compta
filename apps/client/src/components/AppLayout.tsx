@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Building2 } from 'lucide-react';
+import { hasAppAccess } from '@rp-compta/shared';
 import { useAuth } from '@/auth/AuthContext';
 import { Button } from '@/components/ui/button';
 
@@ -13,7 +14,9 @@ function navClass({ isActive }: { isActive: boolean }) {
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
-  const isIrs = user?.appRoles.includes('irs') ?? false;
+  const roles = user?.appRoles ?? [];
+  const isIrs = hasAppAccess(roles, 'irs');
+  const roleLabel = roles.includes('staff') ? 'Staff' : roles.includes('irs') ? 'Agent IRS' : null;
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -40,7 +43,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             )}
             <div className="min-w-0">
               <div className="truncate text-sm font-medium">{user?.displayName}</div>
-              {isIrs && <div className="text-xs text-primary">Agent IRS</div>}
+              {roleLabel && <div className="text-xs text-primary">{roleLabel}</div>}
             </div>
           </div>
           <Button variant="outline" size="sm" className="w-full" onClick={() => logout()}>

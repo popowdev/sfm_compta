@@ -3,6 +3,11 @@ import { z } from 'zod';
 export const APP_ROLES = ['irs', 'staff', 'gouvernement'] as const;
 export type AppRole = (typeof APP_ROLES)[number];
 
+export function hasAppAccess(roles: AppRole[], required: AppRole): boolean {
+  if (roles.includes('staff')) return true;
+  return roles.includes(required);
+}
+
 export const COMPANY_ROLES = ['pdg', 'patron', 'co_patron', 'gerant', 'employe'] as const;
 export type CompanyRole = (typeof COMPANY_ROLES)[number];
 
