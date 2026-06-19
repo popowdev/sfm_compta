@@ -69,3 +69,7 @@ export function getIo(): IOServer | null {
 export function emitInvalidate(rooms: string | string[], keys: (string | number)[][]): void {
   io?.to(rooms).emit(SOCKET_EVENTS.dataInvalidate, keys);
 }
+
+export function emitInvalidateAll(keys: (string | number)[][]): void {
+  io?.emit(SOCKET_EVENTS.dataInvalidate, keys);
+}

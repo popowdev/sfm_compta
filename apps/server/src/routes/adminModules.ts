@@ -4,7 +4,7 @@ import { MODULE_KEYS, type ModuleKey } from '@rp-compta/shared';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getEffectiveModules, setModuleSettings } from '../services/modules';
-import { emitInvalidate } from '../realtime/socket';
+import { emitInvalidateAll } from '../realtime/socket';
 
 export const adminModulesRouter = Router();
 
@@ -33,7 +33,7 @@ adminModulesRouter.put(
     const parsed = patchSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     await setModuleSettings(key as ModuleKey, parsed.data);
-    emitInvalidate('irs', [['admin-modules'], ['company-modules']]);
+    emitInvalidateAll([['admin-modules'], ['company-modules'], ['my-companies']]);
     res.json({ ok: true });
   }),
 );

@@ -66,6 +66,17 @@ export const MODULES: ModuleDef[] = [
   { key: 'actionnaires', label: 'Actionnaires', group: 'Actionnariat', defaultEnabled: false, companyPage: false },
 ];
 
+export const EXPENSE_CATEGORIES = [
+  { key: 'salary', label: 'Salaires' },
+  { key: 'vehicle', label: 'Véhicules' },
+  { key: 'meal', label: 'Repas' },
+  { key: 'supply', label: 'Fournitures' },
+  { key: 'rent', label: 'Loyer' },
+  { key: 'other', label: 'Autre' },
+] as const;
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number]['key'];
+export const EXPENSE_CATEGORY_KEYS = EXPENSE_CATEGORIES.map((c) => c.key) as ExpenseCategory[];
+
 export interface TaxBracket {
   min: number;
   max: number | null;

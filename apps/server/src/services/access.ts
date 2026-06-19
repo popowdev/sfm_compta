@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import type { ModuleKey } from '@rp-compta/shared';
+import { MODULES, type ModuleKey } from '@rp-compta/shared';
 import { db } from '../db';
 import {
   memberships,
@@ -48,6 +48,19 @@ export async function getModuleAccess(
   companyId: number,
   moduleKey: ModuleKey,
 ): Promise<ModuleAccess | null> {
+  const cm = await db
+    .select({ enabled: companyModules.enabled })
+    .from(companyModules)
+    .where(and(eq(companyModules.companyId, companyId), eq(companyModules.moduleKey, moduleKey)))
+    .limit(1);
+  const defaultEnabled = MODULES.find((m) => m.key === moduleKey)?.defaultEnabled ?? false;
+  const enabled = cm[0]?.enabled ?? defaultEnabled;
+  const blocked = await isModuleBlocked(moduleKey);
+
+  if (await isStaff(userId)) {
+    return { enabled, blocked, canView: true, canWrite: true, gradeId: null };
+  }
+
   const mem = await db
     .select({ gradeId: memberships.companyRoleId })
     .from(memberships)
@@ -62,14 +75,6 @@ export async function getModuleAccess(
   if (!mem[0]) return null;
 
   const gradeId = mem[0].gradeId;
-  const cm = await db
-    .select({ enabled: companyModules.enabled })
-    .from(companyModules)
-    .where(and(eq(companyModules.companyId, companyId), eq(companyModules.moduleKey, moduleKey)))
-    .limit(1);
-  const enabled = cm[0]?.enabled ?? false;
-  const blocked = await isModuleBlocked(moduleKey);
-
   let canView = false;
   let canWrite = false;
   if (gradeId) {

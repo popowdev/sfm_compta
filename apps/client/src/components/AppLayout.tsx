@@ -1,5 +1,5 @@
 import { useState, type ComponentType, type ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
@@ -16,9 +16,9 @@ import {
 import { hasAppAccess, MODULES } from '@rp-compta/shared';
 import { useAuth } from '@/auth/AuthContext';
 import { getMyCompanies } from '@/lib/me';
-import { moduleIcon } from '@/lib/moduleIcons';
+import { groupIcon } from '@/lib/moduleIcons';
 
-const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
+const COMPANY_PAGE_KEYS = new Set<string>(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
 const STORAGE_KEY = 'rp-compta.sidebar.collapsed';
 const GROUPS_KEY = 'rp-compta.sidebar.groups';
@@ -28,6 +28,7 @@ interface NavItem {
   label: string;
   Icon: ComponentType<{ className?: string }>;
   end?: boolean;
+  active?: boolean;
 }
 
 interface NavGroup {
@@ -73,16 +74,36 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const roleLabel = roles.includes('staff') ? 'Staff' : roles.includes('irs') ? 'Agent IRS' : null;
 
   const myCompanies = useQuery({ queryKey: ['my-companies'], queryFn: getMyCompanies });
+  const data = myCompanies.data ?? [];
 
-  const companyGroups: NavGroup[] = (myCompanies.data ?? [])
+  const location = useLocation();
+  const activeMatch = location.pathname.match(/^\/entreprise\/(\d+)\/m\/([^/]+)/);
+  const activeCompanyId = activeMatch ? Number(activeMatch[1]) : null;
+  const activeModuleKey = activeMatch ? activeMatch[2] : null;
+  const activeGroup =
+    activeModuleKey && COMPANY_PAGE_KEYS.has(activeModuleKey)
+      ? (data
+          .find((c) => c.company.id === activeCompanyId)
+          ?.modules.find((m) => m.key === activeModuleKey)?.group ?? null)
+      : null;
+
+  const companyGroups: NavGroup[] = data
     .map((c) => {
-      const items: NavItem[] = c.modules
-        .filter((m) => COMPANY_PAGE_KEYS.has(m.key) && m.enabled && !m.blocked && m.canView)
-        .map((m) => ({
+      const accessible = c.modules.filter(
+        (m) => COMPANY_PAGE_KEYS.has(m.key) && m.enabled && !m.blocked && m.canView,
+      );
+      const items: NavItem[] = [];
+      const seen = new Set<string>();
+      for (const m of accessible) {
+        if (seen.has(m.group)) continue;
+        seen.add(m.group);
+        items.push({
           to: `/entreprise/${c.company.id}/m/${m.key}`,
-          label: m.label,
-          Icon: moduleIcon(m.key),
-        }));
+          label: m.group,
+          Icon: groupIcon(m.group),
+          active: activeCompanyId === c.company.id && activeGroup === m.group,
+        });
+      }
       if (c.canManage) {
         items.push({
           to: `/entreprise/${c.company.id}/parametres`,
@@ -161,18 +182,35 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   ))}
                 {!isClosed && (
                   <div className="space-y-1">
-                    {g.items.map((it) => (
-                      <NavLink
-                        key={it.to}
-                        to={it.to}
-                        end={it.end}
-                        title={collapsed ? it.label : undefined}
-                        className={({ isActive }) => navClass(isActive, collapsed)}
-                      >
-                        <it.Icon className="h-[18px] w-[18px] shrink-0" />
-                        {!collapsed && <span className="truncate">{it.label}</span>}
-                      </NavLink>
-                    ))}
+                    {g.items.map((it) => {
+                      const inner = (
+                        <>
+                          <it.Icon className="h-[18px] w-[18px] shrink-0" />
+                          {!collapsed && <span className="truncate">{it.label}</span>}
+                        </>
+                      );
+                      return it.active === undefined ? (
+                        <NavLink
+                          key={it.to}
+                          to={it.to}
+                          end={it.end}
+                          title={collapsed ? it.label : undefined}
+                          className={({ isActive }) => navClass(isActive, collapsed)}
+                        >
+                          {inner}
+                        </NavLink>
+                      ) : (
+                        <Link
+                          key={it.to}
+                          to={it.to}
+                          title={collapsed ? it.label : undefined}
+                          aria-current={it.active ? 'page' : undefined}
+                          className={navClass(it.active, collapsed)}
+                        >
+                          {inner}
+                        </Link>
+                      );
+                    })}
                   </div>
                 )}
               </div>

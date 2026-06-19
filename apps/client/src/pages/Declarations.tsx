@@ -79,13 +79,10 @@ export default function Declarations() {
   const list = decls.data?.declarations ?? [];
 
   return (
-    <div className="max-w-5xl p-8">
-      <h1 className="text-2xl font-bold tracking-tight">Déclarations fiscales</h1>
-      <p className="mt-1 text-sm text-muted-foreground">{company?.company.name}</p>
-
+    <div className="max-w-5xl space-y-6">
       {canWrite && (
         <form
-          className="mt-6 rounded-xl border bg-card p-5"
+          className="rounded-xl border bg-card p-5"
           onSubmit={(e) => {
             e.preventDefault();
             if (form.weekLabel.trim() && form.declarantName.trim()) submit.mutate();
@@ -191,7 +188,7 @@ export default function Declarations() {
         </form>
       )}
 
-      <div className="mt-6 overflow-hidden rounded-xl border bg-card">
+      <div className="overflow-hidden rounded-xl border bg-card">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>

@@ -1,11 +1,28 @@
-import { useParams, Navigate } from 'react-router-dom';
+import { type ComponentType } from 'react';
+import { useParams, Navigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { MODULES } from '@rp-compta/shared';
-import { getMyCompanies } from '@/lib/me';
+import { getMyCompanies, type MyModule } from '@/lib/me';
 import { moduleIcon } from '@/lib/moduleIcons';
 import Declarations from '@/pages/Declarations';
+import Depenses from '@/pages/Depenses';
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
+
+const CONTENT: Partial<Record<string, ComponentType>> = {
+  declarations: Declarations,
+  depenses: Depenses,
+};
+
+function Placeholder({ mod }: { mod: MyModule }) {
+  const Icon = moduleIcon(mod.key);
+  return (
+    <div className="grid place-items-center gap-3 rounded-xl border border-dashed bg-card p-12 text-center">
+      <Icon className="h-8 w-8 text-muted-foreground/60" />
+      <p className="text-sm text-muted-foreground">Interface « {mod.label} » à venir.</p>
+    </div>
+  );
+}
 
 export default function ModulePage() {
   const { id, moduleKey } = useParams();
@@ -20,17 +37,45 @@ export default function ModulePage() {
     return <Navigate to="/" replace />;
   }
 
-  if (moduleKey === 'declarations') return <Declarations />;
+  const tabs = mine.modules.filter(
+    (m) => COMPANY_PAGE_KEYS.has(m.key) && m.group === mod.group && m.enabled && !m.blocked && m.canView,
+  );
+  const Body = CONTENT[mod.key];
 
-  const Icon = moduleIcon(mod.key);
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold tracking-tight">{mod.label}</h1>
-      <p className="mt-1 text-sm text-muted-foreground">{mine.company.name}</p>
-      <div className="mt-8 grid place-items-center gap-3 rounded-xl border border-dashed bg-card p-12 text-center">
-        <Icon className="h-8 w-8 text-muted-foreground/60" />
-        <p className="text-sm text-muted-foreground">Interface « {mod.label} » à venir.</p>
+      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {mine.company.name}
       </div>
+      <h1 className="mt-1 text-2xl font-bold tracking-tight">
+        {tabs.length > 1 ? mod.group : mod.label}
+      </h1>
+
+      {tabs.length > 1 && (
+        <div className="mt-5 flex gap-1 overflow-x-auto border-b">
+          {tabs.map((t) => {
+            const Icon = moduleIcon(t.key);
+            const isActive = t.key === mod.key;
+            return (
+              <Link
+                key={t.key}
+                to={`/entreprise/${companyId}/m/${t.key}`}
+                aria-current={isActive ? 'page' : undefined}
+                className={`-mb-px flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'border-primary text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {t.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="mt-6">{Body ? <Body /> : <Placeholder mod={mod} />}</div>
     </div>
   );
 }

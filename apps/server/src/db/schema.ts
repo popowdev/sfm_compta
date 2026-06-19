@@ -5,6 +5,7 @@ import {
   varchar,
   boolean,
   timestamp,
+  date,
   int,
   json,
   decimal,
@@ -211,6 +212,25 @@ export const declarations = mysqlTable('declarations', {
   paidAt: timestamp('paid_at'),
 });
 
+export const companyExpenses = mysqlTable('company_expenses', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  label: varchar('label', { length: 200 }).notNull(),
+  category: mysqlEnum('category', ['salary', 'vehicle', 'meal', 'supply', 'rent', 'other'])
+    .notNull()
+    .default('other'),
+  amount: decimal('amount', { precision: 14, scale: 2 }).notNull(),
+  taxDeductible: boolean('tax_deductible').notNull().default(false),
+  expenseDate: date('expense_date', { mode: 'string' }).notNull(),
+  notes: text('notes'),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const sessions = mysqlTable('sessions', {
   id: varchar('id', { length: 64 }).primaryKey(),
   userId: int('user_id')
@@ -241,6 +261,11 @@ export const companiesRelations = relations(companies, ({ many }) => ({
   modules: many(companyModules),
   shareholders: many(shareholders),
   roles: many(companyRoles),
+  expenses: many(companyExpenses),
+}));
+
+export const companyExpensesRelations = relations(companyExpenses, ({ one }) => ({
+  company: one(companies, { fields: [companyExpenses.companyId], references: [companies.id] }),
 }));
 
 export const companyRolesRelations = relations(companyRoles, ({ one, many }) => ({
@@ -283,6 +308,7 @@ export type Shareholder = typeof shareholders.$inferSelect;
 export type Grade = typeof companyRoles.$inferSelect;
 export type RolePermission = typeof rolePermissions.$inferSelect;
 export type Declaration = typeof declarations.$inferSelect;
+export type CompanyExpense = typeof companyExpenses.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type TaxBracketRow = typeof taxBrackets.$inferSelect;
 export type FiscalConfigRow = typeof fiscalConfig.$inferSelect;
