@@ -4,6 +4,7 @@ import { hasAppAccess } from '@rp-compta/shared';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import Companies from '@/pages/Companies';
+import Fiscal from '@/pages/Fiscal';
 import Modules from '@/pages/Modules';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppLayout } from '@/components/AppLayout';
@@ -31,6 +32,14 @@ function ProtectedApp() {
           element={
             <IrsRoute>
               <Companies />
+            </IrsRoute>
+          }
+        />
+        <Route
+          path="/bareme"
+          element={
+            <IrsRoute>
+              <Fiscal />
             </IrsRoute>
           }
         />

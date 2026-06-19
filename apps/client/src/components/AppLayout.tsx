@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   Building2,
+  Scale,
   SlidersHorizontal,
   PanelLeftClose,
   PanelLeft,
@@ -47,7 +48,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const groups: { title: string | null; items: NavItem[] }[] = [
     { title: null, items: [{ to: '/', label: 'Tableau de bord', Icon: LayoutDashboard, end: true }] },
     ...(isIrs
-      ? [{ title: 'IRS', items: [{ to: '/entreprises', label: 'Entreprises', Icon: Building2 }] }]
+      ? [
+          {
+            title: 'IRS',
+            items: [
+              { to: '/entreprises', label: 'Entreprises', Icon: Building2 },
+              { to: '/bareme', label: 'Barème fiscal', Icon: Scale },
+            ],
+          },
+        ]
       : []),
     ...(roles.includes('staff')
       ? [{ title: 'Staff', items: [{ to: '/modules', label: 'Modules', Icon: SlidersHorizontal }] }]

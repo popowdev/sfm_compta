@@ -7,6 +7,7 @@ import {
   timestamp,
   int,
   json,
+  decimal,
   unique,
 } from 'drizzle-orm/mysql-core';
 import { APP_ROLES, COMPANY_ROLES, MODULE_KEYS } from '@rp-compta/shared';
@@ -116,6 +117,23 @@ export const moduleSettings = mysqlTable('module_settings', {
     .onUpdateNow(),
 });
 
+export const taxBrackets = mysqlTable('tax_brackets', {
+  id: int('id').autoincrement().primaryKey(),
+  minAmount: decimal('min_amount', { precision: 14, scale: 2 }).notNull(),
+  maxAmount: decimal('max_amount', { precision: 14, scale: 2 }),
+  rate: decimal('rate', { precision: 5, scale: 2 }).notNull(),
+  sortOrder: int('sort_order').notNull().default(0),
+});
+
+export const fiscalConfig = mysqlTable('fiscal_config', {
+  id: int('id').primaryKey(),
+  dividendTaxRate: decimal('dividend_tax_rate', { precision: 5, scale: 2 }).notNull().default('0'),
+  updatedAt: timestamp('updated_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`)
+    .onUpdateNow(),
+});
+
 export const sessions = mysqlTable('sessions', {
   id: varchar('id', { length: 64 }).primaryKey(),
   userId: int('user_id')
@@ -163,3 +181,5 @@ export type Membership = typeof memberships.$inferSelect;
 export type NewMembership = typeof memberships.$inferInsert;
 export type CompanyModule = typeof companyModules.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
+export type TaxBracketRow = typeof taxBrackets.$inferSelect;
+export type FiscalConfigRow = typeof fiscalConfig.$inferSelect;

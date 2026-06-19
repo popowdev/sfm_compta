@@ -65,6 +65,30 @@ export const MODULES: ModuleDef[] = [
   { key: 'stats', label: 'Statistiques', group: 'Pilotage', defaultEnabled: true },
 ];
 
+export interface TaxBracket {
+  min: number;
+  max: number | null;
+  rate: number;
+}
+
+export interface FiscalConfig {
+  dividendTaxRate: number;
+  brackets: TaxBracket[];
+}
+
+export function computeCorporateTax(benefit: number, brackets: TaxBracket[]): number {
+  if (benefit <= 0) return 0;
+  const sorted = [...brackets].sort((a, b) => a.min - b.min);
+  let tax = 0;
+  for (const b of sorted) {
+    const upper = b.max ?? Infinity;
+    if (benefit <= b.min) break;
+    const slice = Math.min(benefit, upper) - b.min;
+    if (slice > 0) tax += (slice * b.rate) / 100;
+  }
+  return Math.round(tax * 100) / 100;
+}
+
 export const sessionUserSchema = z.object({
   id: z.string(),
   discordId: z.string(),
