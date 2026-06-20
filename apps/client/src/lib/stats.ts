@@ -22,6 +22,15 @@ export interface CompanyStats {
     hourlyTotal: number;
     byPosition: { position: string; count: number }[];
   };
+  sales: {
+    total: number;
+    count: number;
+    margin: number;
+    byDay: { date: string; total: number }[];
+    byEmployee: { name: string; total: number; count: number }[];
+    topProducts: { name: string; qty: number; revenue: number }[];
+    byPayment: { method: string; total: number; count: number }[];
+  };
 }
 
 export const getCompanyStats = (companyId: number) =>

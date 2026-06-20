@@ -1,7 +1,14 @@
 import { Router } from 'express';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { declarations, companyExpenses, subventions, companyEmployees } from '../db/schema';
+import {
+  declarations,
+  companyExpenses,
+  subventions,
+  companyEmployees,
+  sales,
+  saleItems,
+} from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess } from '../services/access';
@@ -12,6 +19,7 @@ function parseId(value: string | undefined): number | null {
 }
 
 const num = (v: string | null) => (v === null ? 0 : Number(v));
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export const meStatsRouter = Router({ mergeParams: true });
 meStatsRouter.use(requireAuth);
@@ -26,11 +34,60 @@ meStatsRouter.get(
     if (!acc.enabled || acc.blocked) return res.status(403).json({ error: 'module_unavailable' });
     if (!acc.canView) return res.status(403).json({ error: 'forbidden' });
 
-    const [decls, exps, subs, emps] = await Promise.all([
+    const since = new Date(Date.now() - 29 * 86_400_000);
+    const sinceStr = since.toISOString().slice(0, 10);
+    const dayExpr = sql<string>`DATE_FORMAT(${sales.createdAt}, '%Y-%m-%d')`;
+
+    const [decls, exps, subs, emps, salesAgg, dayRows, empRows, topRows, payRows] = await Promise.all([
       db.select().from(declarations).where(eq(declarations.companyId, companyId)).orderBy(asc(declarations.createdAt)),
       db.select().from(companyExpenses).where(eq(companyExpenses.companyId, companyId)),
       db.select().from(subventions).where(eq(subventions.companyId, companyId)),
       db.select().from(companyEmployees).where(eq(companyEmployees.companyId, companyId)),
+      db
+        .select({
+          total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
+          cost: sql<string>`COALESCE(SUM(${sales.productionCost}), 0)`,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(sales)
+        .where(eq(sales.companyId, companyId)),
+      db
+        .select({ date: dayExpr, total: sql<string>`COALESCE(SUM(${sales.total}), 0)` })
+        .from(sales)
+        .where(and(eq(sales.companyId, companyId), gte(dayExpr, sinceStr)))
+        .groupBy(dayExpr),
+      db
+        .select({
+          name: companyEmployees.name,
+          total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(sales)
+        .leftJoin(companyEmployees, eq(sales.employeeId, companyEmployees.id))
+        .where(eq(sales.companyId, companyId))
+        .groupBy(sales.employeeId, companyEmployees.name)
+        .orderBy(desc(sql`SUM(${sales.total})`))
+        .limit(10),
+      db
+        .select({
+          name: saleItems.name,
+          qty: sql<string>`COALESCE(SUM(${saleItems.quantity}), 0)`,
+          revenue: sql<string>`COALESCE(SUM(${saleItems.lineTotal}), 0)`,
+        })
+        .from(saleItems)
+        .where(eq(saleItems.companyId, companyId))
+        .groupBy(saleItems.name)
+        .orderBy(desc(sql`SUM(${saleItems.lineTotal})`))
+        .limit(10),
+      db
+        .select({
+          method: sales.paymentMethod,
+          total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(sales)
+        .where(eq(sales.companyId, companyId))
+        .groupBy(sales.paymentMethod),
     ]);
 
     const activeDecls = decls.filter((d) => d.status !== 'cancelled');
@@ -54,7 +111,7 @@ meStatsRouter.get(
       total: exps.reduce((s, e) => s + num(e.amount), 0),
       deductible: exps.filter((e) => e.taxDeductible).reduce((s, e) => s + num(e.amount), 0),
       count: exps.length,
-      byCategory: Object.entries(byCategory).map(([category, total]) => ({ category, total })),
+      byCategory: Object.entries(byCategory).map(([category, total]) => ({ category, total: round2(total) })),
     };
 
     const decided = subs.filter((s) => s.status === 'approved' || s.status === 'paid');
@@ -74,6 +131,42 @@ meStatsRouter.get(
       byPosition: Object.entries(byPosition).map(([position, count]) => ({ position, count })),
     };
 
-    res.json({ fiscal, expenses: expensesStat, subventions: subventionsStat, hr: hrStat });
+    const dayMap = new Map(dayRows.map((r) => [r.date, Number(r.total)]));
+    const series: { date: string; total: number }[] = [];
+    for (let i = 0; i < 30; i += 1) {
+      const d = new Date(since.getTime() + i * 86_400_000).toISOString().slice(0, 10);
+      series.push({ date: d, total: round2(dayMap.get(d) ?? 0) });
+    }
+    const salesTotal = num(salesAgg[0]?.total ?? null);
+    const salesCost = num(salesAgg[0]?.cost ?? null);
+    const salesStat = {
+      total: round2(salesTotal),
+      count: Number(salesAgg[0]?.count ?? 0),
+      margin: round2(salesTotal - salesCost),
+      byDay: series,
+      byEmployee: empRows.map((r) => ({
+        name: r.name ?? 'Inconnu',
+        total: round2(Number(r.total)),
+        count: Number(r.count),
+      })),
+      topProducts: topRows.map((r) => ({
+        name: r.name,
+        qty: round2(Number(r.qty)),
+        revenue: round2(Number(r.revenue)),
+      })),
+      byPayment: payRows.map((r) => ({
+        method: r.method,
+        total: round2(Number(r.total)),
+        count: Number(r.count),
+      })),
+    };
+
+    res.json({
+      fiscal,
+      expenses: expensesStat,
+      subventions: subventionsStat,
+      hr: hrStat,
+      sales: salesStat,
+    });
   }),
 );
