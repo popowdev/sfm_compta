@@ -17,6 +17,7 @@ import {
 import {
   EMPLOYEE_POSITIONS,
   CONTRACT_TYPES,
+  moduleConfigBool,
   type EmployeePosition,
   type ContractType,
 } from '@rp-compta/shared';
@@ -101,7 +102,10 @@ function seniority(hireDate: string | null): string {
 }
 
 export default function Employes() {
-  const { companyId } = useCompany();
+  const { company, companyId } = useCompany();
+  const rhCfg = company?.modules.find((m) => m.key === 'rh')?.config;
+  const showCommission = moduleConfigBool(rhCfg, 'rh', 'commission');
+  const showWarnings = moduleConfigBool(rhCfg, 'rh', 'warnings');
   const queryClient = useQueryClient();
 
   const q = useQuery({ queryKey: ['employees', companyId], queryFn: () => getEmployees(companyId) });
@@ -226,10 +230,12 @@ export default function Employes() {
             <span className="text-sm text-muted-foreground">Actifs </span>
             <span className="font-semibold text-primary">{activeCount}</span>
           </div>
-          <div className="rounded-lg border bg-card px-4 py-2">
-            <span className="text-sm text-muted-foreground">Avertissements </span>
-            <span className="font-semibold text-amber-400">{warnTotal}</span>
-          </div>
+          {showWarnings && (
+            <div className="rounded-lg border bg-card px-4 py-2">
+              <span className="text-sm text-muted-foreground">Avertissements </span>
+              <span className="font-semibold text-amber-400">{warnTotal}</span>
+            </div>
+          )}
         </div>
         {canWrite && (
           <div className="ml-auto flex gap-2">
@@ -313,7 +319,7 @@ export default function Employes() {
                         {e.gradeName ?? 'compte lié'}
                       </span>
                     )}
-                    {e.warnings > 0 && (
+                    {showWarnings && e.warnings > 0 && (
                       <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400">
                         <AlertTriangle className="h-3 w-3" />
                         {e.warnings}
@@ -367,7 +373,9 @@ export default function Employes() {
                 <div className="border-t px-4 pb-4 pt-3">
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <Field label="Taux horaire" value={`${e.hourlyRate.toFixed(0)} $/h`} />
-                    <Field label="Commission" value={`${e.commissionRate.toFixed(0)} %`} />
+                    {showCommission && (
+                      <Field label="Commission" value={`${e.commissionRate.toFixed(0)} %`} />
+                    )}
                     <Field label="Ancienneté" value={seniority(e.hireDate)} />
                     <Field label="Naissance" value={fmtDate(e.dateOfBirth)} />
                   </div>
@@ -494,29 +502,34 @@ export default function Employes() {
                     onChange={(e) => set('hourlyRate', e.target.value)}
                   />
                 </label>
-                <label className="text-sm">
-                  <span className={labelCls}>Commission (%)</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className={inputCls}
-                    value={form.commissionRate}
-                    onChange={(e) => set('commissionRate', e.target.value)}
-                  />
-                </label>
+                {showCommission && (
+                  <label className="text-sm">
+                    <span className={labelCls}>Commission (%)</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className={inputCls}
+                      value={form.commissionRate}
+                      onChange={(e) => set('commissionRate', e.target.value)}
+                    />
+                  </label>
+                )}
                 <label className="text-sm">
                   <span className={labelCls}>Téléphone</span>
                   <input className={inputCls} value={form.phone} onChange={(e) => set('phone', e.target.value)} />
                 </label>
-                <label className="text-sm">
-                  <span className={labelCls}>Avertissements</span>
-                  <input
-                    type="number"
-                    className={inputCls}
-                    value={form.warnings}
-                    onChange={(e) => set('warnings', e.target.value)}
-                  />
-                </label>
+                {showWarnings && (
+                  <label className="text-sm">
+                    <span className={labelCls}>Avertissements</span>
+                    <input
+                      type="number"
+                      min="0"
+                      className={inputCls}
+                      value={form.warnings}
+                      onChange={(e) => set('warnings', e.target.value)}
+                    />
+                  </label>
+                )}
                 <label className="text-sm">
                   <span className={labelCls}>Date d'embauche</span>
                   <input

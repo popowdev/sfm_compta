@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, X, Phone, CalendarDays } from 'lucide-react';
+import { moduleConfigBool } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { fmtMoney } from '@/lib/declarations';
 import { useCompany } from '@/lib/useCompany';
@@ -41,7 +42,11 @@ const EMPTY = {
 };
 
 export default function Locations() {
-  const { companyId } = useCompany();
+  const { company, companyId } = useCompany();
+  const cfg = company?.modules.find((m) => m.key === 'locations')?.config;
+  const showDeposit = moduleConfigBool(cfg, 'locations', 'deposit');
+  const showDuration = moduleConfigBool(cfg, 'locations', 'duration');
+  const showTime = moduleConfigBool(cfg, 'locations', 'time');
   const queryClient = useQueryClient();
 
   const q = useQuery({ queryKey: ['rentals', companyId], queryFn: () => getRentals(companyId) });
@@ -104,11 +109,11 @@ export default function Locations() {
       clientPhone: form.clientPhone.trim() || undefined,
       label: form.label.trim(),
       eventDate: form.eventDate,
-      eventTime: form.eventTime.trim() || undefined,
-      durationHours: form.durationHours ? Number(form.durationHours) : undefined,
+      eventTime: showTime ? form.eventTime.trim() || undefined : undefined,
+      durationHours: showDuration && form.durationHours ? Number(form.durationHours) : undefined,
       rentalPrice: Number(form.rentalPrice) || 0,
-      deposit: Number(form.deposit) || 0,
-      depositStatus: form.depositStatus,
+      deposit: showDeposit ? Number(form.deposit) || 0 : 0,
+      depositStatus: showDeposit ? form.depositStatus : 'paid',
       status: form.status,
       notes: form.notes.trim() || undefined,
     };
@@ -132,10 +137,12 @@ export default function Locations() {
             <span className="text-sm text-muted-foreground">CA locations </span>
             <span className="font-semibold text-primary">{fmtMoney(revenue)} $</span>
           </div>
-          <div className="rounded-lg border bg-card px-4 py-2">
-            <span className="text-sm text-muted-foreground">Cautions détenues </span>
-            <span className="font-semibold text-emerald-400">{fmtMoney(held)} $</span>
-          </div>
+          {showDeposit && (
+            <div className="rounded-lg border bg-card px-4 py-2">
+              <span className="text-sm text-muted-foreground">Cautions détenues </span>
+              <span className="font-semibold text-emerald-400">{fmtMoney(held)} $</span>
+            </div>
+          )}
           <div className="rounded-lg border bg-card px-4 py-2">
             <span className="text-sm text-muted-foreground">À venir </span>
             <span className="font-semibold text-amber-400">{upcoming}</span>
@@ -159,9 +166,11 @@ export default function Locations() {
                   <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${RENTAL_STATUS[r.status].cls}`}>
                     {RENTAL_STATUS[r.status].label}
                   </span>
-                  <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${DEPOSIT_STATUS[r.depositStatus].cls}`}>
-                    {DEPOSIT_STATUS[r.depositStatus].label}
-                  </span>
+                  {showDeposit && (
+                    <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${DEPOSIT_STATUS[r.depositStatus].cls}`}>
+                      {DEPOSIT_STATUS[r.depositStatus].label}
+                    </span>
+                  )}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   <span>{r.clientName}</span>
@@ -174,8 +183,8 @@ export default function Locations() {
                   <span className="inline-flex items-center gap-1">
                     <CalendarDays className="h-3 w-3" />
                     {fmtDate(r.eventDate)}
-                    {r.eventTime ? ` · ${r.eventTime}` : ''}
-                    {r.durationHours ? ` · ${r.durationHours}h` : ''}
+                    {showTime && r.eventTime ? ` · ${r.eventTime}` : ''}
+                    {showDuration && r.durationHours ? ` · ${r.durationHours}h` : ''}
                   </span>
                 </div>
               </div>
@@ -207,10 +216,12 @@ export default function Locations() {
                 <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Prix</div>
                 <div className="text-sm font-medium">{fmtMoney(r.rentalPrice)} $</div>
               </div>
-              <div>
-                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Caution</div>
-                <div className="text-sm font-medium">{fmtMoney(r.deposit)} $</div>
-              </div>
+              {showDeposit && (
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Caution</div>
+                  <div className="text-sm font-medium">{fmtMoney(r.deposit)} $</div>
+                </div>
+              )}
             </div>
             {r.notes && <div className="mt-3 text-sm text-muted-foreground">{r.notes}</div>}
           </div>
@@ -275,30 +286,38 @@ export default function Locations() {
                   <span className={labelCls}>Date</span>
                   <input type="date" className={inputCls} value={form.eventDate} onChange={(e) => set('eventDate', e.target.value)} />
                 </label>
-                <label className="text-sm">
-                  <span className={labelCls}>Heure</span>
-                  <input className={inputCls} placeholder="20:00" value={form.eventTime} onChange={(e) => set('eventTime', e.target.value)} />
-                </label>
-                <label className="text-sm">
-                  <span className={labelCls}>Durée (h)</span>
-                  <input type="number" min="0" step="1" className={inputCls} value={form.durationHours} onChange={(e) => set('durationHours', e.target.value)} />
-                </label>
+                {showTime && (
+                  <label className="text-sm">
+                    <span className={labelCls}>Heure</span>
+                    <input className={inputCls} placeholder="20:00" value={form.eventTime} onChange={(e) => set('eventTime', e.target.value)} />
+                  </label>
+                )}
+                {showDuration && (
+                  <label className="text-sm">
+                    <span className={labelCls}>Durée (h)</span>
+                    <input type="number" min="0" step="1" className={inputCls} value={form.durationHours} onChange={(e) => set('durationHours', e.target.value)} />
+                  </label>
+                )}
                 <label className="text-sm">
                   <span className={labelCls}>Prix ($)</span>
                   <input type="number" min="0" step="0.01" className={inputCls} value={form.rentalPrice} onChange={(e) => set('rentalPrice', e.target.value)} />
                 </label>
-                <label className="text-sm">
-                  <span className={labelCls}>Caution ($)</span>
-                  <input type="number" min="0" step="0.01" className={inputCls} value={form.deposit} onChange={(e) => set('deposit', e.target.value)} />
-                </label>
-                <label className="text-sm">
-                  <span className={labelCls}>État caution</span>
-                  <select className={inputCls} value={form.depositStatus} onChange={(e) => set('depositStatus', e.target.value as DepositStatus)}>
-                    <option value="paid">Payée</option>
-                    <option value="returned">Rendue</option>
-                    <option value="kept">Conservée</option>
-                  </select>
-                </label>
+                {showDeposit && (
+                  <>
+                    <label className="text-sm">
+                      <span className={labelCls}>Caution ($)</span>
+                      <input type="number" min="0" step="0.01" className={inputCls} value={form.deposit} onChange={(e) => set('deposit', e.target.value)} />
+                    </label>
+                    <label className="text-sm">
+                      <span className={labelCls}>État caution</span>
+                      <select className={inputCls} value={form.depositStatus} onChange={(e) => set('depositStatus', e.target.value as DepositStatus)}>
+                        <option value="paid">Payée</option>
+                        <option value="returned">Rendue</option>
+                        <option value="kept">Conservée</option>
+                      </select>
+                    </label>
+                  </>
+                )}
                 <label className="text-sm">
                   <span className={labelCls}>Statut</span>
                   <select className={inputCls} value={form.status} onChange={(e) => set('status', e.target.value as RentalStatus)}>

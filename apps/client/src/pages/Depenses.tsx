@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useCompany } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { EXPENSE_CATEGORIES, type ExpenseCategory } from '@rp-compta/shared';
+import { EXPENSE_CATEGORIES, moduleConfigBool, type ExpenseCategory } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { fmtMoney } from '@/lib/declarations';
 import {
@@ -34,7 +34,12 @@ const EMPTY = {
 };
 
 export default function Depenses() {
-  const { companyId } = useCompany();
+  const { company, companyId } = useCompany();
+  const showDeductible = moduleConfigBool(
+    company?.modules.find((m) => m.key === 'depenses')?.config,
+    'depenses',
+    'deductible',
+  );
   const queryClient = useQueryClient();
 
   const q = useQuery({ queryKey: ['expenses', companyId], queryFn: () => getExpenses(companyId) });
@@ -104,10 +109,12 @@ export default function Depenses() {
           <div className="text-xs text-muted-foreground">Total dépenses</div>
           <div className="text-lg font-semibold">{fmtMoney(total)} $</div>
         </div>
-        <div className="rounded-xl border bg-card p-4">
-          <div className="text-xs text-muted-foreground">Déductibles</div>
-          <div className="text-lg font-semibold text-primary">{fmtMoney(deductible)} $</div>
-        </div>
+        {showDeductible && (
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-xs text-muted-foreground">Déductibles</div>
+            <div className="text-lg font-semibold text-primary">{fmtMoney(deductible)} $</div>
+          </div>
+        )}
         <div className="rounded-xl border bg-card p-4">
           <div className="text-xs text-muted-foreground">Nombre</div>
           <div className="text-lg font-semibold">{list.length}</div>
@@ -168,15 +175,17 @@ export default function Depenses() {
                 onChange={(e) => set('expenseDate', e.target.value)}
               />
             </label>
-            <label className="flex items-center gap-2 self-end pb-2 text-sm">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-input accent-primary"
-                checked={form.taxDeductible}
-                onChange={(e) => set('taxDeductible', e.target.checked)}
-              />
-              <span>Déductible des impôts</span>
-            </label>
+            {showDeductible && (
+              <label className="flex items-center gap-2 self-end pb-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-input accent-primary"
+                  checked={form.taxDeductible}
+                  onChange={(e) => set('taxDeductible', e.target.checked)}
+                />
+                <span>Déductible des impôts</span>
+              </label>
+            )}
             <label className="text-sm sm:col-span-2">
               <span className="mb-1 block text-muted-foreground">Notes</span>
               <textarea
@@ -209,7 +218,7 @@ export default function Depenses() {
                 <th className="px-4 py-3 text-left font-semibold">Libellé</th>
                 <th className="px-4 py-3 text-left font-semibold">Catégorie</th>
                 <th className="px-4 py-3 text-right font-semibold">Montant</th>
-                <th className="px-4 py-3 text-center font-semibold">Déduct.</th>
+                {showDeductible && <th className="px-4 py-3 text-center font-semibold">Déduct.</th>}
                 {canWrite && <th className="px-4 py-3 text-right font-semibold">Actions</th>}
               </tr>
             </thead>
@@ -229,13 +238,15 @@ export default function Depenses() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right font-medium">{fmtMoney(e.amount)} $</td>
-                  <td className="px-4 py-3 text-center">
-                    {e.taxDeductible ? (
-                      <span className="text-primary">✓</span>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </td>
+                  {showDeductible && (
+                    <td className="px-4 py-3 text-center">
+                      {e.taxDeductible ? (
+                        <span className="text-primary">✓</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                  )}
                   {canWrite && (
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       <button
@@ -260,7 +271,7 @@ export default function Depenses() {
               ))}
               {list.length === 0 && (
                 <tr>
-                  <td colSpan={canWrite ? 6 : 5} className="px-4 py-4 text-muted-foreground">
+                  <td colSpan={(canWrite ? 5 : 4) + (showDeductible ? 1 : 0)} className="px-4 py-4 text-muted-foreground">
                     Aucune dépense enregistrée.
                   </td>
                 </tr>

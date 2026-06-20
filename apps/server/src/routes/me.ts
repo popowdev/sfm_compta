@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { and, eq, isNull } from 'drizzle-orm';
-import { MODULE_KEYS, type ModuleKey } from '@rp-compta/shared';
+import { MODULE_KEYS, MODULE_CONFIG, type ModuleKey } from '@rp-compta/shared';
 import { db } from '../db';
 import { memberships, companies, companyRoles, companyModules, rolePermissions } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
@@ -81,6 +81,7 @@ meRouter.get(
         .from(companyModules)
         .where(eq(companyModules.companyId, e.companyId));
       const enabledMap = new Map(cmods.map((c) => [c.moduleKey, c.enabled]));
+      const configMap = new Map(cmods.map((c) => [c.moduleKey, c.config]));
       const permMap = new Map<string, { canView: boolean; canWrite: boolean }>();
       if (!staff && e.gradeId) {
         const perms = await db
@@ -100,6 +101,7 @@ meRouter.get(
           blocked: m.blocked,
           canView: staff ? true : (p?.canView ?? false),
           canWrite: staff ? true : (p?.canWrite ?? false),
+          config: (configMap.get(m.key) as Record<string, unknown> | null) ?? {},
         };
       });
 
@@ -150,6 +152,32 @@ meRouter.put(
       ['company-modules', id],
       ['companies'],
     ]);
+    res.json({ ok: true });
+  }),
+);
+
+meRouter.put(
+  '/companies/:id/modules/:key/config',
+  asyncHandler(async (req, res) => {
+    const id = parseId(req.params.id);
+    const key = req.params.key;
+    if (!id || !key || !(MODULE_KEYS as readonly string[]).includes(key)) {
+      return res.status(400).json({ error: 'bad_request' });
+    }
+    if (!(await canManageCompany(req.user!.id, id))) return res.status(403).json({ error: 'forbidden' });
+    const moduleKey = key as ModuleKey;
+    const fields = MODULE_CONFIG[moduleKey] ?? [];
+    if (fields.length === 0) return res.status(400).json({ error: 'no_config' });
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const config: Record<string, boolean> = {};
+    for (const f of fields) {
+      config[f.key] = typeof body[f.key] === 'boolean' ? (body[f.key] as boolean) : f.default;
+    }
+    await db
+      .insert(companyModules)
+      .values({ companyId: id, moduleKey, config })
+      .onDuplicateKeyUpdate({ set: { config } });
+    emitInvalidate(['irs', `company:${id}`], [['my-companies'], ['companies']]);
     res.json({ ok: true });
   }),
 );

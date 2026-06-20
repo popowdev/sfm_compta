@@ -66,6 +66,43 @@ export const MODULES: ModuleDef[] = [
   { key: 'actionnaires', label: 'Actionnaires', group: 'Actionnariat', defaultEnabled: false, companyPage: false },
 ];
 
+export interface ModuleConfigField {
+  key: string;
+  label: string;
+  type: 'boolean';
+  default: boolean;
+  help?: string;
+}
+
+export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
+  locations: [
+    { key: 'deposit', label: 'Gérer la caution', type: 'boolean', default: true, help: 'Champ caution + son état (payée/rendue/conservée).' },
+    { key: 'duration', label: 'Gérer la durée', type: 'boolean', default: true },
+    { key: 'time', label: "Gérer l'heure", type: 'boolean', default: true },
+  ],
+  depenses: [
+    { key: 'deductible', label: 'Gérer la déductibilité fiscale', type: 'boolean', default: true },
+  ],
+  rh: [
+    { key: 'commission', label: 'Gérer les commissions', type: 'boolean', default: true },
+    { key: 'warnings', label: 'Gérer les avertissements', type: 'boolean', default: true },
+  ],
+  badgeuse: [
+    { key: 'pauses', label: 'Autoriser les pauses', type: 'boolean', default: true },
+  ],
+};
+
+export function moduleConfigBool(
+  config: Record<string, unknown> | null | undefined,
+  moduleKey: ModuleKey,
+  fieldKey: string,
+): boolean {
+  const v = config?.[fieldKey];
+  if (typeof v === 'boolean') return v;
+  const field = MODULE_CONFIG[moduleKey]?.find((f) => f.key === fieldKey);
+  return field ? field.default : true;
+}
+
 export const EXPENSE_CATEGORIES = [
   { key: 'salary', label: 'Salaires' },
   { key: 'vehicle', label: 'Véhicules' },

@@ -9,6 +9,7 @@ export interface MyModule {
   blocked: boolean;
   canView: boolean;
   canWrite: boolean;
+  config: Record<string, unknown>;
 }
 
 export interface MyCompany {
@@ -24,6 +25,16 @@ export const toggleMyModule = (companyId: number, key: ModuleKey, enabled: boole
   apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/modules/${key}`, {
     method: 'PUT',
     body: JSON.stringify({ enabled }),
+  });
+
+export const setModuleConfig = (
+  companyId: number,
+  key: ModuleKey,
+  config: Record<string, boolean>,
+) =>
+  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/modules/${key}/config`, {
+    method: 'PUT',
+    body: JSON.stringify(config),
   });
 
 export async function uploadMyCompanyLogo(companyId: number, file: File): Promise<void> {

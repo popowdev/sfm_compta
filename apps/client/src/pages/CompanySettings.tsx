@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { MODULES } from '@rp-compta/shared';
+import { Settings2 } from 'lucide-react';
+import { MODULES, MODULE_CONFIG } from '@rp-compta/shared';
 import { toggleMyModule, uploadMyCompanyLogo, type MyModule } from '@/lib/me';
 import { useCompany } from '@/lib/useCompany';
 import { moduleIcon } from '@/lib/moduleIcons';
 import { Switch } from '@/components/ui/switch';
+import { ModuleConfigModal } from '@/components/ModuleConfigModal';
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
@@ -32,6 +35,7 @@ export default function CompanySettings() {
       toggleMyModule(companyId, v.key, v.enabled),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['my-companies'] }),
   });
+  const [configModule, setConfigModule] = useState<MyModule | null>(null);
 
   if (isLoading) return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
   if (!mine || !mine.canManage) return <Navigate to="/" replace />;
@@ -104,11 +108,23 @@ export default function CompanySettings() {
                         </span>
                       )}
                     </span>
-                    <Switch
-                      checked={m.enabled && !m.blocked}
-                      disabled={toggle.isPending || m.blocked}
-                      onChange={() => toggle.mutate({ key: m.key, enabled: !m.enabled })}
-                    />
+                    <div className="flex items-center gap-1">
+                      {m.enabled && !m.blocked && (MODULE_CONFIG[m.key]?.length ?? 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setConfigModule(m)}
+                          title="Options du module"
+                          className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        >
+                          <Settings2 className="h-4 w-4" />
+                        </button>
+                      )}
+                      <Switch
+                        checked={m.enabled && !m.blocked}
+                        disabled={toggle.isPending || m.blocked}
+                        onChange={() => toggle.mutate({ key: m.key, enabled: !m.enabled })}
+                      />
+                    </div>
                   </div>
                   );
                 })}
@@ -121,6 +137,12 @@ export default function CompanySettings() {
       <p className="mt-4 text-xs text-muted-foreground">
         La gestion des grades et des membres arrivera prochainement côté patron.
       </p>
+
+      <ModuleConfigModal
+        companyId={companyId}
+        module={configModule}
+        onClose={() => setConfigModule(null)}
+      />
     </div>
   );
 }

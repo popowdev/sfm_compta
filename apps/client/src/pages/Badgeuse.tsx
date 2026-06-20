@@ -15,7 +15,7 @@ import {
   Coffee,
   Square,
 } from 'lucide-react';
-import { EMPLOYEE_POSITIONS } from '@rp-compta/shared';
+import { EMPLOYEE_POSITIONS, moduleConfigBool } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { fmtMoney } from '@/lib/declarations';
 import {
@@ -113,7 +113,7 @@ function EntriesTable({ entries }: { entries: TimeEntry[] }) {
   );
 }
 
-function MyClock({ companyId }: { companyId: number }) {
+function MyClock({ companyId, pausesEnabled }: { companyId: number; pausesEnabled: boolean }) {
   const queryClient = useQueryClient();
   const q = useQuery({ queryKey: ['timeclock-me', companyId], queryFn: () => getMyTimeclock(companyId) });
   const current = q.data?.current ?? null;
@@ -194,15 +194,17 @@ function MyClock({ companyId }: { companyId: number }) {
                     Reprendre
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => pause.mutate()}
-                    disabled={busy}
-                    className="inline-flex h-11 items-center gap-2 rounded-lg bg-amber-500 px-6 font-semibold text-white transition-colors hover:bg-amber-500/90 disabled:opacity-50"
-                  >
-                    <Coffee className="h-5 w-5" />
-                    Prendre une pause
-                  </button>
+                  pausesEnabled && (
+                    <button
+                      type="button"
+                      onClick={() => pause.mutate()}
+                      disabled={busy}
+                      className="inline-flex h-11 items-center gap-2 rounded-lg bg-amber-500 px-6 font-semibold text-white transition-colors hover:bg-amber-500/90 disabled:opacity-50"
+                    >
+                      <Coffee className="h-5 w-5" />
+                      Prendre une pause
+                    </button>
+                  )
                 )}
                 <button
                   type="button"
@@ -482,7 +484,12 @@ function TeamView({ companyId }: { companyId: number }) {
 }
 
 export default function Badgeuse() {
-  const { companyId } = useCompany();
+  const { company, companyId } = useCompany();
+  const pausesEnabled = moduleConfigBool(
+    company?.modules.find((m) => m.key === 'badgeuse')?.config,
+    'badgeuse',
+    'pauses',
+  );
   const [tab, setTab] = useState<'me' | 'team'>('me');
   const me = useQuery({ queryKey: ['timeclock-me', companyId], queryFn: () => getMyTimeclock(companyId) });
   const canManageTeam = me.data?.canManageTeam ?? false;
@@ -507,7 +514,11 @@ export default function Badgeuse() {
         </div>
       )}
 
-      {canManageTeam && tab === 'team' ? <TeamView companyId={companyId} /> : <MyClock companyId={companyId} />}
+      {canManageTeam && tab === 'team' ? (
+        <TeamView companyId={companyId} />
+      ) : (
+        <MyClock companyId={companyId} pausesEnabled={pausesEnabled} />
+      )}
     </div>
   );
 }
