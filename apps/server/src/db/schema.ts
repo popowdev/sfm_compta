@@ -325,6 +325,30 @@ export const messages = mysqlTable('messages', {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const companyRentals = mysqlTable('company_rentals', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  clientName: varchar('client_name', { length: 150 }).notNull(),
+  clientPhone: varchar('client_phone', { length: 50 }),
+  label: varchar('label', { length: 150 }).notNull(),
+  eventDate: date('event_date', { mode: 'string' }).notNull(),
+  eventTime: varchar('event_time', { length: 20 }),
+  durationHours: int('duration_hours'),
+  rentalPrice: decimal('rental_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  deposit: decimal('deposit', { precision: 12, scale: 2 }).notNull().default('0'),
+  depositStatus: mysqlEnum('deposit_status', ['paid', 'returned', 'kept']).notNull().default('paid'),
+  status: mysqlEnum('status', ['reserved', 'active', 'completed', 'cancelled'])
+    .notNull()
+    .default('reserved'),
+  notes: text('notes'),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const sessions = mysqlTable('sessions', {
   id: varchar('id', { length: 64 }).primaryKey(),
   userId: int('user_id')
@@ -432,6 +456,7 @@ export type Message = typeof messages.$inferSelect;
 export type CompanyEmployee = typeof companyEmployees.$inferSelect;
 export type TimeEntry = typeof timeEntries.$inferSelect;
 export type SalaryGridRow = typeof salaryGrid.$inferSelect;
+export type CompanyRental = typeof companyRentals.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type TaxBracketRow = typeof taxBrackets.$inferSelect;
 export type FiscalConfigRow = typeof fiscalConfig.$inferSelect;

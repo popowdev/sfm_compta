@@ -141,6 +141,13 @@
       "when": 1781953563086,
       "tag": "0019_common_texas_twister",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1781953673243,
+      "tag": "0020_thin_emma_frost",
+      "breakpoints": true
     }
   ]
 }
