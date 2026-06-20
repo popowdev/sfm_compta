@@ -82,13 +82,23 @@ meRouter.get(
         .where(eq(companyModules.companyId, e.companyId));
       const enabledMap = new Map(cmods.map((c) => [c.moduleKey, c.enabled]));
       const configMap = new Map(cmods.map((c) => [c.moduleKey, c.config]));
-      const permMap = new Map<string, { canView: boolean; canWrite: boolean }>();
+      const permMap = new Map<
+        string,
+        { canView: boolean; canWrite: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }
+      >();
       if (!staff && e.gradeId) {
         const perms = await db
           .select()
           .from(rolePermissions)
           .where(eq(rolePermissions.companyRoleId, e.gradeId));
-        for (const p of perms) permMap.set(p.moduleKey, { canView: p.canView, canWrite: p.canWrite });
+        for (const p of perms)
+          permMap.set(p.moduleKey, {
+            canView: p.canView,
+            canWrite: p.canWrite,
+            canCreate: p.canCreate,
+            canEdit: p.canEdit,
+            canDelete: p.canDelete,
+          });
       }
 
       const modules = effective.map((m) => {
@@ -101,6 +111,9 @@ meRouter.get(
           blocked: m.blocked,
           canView: staff ? true : (p?.canView ?? false),
           canWrite: staff ? true : (p?.canWrite ?? false),
+          canCreate: staff ? true : (p?.canCreate ?? false),
+          canEdit: staff ? true : (p?.canEdit ?? false),
+          canDelete: staff ? true : (p?.canDelete ?? false),
           config: (configMap.get(m.key) as Record<string, unknown> | null) ?? {},
         };
       });

@@ -154,6 +154,9 @@ export const rolePermissions = mysqlTable(
     moduleKey: mysqlEnum('module_key', MODULE_KEYS).notNull(),
     canView: boolean('can_view').notNull().default(false),
     canWrite: boolean('can_write').notNull().default(false),
+    canCreate: boolean('can_create').notNull().default(false),
+    canEdit: boolean('can_edit').notNull().default(false),
+    canDelete: boolean('can_delete').notNull().default(false),
   },
   (t) => ({
     uqRoleModule: unique('uq_role_module').on(t.companyRoleId, t.moduleKey),

@@ -5,7 +5,7 @@ import { db } from '../db';
 import { timeEntries, companyEmployees } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
-import { getModuleAccess } from '../services/access';
+import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
 
 type Entry = typeof timeEntries.$inferSelect;
@@ -51,12 +51,12 @@ function computeEntry(t: Entry, rate: number, now: string) {
 export const meTimeclockRouter = Router({ mergeParams: true });
 meTimeclockRouter.use(requireAuth);
 
-async function gate(userId: number, companyId: number, write: boolean) {
+async function gate(userId: number, companyId: number, action: PermAction) {
   const acc = await getModuleAccess(userId, companyId, 'badgeuse');
   if (!acc) return { ok: false as const, status: 404, error: 'not_member' };
   if (!acc.enabled || acc.blocked) return { ok: false as const, status: 403, error: 'module_unavailable' };
   if (!acc.canView) return { ok: false as const, status: 403, error: 'forbidden' };
-  if (write && !acc.canWrite) return { ok: false as const, status: 403, error: 'forbidden' };
+  if (actionDenied(acc, action)) return { ok: false as const, status: 403, error: 'forbidden' };
   return { ok: true as const, canWrite: acc.canWrite };
 }
 
@@ -93,7 +93,7 @@ meTimeclockRouter.get(
   asyncHandler(async (req, res) => {
     const companyId = parseId(req.params.companyId);
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
-    const g = await gate(req.user!.id, companyId, false);
+    const g = await gate(req.user!.id, companyId, 'view');
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const emp = await myEmployee(req.user!.id, companyId);
     if (!emp) {
@@ -129,7 +129,7 @@ async function selfAction(
 ) {
   const companyId = parseId(req.params.companyId);
   if (!companyId) return res.status(400).json({ error: 'bad_request' });
-  const g = await gate(req.user!.id, companyId, false);
+  const g = await gate(req.user!.id, companyId, 'view');
   if (!g.ok) return res.status(g.status).json({ error: g.error });
   const emp = await myEmployee(req.user!.id, companyId);
   if (!emp) return res.status(404).json({ error: 'no_fiche' });
@@ -197,7 +197,7 @@ meTimeclockRouter.get(
   asyncHandler(async (req, res) => {
     const companyId = parseId(req.params.companyId);
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
-    const g = await gate(req.user!.id, companyId, true);
+    const g = await gate(req.user!.id, companyId, 'edit');
     if (!g.ok) return res.status(g.status).json({ error: g.error });
 
     const now = nowStr();
@@ -266,7 +266,7 @@ meTimeclockRouter.post(
   asyncHandler(async (req, res) => {
     const companyId = parseId(req.params.companyId);
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
-    const g = await gate(req.user!.id, companyId, true);
+    const g = await gate(req.user!.id, companyId, 'create');
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
@@ -297,7 +297,7 @@ meTimeclockRouter.delete(
     const companyId = parseId(req.params.companyId);
     const id = parseId(req.params.id);
     if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
-    const g = await gate(req.user!.id, companyId, true);
+    const g = await gate(req.user!.id, companyId, 'delete');
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const result = await db
       .delete(timeEntries)

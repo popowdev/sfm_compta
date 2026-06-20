@@ -40,7 +40,19 @@ export interface ModuleAccess {
   blocked: boolean;
   canView: boolean;
   canWrite: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
   gradeId: number | null;
+}
+
+export type PermAction = 'view' | 'create' | 'edit' | 'delete';
+
+export function actionDenied(acc: ModuleAccess, action: PermAction): boolean {
+  if (action === 'create') return !acc.canCreate;
+  if (action === 'edit') return !acc.canEdit;
+  if (action === 'delete') return !acc.canDelete;
+  return false;
 }
 
 export async function getModuleAccess(
@@ -58,7 +70,16 @@ export async function getModuleAccess(
   const blocked = await isModuleBlocked(moduleKey);
 
   if (await isStaff(userId)) {
-    return { enabled, blocked, canView: true, canWrite: true, gradeId: null };
+    return {
+      enabled,
+      blocked,
+      canView: true,
+      canWrite: true,
+      canCreate: true,
+      canEdit: true,
+      canDelete: true,
+      gradeId: null,
+    };
   }
 
   const mem = await db
@@ -77,6 +98,9 @@ export async function getModuleAccess(
   const gradeId = mem[0].gradeId;
   let canView = false;
   let canWrite = false;
+  let canCreate = false;
+  let canEdit = false;
+  let canDelete = false;
   if (gradeId) {
     const p = await db
       .select()
@@ -85,7 +109,10 @@ export async function getModuleAccess(
       .limit(1);
     canView = p[0]?.canView ?? false;
     canWrite = p[0]?.canWrite ?? false;
+    canCreate = p[0]?.canCreate ?? false;
+    canEdit = p[0]?.canEdit ?? false;
+    canDelete = p[0]?.canDelete ?? false;
   }
 
-  return { enabled, blocked, canView, canWrite, gradeId };
+  return { enabled, blocked, canView, canWrite, canCreate, canEdit, canDelete, gradeId };
 }

@@ -9,6 +9,9 @@ export interface MyModule {
   blocked: boolean;
   canView: boolean;
   canWrite: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
   config: Record<string, unknown>;
 }
 

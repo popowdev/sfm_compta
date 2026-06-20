@@ -79,7 +79,7 @@ meDeclarationsRouter.post(
     const acc = await getModuleAccess(req.user!.id, companyId, 'declarations');
     if (!acc) return res.status(404).json({ error: 'not_member' });
     if (!acc.enabled || acc.blocked) return res.status(403).json({ error: 'module_unavailable' });
-    if (!acc.canWrite) return res.status(403).json({ error: 'forbidden' });
+    if (!acc.canCreate) return res.status(403).json({ error: 'forbidden' });
     const parsed = submitSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     const d = parsed.data;

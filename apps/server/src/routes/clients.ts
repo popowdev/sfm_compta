@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { LOYALTY_TIERS, LOYALTY_TIER_KEYS } from '@rp-compta/shared';
@@ -6,8 +6,12 @@ import { db } from '../db';
 import { companyClients, clientLoyaltyTiers } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
-import { getModuleAccess, canManageCompany } from '../services/access';
+import { getModuleAccess, canManageCompany, actionDenied, type PermAction } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
+
+function methodAction(method: string): PermAction {
+  return method === 'POST' ? 'create' : method === 'PUT' ? 'edit' : method === 'DELETE' ? 'delete' : 'view';
+}
 
 function parseId(value: string | undefined): number | null {
   const n = Number(value);
@@ -66,13 +70,13 @@ function toRow(d: z.infer<typeof bodySchema>) {
 export const meClientsRouter = Router({ mergeParams: true });
 meClientsRouter.use(requireAuth);
 
-async function gate(userId: number, companyId: number, write: boolean) {
-  const acc = await getModuleAccess(userId, companyId, 'clients');
+async function gate(req: Request, companyId: number) {
+  const acc = await getModuleAccess(req.user!.id, companyId, 'clients');
   if (!acc) return { ok: false as const, status: 404, error: 'not_member' };
   if (!acc.enabled || acc.blocked) return { ok: false as const, status: 403, error: 'module_unavailable' };
   if (!acc.canView) return { ok: false as const, status: 403, error: 'forbidden' };
-  if (write && !acc.canWrite) return { ok: false as const, status: 403, error: 'forbidden' };
-  return { ok: true as const, canWrite: acc.canWrite };
+  if (actionDenied(acc, methodAction(req.method))) return { ok: false as const, status: 403, error: 'forbidden' };
+  return { ok: true as const, canWrite: acc.canWrite, canCreate: acc.canCreate, canEdit: acc.canEdit, canDelete: acc.canDelete };
 }
 
 meClientsRouter.get(
@@ -80,7 +84,7 @@ meClientsRouter.get(
   asyncHandler(async (req, res) => {
     const companyId = parseId(req.params.companyId);
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
-    const g = await gate(req.user!.id, companyId, false);
+    const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const rows = await db
       .select()
@@ -96,7 +100,7 @@ meClientsRouter.post(
   asyncHandler(async (req, res) => {
     const companyId = parseId(req.params.companyId);
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
-    const g = await gate(req.user!.id, companyId, true);
+    const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const parsed = bodySchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
@@ -112,7 +116,7 @@ meClientsRouter.put(
     const companyId = parseId(req.params.companyId);
     const id = parseId(req.params.id);
     if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
-    const g = await gate(req.user!.id, companyId, true);
+    const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const parsed = bodySchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
@@ -132,7 +136,7 @@ meClientsRouter.delete(
     const companyId = parseId(req.params.companyId);
     const id = parseId(req.params.id);
     if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
-    const g = await gate(req.user!.id, companyId, true);
+    const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const result = await db
       .delete(companyClients)
@@ -174,7 +178,7 @@ meLoyaltyRouter.get(
   asyncHandler(async (req, res) => {
     const companyId = parseId(req.params.companyId);
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
-    const g = await gate(req.user!.id, companyId, false);
+    const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const rows = await db
       .select()
