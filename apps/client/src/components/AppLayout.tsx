@@ -11,6 +11,7 @@ import {
   SlidersHorizontal,
   Settings,
   ChevronDown,
+  ChevronLeft,
   PanelLeftClose,
   PanelLeft,
   LogOut,
@@ -18,7 +19,7 @@ import {
 } from 'lucide-react';
 import { hasAppAccess, MODULES } from '@rp-compta/shared';
 import { useAuth } from '@/auth/AuthContext';
-import { getMyCompanies } from '@/lib/me';
+import { getMyCompanies, type MyCompany } from '@/lib/me';
 import { groupIcon } from '@/lib/moduleIcons';
 
 const COMPANY_PAGE_KEYS = new Set<string>(MODULES.filter((m) => m.companyPage).map((m) => m.key));
@@ -82,78 +83,89 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const data = myCompanies.data ?? [];
 
   const location = useLocation();
-  const activeMatch = location.pathname.match(/^\/entreprise\/([^/]+)\/m\/([^/]+)/);
-  const activeSlug = activeMatch ? activeMatch[1] : null;
-  const activeModuleKey = activeMatch ? activeMatch[2] : null;
+  const slugMatch = location.pathname.match(/^\/entreprise\/([^/]+)/);
+  const activeSlug = slugMatch ? slugMatch[1] : null;
+  const moduleMatch = location.pathname.match(/^\/entreprise\/[^/]+\/m\/([^/]+)/);
+  const activeModuleKey = moduleMatch ? moduleMatch[1] : null;
+  const currentCompany: MyCompany | null = activeSlug
+    ? (data.find((c) => c.company.slug === activeSlug) ?? null)
+    : null;
   const activeGroup =
-    activeModuleKey && COMPANY_PAGE_KEYS.has(activeModuleKey)
-      ? (data
-          .find((c) => c.company.slug === activeSlug)
-          ?.modules.find((m) => m.key === activeModuleKey)?.group ?? null)
+    currentCompany && activeModuleKey
+      ? (currentCompany.modules.find((m) => m.key === activeModuleKey)?.group ?? null)
       : null;
 
-  const companyGroups: NavGroup[] = data
-    .map((c) => {
-      const accessible = c.modules.filter(
-        (m) => COMPANY_PAGE_KEYS.has(m.key) && m.enabled && !m.blocked && m.canView,
-      );
-      const items: NavItem[] = [];
-      const seen = new Set<string>();
-      for (const m of accessible) {
-        if (seen.has(m.group)) continue;
-        seen.add(m.group);
-        items.push({
-          to: `/entreprise/${c.company.slug}/m/${m.key}`,
-          label: m.group,
-          Icon: groupIcon(m.group),
-          active: activeSlug === c.company.slug && activeGroup === m.group,
-        });
-      }
-      if (c.canManage) {
-        items.push({
-          to: `/entreprise/${c.company.slug}/parametres`,
-          label: 'Paramètres',
-          Icon: Settings,
-        });
-      }
-      return { title: c.company.name, items, defaultClosed: isIrs };
-    })
-    .filter((g) => g.items.length > 0);
+  function companyNavItems(c: MyCompany): NavItem[] {
+    const accessible = c.modules.filter(
+      (m) => COMPANY_PAGE_KEYS.has(m.key) && m.enabled && !m.blocked && m.canView,
+    );
+    const items: NavItem[] = [
+      { to: `/entreprise/${c.company.slug}`, label: "Tableau de bord", Icon: LayoutDashboard, end: true },
+    ];
+    const seen = new Set<string>();
+    for (const m of accessible) {
+      if (seen.has(m.group)) continue;
+      seen.add(m.group);
+      items.push({
+        to: `/entreprise/${c.company.slug}/m/${m.key}`,
+        label: m.group,
+        Icon: groupIcon(m.group),
+        active: activeGroup === m.group,
+      });
+    }
+    if (c.canManage) {
+      items.push({ to: `/entreprise/${c.company.slug}/parametres`, label: 'Paramètres', Icon: Settings });
+    }
+    return items;
+  }
 
-  const groups: NavGroup[] = [
-    { title: null, items: [{ to: '/', label: 'Tableau de bord', Icon: LayoutDashboard, end: true }] },
-    ...(isIrs
-      ? [
-          {
-            title: 'IRS',
-            items: [
-              { to: '/entreprises', label: 'Entreprises', Icon: Building2 },
-              { to: '/declarations', label: 'Déclarations', Icon: FileText },
-              { to: '/subventions', label: 'Subventions', Icon: HandCoins },
-              { to: '/messages', label: 'Messagerie', Icon: MessagesSquare },
-              { to: '/bareme', label: 'Barème fiscal', Icon: Scale },
-            ],
-          },
-        ]
-      : []),
-    ...(roles.includes('staff')
-      ? [{ title: 'Staff', items: [{ to: '/modules', label: 'Modules', Icon: SlidersHorizontal }] }]
-      : []),
-    ...companyGroups,
-  ];
+  // Immersive per-company shell when inside a company, else the global shell.
+  const immersive = currentCompany !== null;
+  let groups: NavGroup[];
+  if (immersive) {
+    groups = [{ title: null, items: companyNavItems(currentCompany!) }];
+  } else {
+    const companyGroups: NavGroup[] = data
+      .map((c) => {
+        const items = companyNavItems(c).filter((it) => !it.end);
+        return { title: c.company.name, items, defaultClosed: isIrs };
+      })
+      .filter((g) => g.items.length > 0);
+    groups = [
+      { title: null, items: [{ to: '/', label: 'Tableau de bord', Icon: LayoutDashboard, end: true }] },
+      ...(isIrs
+        ? [
+            {
+              title: 'IRS',
+              items: [
+                { to: '/entreprises', label: 'Entreprises', Icon: Building2 },
+                { to: '/declarations', label: 'Déclarations', Icon: FileText },
+                { to: '/subventions', label: 'Subventions', Icon: HandCoins },
+                { to: '/messages', label: 'Messagerie', Icon: MessagesSquare },
+                { to: '/bareme', label: 'Barème fiscal', Icon: Scale },
+              ],
+            },
+          ]
+        : []),
+      ...(roles.includes('staff')
+        ? [{ title: 'Staff', items: [{ to: '/modules', label: 'Modules', Icon: SlidersHorizontal }] }]
+        : []),
+      ...companyGroups,
+    ];
+  }
 
   const term = search.trim().toLowerCase();
   const visibleGroups: NavGroup[] = term
     ? groups
         .map((g) => {
           const titleMatch = g.title?.toLowerCase().includes(term) ?? false;
-          const items = titleMatch
-            ? g.items
-            : g.items.filter((it) => it.label.toLowerCase().includes(term));
+          const items = titleMatch ? g.items : g.items.filter((it) => it.label.toLowerCase().includes(term));
           return { ...g, items };
         })
         .filter((g) => g.items.length > 0)
     : groups;
+
+  const logoUrl = currentCompany?.company.logoUrl;
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -162,26 +174,48 @@ export function AppLayout({ children }: { children: ReactNode }) {
           collapsed ? 'w-16' : 'w-60'
         }`}
       >
-        <div
-          className={`flex h-16 items-center ${collapsed ? 'justify-center px-0' : 'justify-between px-5'}`}
-        >
-          {!collapsed && <img src="/logo.png" alt="RP Compta" className="h-9 w-auto" />}
+        <div className={`flex h-16 items-center ${collapsed ? 'justify-center px-0' : 'justify-between px-4'}`}>
+          {immersive ? (
+            collapsed ? (
+              <Link
+                to="/"
+                title="Mes entreprises"
+                className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+              >
+                <ChevronLeft className="h-[18px] w-[18px]" />
+              </Link>
+            ) : (
+              <div className="flex min-w-0 items-center gap-2.5">
+                {logoUrl ? (
+                  <img src={logoUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />
+                ) : (
+                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/15 text-sm font-bold text-primary">
+                    {currentCompany!.company.name.slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <Link to="/" className="flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground">
+                    <ChevronLeft className="h-3 w-3" /> Mes entreprises
+                  </Link>
+                  <div className="truncate text-sm font-semibold leading-tight">{currentCompany!.company.name}</div>
+                </div>
+              </div>
+            )
+          ) : (
+            !collapsed && <img src="/logo.png" alt="RP Compta" className="h-9 w-auto" />
+          )}
           <button
             type="button"
             onClick={toggle}
             aria-label={collapsed ? 'Déplier le menu' : 'Replier le menu'}
-            className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
           >
-            {collapsed ? (
-              <PanelLeft className="h-[18px] w-[18px]" />
-            ) : (
-              <PanelLeftClose className="h-[18px] w-[18px]" />
-            )}
+            {collapsed ? <PanelLeft className="h-[18px] w-[18px]" /> : <PanelLeftClose className="h-[18px] w-[18px]" />}
           </button>
         </div>
 
         <nav className="flex-1 overflow-auto px-2 py-2">
-          {isIrs && !collapsed && (
+          {!immersive && isIrs && !collapsed && (
             <div className="relative mb-2 px-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -196,8 +230,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <div className="px-3 py-4 text-sm text-muted-foreground">Aucun résultat.</div>
           )}
           {visibleGroups.map((g, gi) => {
-            const effectiveClosed =
-              g.title !== null && (closedGroups[g.title] ?? g.defaultClosed ?? false);
+            const effectiveClosed = g.title !== null && (closedGroups[g.title] ?? g.defaultClosed ?? false);
             const isClosed = !collapsed && !term && effectiveClosed;
             return (
               <div key={g.title ?? `g${gi}`} className={gi > 0 ? 'pt-2' : ''}>
@@ -211,9 +244,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                       className="flex w-full items-center justify-between px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
                     >
                       <span className="truncate">{g.title}</span>
-                      <ChevronDown
-                        className={`h-3.5 w-3.5 shrink-0 transition-transform ${isClosed ? '-rotate-90' : ''}`}
-                      />
+                      <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${isClosed ? '-rotate-90' : ''}`} />
                     </button>
                   ))}
                 {!isClosed && (
@@ -270,9 +301,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           ) : (
             <>
               <div className="mb-2 flex items-center gap-2 px-2">
-                {user?.avatarUrl && (
-                  <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full" />
-                )}
+                {user?.avatarUrl && <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full" />}
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium">{user?.displayName}</div>
                   {roleLabel && <div className="text-xs text-primary">{roleLabel}</div>}

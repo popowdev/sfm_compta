@@ -21,6 +21,7 @@ import { meSubventionsRouter, irsSubventionsRouter } from './routes/subventions'
 import { meMessagesRouter, irsMessagesRouter } from './routes/messages';
 import { meEmployeesRouter } from './routes/employees';
 import { meStatsRouter } from './routes/stats';
+import { meDashboardRouter } from './routes/dashboard';
 import { meTimeclockRouter } from './routes/timeclock';
 import { meSalaryRouter } from './routes/salary';
 import { meRentalsRouter } from './routes/rentals';
@@ -63,6 +64,7 @@ app.use('/api/me/companies/:companyId/subventions', meSubventionsRouter);
 app.use('/api/me/companies/:companyId/messages', meMessagesRouter);
 app.use('/api/me/companies/:companyId/employees', meEmployeesRouter);
 app.use('/api/me/companies/:companyId/stats', meStatsRouter);
+app.use('/api/me/companies/:companyId/dashboard', meDashboardRouter);
 app.use('/api/me/companies/:companyId/timeclock', meTimeclockRouter);
 app.use('/api/me/companies/:companyId/salary-grid', meSalaryRouter);
 app.use('/api/me/companies/:companyId/rentals', meRentalsRouter);
