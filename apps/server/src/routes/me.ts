@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { and, eq, isNull } from 'drizzle-orm';
-import { MODULE_KEYS, MODULE_CONFIG, type ModuleKey } from '@rp-compta/shared';
+import { MODULE_KEYS, MODULE_CONFIG, MODULES, type ModuleKey } from '@rp-compta/shared';
 import { db } from '../db';
 import { memberships, companies, companyRoles, companyModules, rolePermissions } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
@@ -166,6 +166,7 @@ meRouter.put(
     }
     if (!(await canManageCompany(req.user!.id, id))) return res.status(403).json({ error: 'forbidden' });
     const moduleKey = key as ModuleKey;
+    if (await isModuleBlocked(moduleKey)) return res.status(409).json({ error: 'module_blocked' });
     const fields = MODULE_CONFIG[moduleKey] ?? [];
     if (fields.length === 0) return res.status(400).json({ error: 'no_config' });
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -173,9 +174,10 @@ meRouter.put(
     for (const f of fields) {
       config[f.key] = typeof body[f.key] === 'boolean' ? (body[f.key] as boolean) : f.default;
     }
+    const defaultEnabled = MODULES.find((m) => m.key === moduleKey)?.defaultEnabled ?? false;
     await db
       .insert(companyModules)
-      .values({ companyId: id, moduleKey, config })
+      .values({ companyId: id, moduleKey, enabled: defaultEnabled, config })
       .onDuplicateKeyUpdate({ set: { config } });
     emitInvalidate(['irs', `company:${id}`], [['my-companies'], ['companies']]);
     res.json({ ok: true });

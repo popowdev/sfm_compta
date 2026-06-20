@@ -109,11 +109,12 @@ export default function Locations() {
       clientPhone: form.clientPhone.trim() || undefined,
       label: form.label.trim(),
       eventDate: form.eventDate,
-      eventTime: showTime ? form.eventTime.trim() || undefined : undefined,
-      durationHours: showDuration && form.durationHours ? Number(form.durationHours) : undefined,
+      eventTime: showTime || editing !== null ? form.eventTime.trim() || undefined : undefined,
+      durationHours:
+        (showDuration || editing !== null) && form.durationHours ? Number(form.durationHours) : undefined,
       rentalPrice: Number(form.rentalPrice) || 0,
-      deposit: showDeposit ? Number(form.deposit) || 0 : 0,
-      depositStatus: showDeposit ? form.depositStatus : 'paid',
+      deposit: showDeposit || editing !== null ? Number(form.deposit) || 0 : 0,
+      depositStatus: showDeposit || editing !== null ? form.depositStatus : 'paid',
       status: form.status,
       notes: form.notes.trim() || undefined,
     };
