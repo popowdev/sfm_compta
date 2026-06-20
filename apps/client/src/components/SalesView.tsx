@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, ShoppingCart, X, FileDown, Receipt, Loader2 } from 'lucide-react';
+import { Plus, Trash2, ShoppingCart, X, FileDown, Receipt, Loader2, Search } from 'lucide-react';
 import { PAYMENT_METHODS, type PaymentMethod } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -56,6 +56,8 @@ export function SalesView({
   const uid = useRef(1);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [clientId, setClientId] = useState<number | ''>('');
+  const [clientQuery, setClientQuery] = useState('');
+  const [clientOpen, setClientOpen] = useState(false);
   const [payment, setPayment] = useState<PaymentMethod>('cash');
   const [discount, setDiscount] = useState('');
   const [notes, setNotes] = useState('');
@@ -180,6 +182,12 @@ export function SalesView({
 
   const activeItems = catalogItems.filter((i) => i.active);
   const recent = salesQ.data?.sales ?? [];
+  const selectedClient = clientId ? clients.find((c) => c.id === clientId) ?? null : null;
+  const clientMatches = (
+    clientQuery.trim()
+      ? clients.filter((c) => c.name.toLowerCase().includes(clientQuery.trim().toLowerCase()))
+      : clients
+  ).slice(0, 50);
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_22rem]">
@@ -276,21 +284,66 @@ export function SalesView({
         <div className="rounded-xl border bg-card p-4">
           <div className="space-y-3">
             {clientLink && (
-              <label className="block text-sm">
+              <div className="text-sm">
                 <span className="mb-1 block text-muted-foreground">Client</span>
-                <select
-                  className={inputCls}
-                  value={clientId}
-                  onChange={(e) => setClientId(e.target.value ? Number(e.target.value) : '')}
-                >
-                  <option value="">— aucun —</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                {selectedClient ? (
+                  <div className="flex items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2">
+                    <span className="truncate text-sm font-medium">{selectedClient.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClientId('');
+                        setClientQuery('');
+                      }}
+                      aria-label="Retirer le client"
+                      className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      className={`${inputCls} pl-8`}
+                      value={clientQuery}
+                      onChange={(e) => {
+                        setClientQuery(e.target.value);
+                        setClientOpen(true);
+                      }}
+                      onFocus={() => setClientOpen(true)}
+                      onBlur={() => setTimeout(() => setClientOpen(false), 120)}
+                      placeholder="Rechercher un client…"
+                      aria-label="Rechercher un client"
+                    />
+                    {clientOpen && (
+                      <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border bg-card shadow-lg">
+                        {clients.length === 0 ? (
+                          <div className="px-3 py-2 text-xs text-muted-foreground">Aucun client enregistré.</div>
+                        ) : clientMatches.length === 0 ? (
+                          <div className="px-3 py-2 text-xs text-muted-foreground">Aucun client trouvé.</div>
+                        ) : (
+                          clientMatches.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setClientId(c.id);
+                                setClientQuery('');
+                                setClientOpen(false);
+                              }}
+                              className="block w-full truncate px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
+                            >
+                              {c.name}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
             <label className="block text-sm">
               <span className="mb-1 block text-muted-foreground">Paiement</span>
