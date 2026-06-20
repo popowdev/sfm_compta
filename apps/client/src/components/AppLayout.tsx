@@ -22,7 +22,7 @@ import {
 import { hasAppAccess, MODULES } from '@rp-compta/shared';
 import { useAuth } from '@/auth/AuthContext';
 import { getMyCompanies, type MyCompany } from '@/lib/me';
-import { groupIcon } from '@/lib/moduleIcons';
+import { moduleIcon } from '@/lib/moduleIcons';
 
 const COMPANY_PAGE_KEYS = new Set<string>(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
@@ -87,32 +87,22 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const slugMatch = location.pathname.match(/^\/entreprise\/([^/]+)/);
   const activeSlug = slugMatch ? slugMatch[1] : null;
-  const moduleMatch = location.pathname.match(/^\/entreprise\/[^/]+\/m\/([^/]+)/);
-  const activeModuleKey = moduleMatch ? moduleMatch[1] : null;
   const currentCompany: MyCompany | null = activeSlug
     ? (data.find((c) => c.company.slug === activeSlug) ?? null)
     : null;
-  const activeGroup =
-    currentCompany && activeModuleKey
-      ? (currentCompany.modules.find((m) => m.key === activeModuleKey)?.group ?? null)
-      : null;
 
   function companyNavItems(c: MyCompany): NavItem[] {
     const accessible = c.modules.filter(
       (m) => COMPANY_PAGE_KEYS.has(m.key) && m.enabled && !m.blocked && m.canView,
     );
     const items: NavItem[] = [
-      { to: `/entreprise/${c.company.slug}`, label: "Tableau de bord", Icon: LayoutDashboard, end: true },
+      { to: `/entreprise/${c.company.slug}`, label: 'Tableau de bord', Icon: LayoutDashboard, end: true },
     ];
-    const seen = new Set<string>();
     for (const m of accessible) {
-      if (seen.has(m.group)) continue;
-      seen.add(m.group);
       items.push({
         to: `/entreprise/${c.company.slug}/m/${m.key}`,
-        label: m.group,
-        Icon: groupIcon(m.group),
-        active: activeGroup === m.group,
+        label: m.label,
+        Icon: moduleIcon(m.key),
       });
     }
     if (c.canManage) {

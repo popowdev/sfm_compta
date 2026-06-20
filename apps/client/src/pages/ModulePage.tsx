@@ -1,5 +1,5 @@
 import { type ComponentType } from 'react';
-import { useParams, Navigate, Link } from 'react-router-dom';
+import { useParams, Navigate } from 'react-router-dom';
 import { MODULES } from '@rp-compta/shared';
 import { type MyModule } from '@/lib/me';
 import { useCompany } from '@/lib/useCompany';
@@ -48,7 +48,7 @@ function Placeholder({ mod }: { mod: MyModule }) {
 
 export default function ModulePage() {
   const { moduleKey } = useParams();
-  const { company: mine, slug, isLoading } = useCompany();
+  const { company: mine, isLoading } = useCompany();
 
   if (isLoading) return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
 
@@ -57,9 +57,6 @@ export default function ModulePage() {
     return <Navigate to="/" replace />;
   }
 
-  const tabs = mine.modules.filter(
-    (m) => COMPANY_PAGE_KEYS.has(m.key) && m.group === mod.group && m.enabled && !m.blocked && m.canView,
-  );
   const Body = CONTENT[mod.key];
 
   return (
@@ -67,33 +64,7 @@ export default function ModulePage() {
       <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {mine.company.name}
       </div>
-      <h1 className="mt-1 text-2xl font-bold tracking-tight">
-        {tabs.length > 1 ? mod.group : mod.label}
-      </h1>
-
-      {tabs.length > 1 && (
-        <div className="mt-5 flex gap-1 overflow-x-auto border-b">
-          {tabs.map((t) => {
-            const Icon = moduleIcon(t.key);
-            const isActive = t.key === mod.key;
-            return (
-              <Link
-                key={t.key}
-                to={`/entreprise/${slug}/m/${t.key}`}
-                aria-current={isActive ? 'page' : undefined}
-                className={`-mb-px flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'border-primary text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {t.label}
-              </Link>
-            );
-          })}
-        </div>
-      )}
+      <h1 className="mt-1 text-2xl font-bold tracking-tight">{mod.label}</h1>
 
       <div className="mt-6">{Body ? <Body /> : <Placeholder mod={mod} />}</div>
     </div>
