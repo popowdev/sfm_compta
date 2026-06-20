@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { and, asc, eq } from 'drizzle-orm';
-import { LOYALTY_TIER_KEYS } from '@rp-compta/shared';
+import { and, asc, eq, sql } from 'drizzle-orm';
+import { LOYALTY_TIERS, LOYALTY_TIER_KEYS } from '@rp-compta/shared';
 import { db } from '../db';
-import { companyClients } from '../db/schema';
+import { companyClients, clientLoyaltyTiers } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
-import { getModuleAccess } from '../services/access';
+import { getModuleAccess, canManageCompany } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
 
 function parseId(value: string | undefined): number | null {
@@ -139,6 +139,89 @@ meClientsRouter.delete(
       .where(and(eq(companyClients.id, id), eq(companyClients.companyId, companyId)));
     if (!result[0].affectedRows) return res.status(404).json({ error: 'not_found' });
     emitInvalidate(['irs', `company:${companyId}`], [['clients', companyId]]);
+    res.json({ ok: true });
+  }),
+);
+
+const balanceSchema = z.object({ delta: signedMoney, reason: z.string().trim().max(200).optional() });
+
+meClientsRouter.post(
+  '/:id/balance',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const id = parseId(req.params.id);
+    if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
+    if (!(await canManageCompany(req.user!.id, companyId))) return res.status(403).json({ error: 'forbidden' });
+    const acc = await getModuleAccess(req.user!.id, companyId, 'clients');
+    if (!acc || !acc.enabled || acc.blocked) return res.status(403).json({ error: 'module_unavailable' });
+    const parsed = balanceSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    const result = await db
+      .update(companyClients)
+      .set({ accountBalance: sql`${companyClients.accountBalance} + ${round2(parsed.data.delta)}` })
+      .where(and(eq(companyClients.id, id), eq(companyClients.companyId, companyId)));
+    if (!result[0].affectedRows) return res.status(404).json({ error: 'not_found' });
+    emitInvalidate(['irs', `company:${companyId}`], [['clients', companyId]]);
+    res.json({ ok: true });
+  }),
+);
+
+export const meLoyaltyRouter = Router({ mergeParams: true });
+meLoyaltyRouter.use(requireAuth);
+
+meLoyaltyRouter.get(
+  '/',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req.user!.id, companyId, false);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    const rows = await db
+      .select()
+      .from(clientLoyaltyTiers)
+      .where(eq(clientLoyaltyTiers.companyId, companyId));
+    const byTier = new Map(rows.map((r) => [r.tier, r]));
+    const tiers = LOYALTY_TIERS.map((t) => {
+      const r = byTier.get(t.key);
+      return { tier: t.key, name: r?.name ?? t.label, threshold: r?.threshold ?? 0 };
+    });
+    res.json({ canManage: await canManageCompany(req.user!.id, companyId), tiers });
+  }),
+);
+
+const tiersSchema = z.object({
+  tiers: z
+    .array(
+      z.object({
+        tier: z.enum(LOYALTY_TIER_KEYS as [string, ...string[]]),
+        name: z.string().trim().min(1).max(60),
+        threshold: z.number().int().min(0).max(100_000_000),
+      }),
+    )
+    .max(LOYALTY_TIER_KEYS.length)
+    .refine((g) => new Set(g.map((r) => r.tier)).size === g.length, 'duplicate_tier'),
+});
+
+meLoyaltyRouter.put(
+  '/',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    if (!(await canManageCompany(req.user!.id, companyId))) return res.status(403).json({ error: 'forbidden' });
+    const parsed = tiersSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    for (const t of parsed.data.tiers) {
+      await db
+        .insert(clientLoyaltyTiers)
+        .values({
+          companyId,
+          tier: t.tier as (typeof clientLoyaltyTiers.$inferInsert)['tier'],
+          name: t.name,
+          threshold: t.threshold,
+        })
+        .onDuplicateKeyUpdate({ set: { name: t.name, threshold: t.threshold } });
+    }
+    emitInvalidate(['irs', `company:${companyId}`], [['loyalty-tiers', companyId], ['clients', companyId]]);
     res.json({ ok: true });
   }),
 );

@@ -48,6 +48,29 @@ export const deleteClient = (companyId: number, id: number) =>
     method: 'DELETE',
   });
 
+export interface LoyaltyTierDef {
+  tier: LoyaltyTier;
+  name: string;
+  threshold: number;
+}
+
+export const getLoyaltyTiers = (companyId: number) =>
+  apiFetch<{ canManage: boolean; tiers: LoyaltyTierDef[] }>(
+    `/api/me/companies/${companyId}/loyalty-tiers`,
+  );
+
+export const saveLoyaltyTiers = (companyId: number, tiers: LoyaltyTierDef[]) =>
+  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/loyalty-tiers`, {
+    method: 'PUT',
+    body: JSON.stringify({ tiers }),
+  });
+
+export const adjustClientBalance = (companyId: number, id: number, delta: number, reason?: string) =>
+  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/clients/${id}/balance`, {
+    method: 'POST',
+    body: JSON.stringify({ delta, reason }),
+  });
+
 export const TIER_CLS: Record<LoyaltyTier, string> = {
   bronze: 'bg-amber-700/15 text-amber-600',
   silver: 'bg-slate-400/15 text-slate-300',

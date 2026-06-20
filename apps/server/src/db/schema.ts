@@ -371,6 +371,20 @@ export const companyClients = mysqlTable('company_clients', {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const clientLoyaltyTiers = mysqlTable(
+  'client_loyalty_tiers',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    companyId: int('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    tier: mysqlEnum('tier', ['bronze', 'silver', 'gold', 'platinum']).notNull(),
+    name: varchar('name', { length: 60 }).notNull(),
+    threshold: int('threshold').notNull().default(0),
+  },
+  (t) => ({ uq: unique('uq_loyalty_tier').on(t.companyId, t.tier) }),
+);
+
 export const sessions = mysqlTable('sessions', {
   id: varchar('id', { length: 64 }).primaryKey(),
   userId: int('user_id')
@@ -480,6 +494,7 @@ export type TimeEntry = typeof timeEntries.$inferSelect;
 export type SalaryGridRow = typeof salaryGrid.$inferSelect;
 export type CompanyRental = typeof companyRentals.$inferSelect;
 export type CompanyClient = typeof companyClients.$inferSelect;
+export type ClientLoyaltyTier = typeof clientLoyaltyTiers.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type TaxBracketRow = typeof taxBrackets.$inferSelect;
 export type FiscalConfigRow = typeof fiscalConfig.$inferSelect;

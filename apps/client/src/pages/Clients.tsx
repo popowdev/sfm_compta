@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, X, Phone, Mail, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Phone, Mail, Search, Wallet } from 'lucide-react';
 import { LOYALTY_TIERS, moduleConfigBool, type LoyaltyTier } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { fmtMoney } from '@/lib/declarations';
@@ -10,6 +10,8 @@ import {
   createClient,
   updateClient,
   deleteClient,
+  getLoyaltyTiers,
+  adjustClientBalance,
   TIER_CLS,
   type Client,
   type ClientInput,
@@ -38,9 +40,28 @@ export default function Clients() {
   const cfg = company?.modules.find((m) => m.key === 'clients')?.config;
   const showLoyalty = moduleConfigBool(cfg, 'clients', 'loyalty');
   const showCredit = moduleConfigBool(cfg, 'clients', 'credit');
+  const canManage = company?.canManage ?? false;
   const queryClient = useQueryClient();
 
   const q = useQuery({ queryKey: ['clients', companyId], queryFn: () => getClients(companyId) });
+  const tiersQ = useQuery({
+    queryKey: ['loyalty-tiers', companyId],
+    queryFn: () => getLoyaltyTiers(companyId),
+    enabled: showLoyalty,
+  });
+  const tierName = (t: LoyaltyTier) =>
+    tiersQ.data?.tiers.find((x) => x.tier === t)?.name ?? TIER_LABEL[t] ?? t;
+
+  const [balanceClient, setBalanceClient] = useState<Client | null>(null);
+  const [delta, setDelta] = useState('');
+  const adjust = useMutation({
+    mutationFn: (v: { id: number; delta: number }) => adjustClientBalance(companyId, v.id, v.delta),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients', companyId] });
+      setBalanceClient(null);
+      setDelta('');
+    },
+  });
 
   const [form, setForm] = useState({ ...EMPTY });
   const [editing, setEditing] = useState<number | null>(null);
@@ -167,7 +188,7 @@ export default function Clients() {
                   <span className="text-base font-semibold">{c.name}</span>
                   {showLoyalty && (
                     <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${TIER_CLS[c.loyaltyTier]}`}>
-                      {TIER_LABEL[c.loyaltyTier] ?? c.loyaltyTier}
+                      {tierName(c.loyaltyTier)}
                     </span>
                   )}
                 </div>
@@ -186,26 +207,43 @@ export default function Clients() {
                   )}
                 </div>
               </div>
-              {canWrite && (
+              {(canWrite || (showCredit && canManage)) && (
                 <div className="flex shrink-0 gap-1">
-                  <button
-                    type="button"
-                    onClick={() => openEdit(c)}
-                    title="Modifier"
-                    className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (confirm(`Supprimer ${c.name} ?`)) remove.mutate(c.id);
-                    }}
-                    title="Supprimer"
-                    className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {showCredit && canManage && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBalanceClient(c);
+                        setDelta('');
+                      }}
+                      title="Ajuster le solde"
+                      className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      <Wallet className="h-4 w-4" />
+                    </button>
+                  )}
+                  {canWrite && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => openEdit(c)}
+                        title="Modifier"
+                        className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Supprimer ${c.name} ?`)) remove.mutate(c.id);
+                        }}
+                        title="Supprimer"
+                        className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -288,7 +326,7 @@ export default function Clients() {
                       <select className={inputCls} value={form.loyaltyTier} onChange={(e) => set('loyaltyTier', e.target.value as LoyaltyTier)}>
                         {LOYALTY_TIERS.map((t) => (
                           <option key={t.key} value={t.key}>
-                            {t.label}
+                            {tierName(t.key)}
                           </option>
                         ))}
                       </select>
@@ -326,6 +364,64 @@ export default function Clients() {
                 </Button>
                 <Button type="submit" disabled={!form.name.trim() || pending}>
                   {pending ? 'Enregistrement…' : editing !== null ? 'Enregistrer' : 'Ajouter'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {balanceClient && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => setBalanceClient(null)}>
+          <div className="w-full max-w-sm rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <h2 className="truncate text-sm font-semibold">Ajuster le solde · {balanceClient.name}</h2>
+              <button
+                type="button"
+                onClick={() => setBalanceClient(null)}
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <form
+              className="space-y-4 p-5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const d = Number(delta);
+                if (d) adjust.mutate({ id: balanceClient.id, delta: d });
+              }}
+            >
+              <div className="text-sm text-muted-foreground">
+                Solde actuel :{' '}
+                <span className="font-medium text-foreground">{fmtMoney(balanceClient.accountBalance)} $</span>
+              </div>
+              <label className="block text-sm">
+                <span className={labelCls}>Ajustement (+ crédit / − débit)</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  autoFocus
+                  className={inputCls}
+                  placeholder="ex. 50 ou -50"
+                  value={delta}
+                  onChange={(e) => setDelta(e.target.value)}
+                />
+              </label>
+              {Number(delta) !== 0 && delta.trim() !== '' && (
+                <div className="text-sm">
+                  Nouveau solde :{' '}
+                  <span className="font-semibold">
+                    {fmtMoney(balanceClient.accountBalance + (Number(delta) || 0))} $
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <Button type="button" variant="outline" onClick={() => setBalanceClient(null)}>
+                  Annuler
+                </Button>
+                <Button type="submit" disabled={!Number(delta) || adjust.isPending}>
+                  {adjust.isPending ? 'Application…' : 'Appliquer'}
                 </Button>
               </div>
             </form>
