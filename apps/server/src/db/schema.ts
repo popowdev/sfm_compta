@@ -565,6 +565,24 @@ export const catalogRecipe = mysqlTable(
   (t) => ({ uq: unique('uq_catalog_recipe').on(t.catalogItemId, t.stockItemId) }),
 );
 
+export const dividendPayouts = mysqlTable('dividend_payouts', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  shareholderName: varchar('shareholder_name', { length: 150 }).notNull(),
+  rib: varchar('rib', { length: 40 }),
+  gross: decimal('gross', { precision: 14, scale: 2 }).notNull().default('0'),
+  taxRate: decimal('tax_rate', { precision: 5, scale: 2 }).notNull().default('33'),
+  tax: decimal('tax', { precision: 14, scale: 2 }).notNull().default('0'),
+  net: decimal('net', { precision: 14, scale: 2 }).notNull().default('0'),
+  notes: varchar('notes', { length: 300 }),
+  declaredByUserId: int('declared_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const sessions = mysqlTable('sessions', {
   id: varchar('id', { length: 64 }).primaryKey(),
   userId: int('user_id')

@@ -8,6 +8,7 @@ import Fiscal from '@/pages/Fiscal';
 import Modules from '@/pages/Modules';
 import IrsDeclarations from '@/pages/IrsDeclarations';
 import IrsSubventions from '@/pages/IrsSubventions';
+import IrsDividends from '@/pages/IrsDividends';
 import IrsMessages from '@/pages/IrsMessages';
 import EntrepriseIndex from '@/pages/EntrepriseIndex';
 import ModulePage from '@/pages/ModulePage';
@@ -65,6 +66,14 @@ function ProtectedApp() {
           element={
             <IrsRoute>
               <IrsSubventions />
+            </IrsRoute>
+          }
+        />
+        <Route
+          path="/dividendes"
+          element={
+            <IrsRoute>
+              <IrsDividends />
             </IrsRoute>
           }
         />

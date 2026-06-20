@@ -16,6 +16,7 @@ import Clients from '@/pages/Clients';
 import Stocks from '@/pages/Stocks';
 import Exercices from '@/pages/Exercices';
 import Caisse from '@/pages/Caisse';
+import Dividendes from '@/pages/Dividendes';
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
@@ -32,6 +33,7 @@ const CONTENT: Partial<Record<string, ComponentType>> = {
   stocks: Stocks,
   exercices: Exercices,
   caisse: Caisse,
+  dividendes: Dividendes,
 };
 
 function Placeholder({ mod }: { mod: MyModule }) {
