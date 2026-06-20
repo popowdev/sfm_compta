@@ -208,7 +208,7 @@ export default function Exercices() {
   const list = q.data?.exercices ?? [];
 
   return (
-    <div className="max-w-5xl space-y-5">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
         <div className="rounded-lg border bg-card px-4 py-2">
           <span className="text-sm text-muted-foreground">Exercices </span>
@@ -803,7 +803,7 @@ function ExerciceDetailView({
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
         <Kpi icon={ShoppingCart} label="Chiffre d'affaires" value={`${fmtMoney(s.caNet)} $`} accent="text-primary" />
         <Kpi icon={ShoppingCart} label="Nombre de ventes" value={`${s.salesCount}`} />
         <Kpi icon={TrendingUp} label="Marge brute" value={`${fmtMoney(s.grossMargin)} $`} accent="text-sky-400" />

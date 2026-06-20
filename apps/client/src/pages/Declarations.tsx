@@ -78,7 +78,7 @@ export default function Declarations() {
   const list = decls.data?.declarations ?? [];
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="space-y-6">
       {canCreate && (
         <form
           className="rounded-xl border bg-card p-5"

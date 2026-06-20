@@ -130,7 +130,7 @@ export default function Locations() {
   const valid = form.clientName.trim() && form.label.trim() && form.eventDate;
 
   return (
-    <div className="max-w-5xl space-y-5">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-3">
           <div className="rounded-lg border bg-card px-4 py-2">

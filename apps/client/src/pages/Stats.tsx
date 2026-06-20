@@ -127,7 +127,7 @@ export default function Stats() {
     .sort((a, b) => b.count - a.count);
 
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Kpi label="CA ventes" value={money(sales.total)} icon={ShoppingCart} accent="text-primary" />
         <Kpi label="Marge ventes" value={money(sales.margin)} icon={TrendingUp} accent="text-emerald-400" />

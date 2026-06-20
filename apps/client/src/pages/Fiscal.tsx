@@ -57,7 +57,7 @@ export default function Fiscal() {
   const fmt = (n: number) => n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
-    <div className="max-w-3xl p-8">
+    <div className="max-w-5xl p-8">
       <h1 className="text-2xl font-bold tracking-tight">Barème fiscal</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         Config fiscale centrale, appliquée à toutes les entreprises (IRS uniquement).

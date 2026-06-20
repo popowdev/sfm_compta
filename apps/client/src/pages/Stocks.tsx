@@ -205,7 +205,7 @@ export default function Stocks() {
   const lowCount = items.filter((it) => it.lowStockThreshold > 0 && it.quantity <= it.lowStockThreshold).length;
 
   return (
-    <div className="max-w-5xl space-y-5">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap gap-3">
           <div className="rounded-lg border bg-card px-4 py-2">

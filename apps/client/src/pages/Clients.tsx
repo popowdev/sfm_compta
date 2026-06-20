@@ -140,7 +140,7 @@ export default function Clients() {
   const pending = create.isPending || update.isPending;
 
   return (
-    <div className="max-w-5xl space-y-5">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap gap-3">
           <div className="rounded-lg border bg-card px-4 py-2">

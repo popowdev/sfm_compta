@@ -49,7 +49,7 @@ export default function Subventions() {
   const pending = list.filter((s) => s.status === 'pending').length;
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div className="rounded-xl border bg-card p-4">
           <div className="text-xs text-muted-foreground">Demandes</div>

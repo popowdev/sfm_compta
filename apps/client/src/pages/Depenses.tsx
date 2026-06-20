@@ -103,7 +103,7 @@ export default function Depenses() {
   const pending = create.isPending || update.isPending;
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div className="rounded-xl border bg-card p-4">
           <div className="text-xs text-muted-foreground">Total dépenses</div>

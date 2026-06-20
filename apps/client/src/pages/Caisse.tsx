@@ -110,7 +110,7 @@ export default function Caisse() {
   const services = items.length - products;
 
   return (
-    <div className="max-w-5xl space-y-5">
+    <div className="space-y-5">
       <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5 w-fit">
         <button
           type="button"
