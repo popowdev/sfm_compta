@@ -176,6 +176,13 @@
       "when": 1781956759920,
       "tag": "0024_backfill_action_perms",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1781960255519,
+      "tag": "0025_common_firebrand",
+      "breakpoints": true
     }
   ]
 }

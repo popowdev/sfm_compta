@@ -163,6 +163,22 @@ export const rolePermissions = mysqlTable(
   }),
 );
 
+export const roleSpecialPermissions = mysqlTable(
+  'role_special_permissions',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    companyRoleId: int('company_role_id')
+      .notNull()
+      .references(() => companyRoles.id, { onDelete: 'cascade' }),
+    moduleKey: mysqlEnum('module_key', MODULE_KEYS).notNull(),
+    actionKey: varchar('action_key', { length: 48 }).notNull(),
+    granted: boolean('granted').notNull().default(false),
+  },
+  (t) => ({
+    uqRoleSpecial: unique('uq_role_special').on(t.companyRoleId, t.moduleKey, t.actionKey),
+  }),
+);
+
 export const moduleSettings = mysqlTable('module_settings', {
   moduleKey: mysqlEnum('module_key', MODULE_KEYS).primaryKey(),
   label: varchar('label', { length: 100 }),

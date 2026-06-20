@@ -60,6 +60,7 @@ export interface GradeFine {
   isDefault: boolean;
   canManage: boolean;
   permissions: Record<string, GradePermFine>;
+  special: Record<string, Record<string, boolean>>;
 }
 
 export interface GradesDataFine {
@@ -99,6 +100,18 @@ export const setMyGradePermission = (
     method: 'PUT',
     body: JSON.stringify(perm),
   });
+
+export const setMyGradeSpecialPermission = (
+  companyId: number,
+  rid: number,
+  moduleKey: string,
+  actionKey: string,
+  granted: boolean,
+) =>
+  apiFetch<{ ok: boolean }>(
+    `/api/me/companies/${companyId}/grades/${rid}/special/${moduleKey}/${actionKey}`,
+    { method: 'PUT', body: JSON.stringify({ granted }) },
+  );
 
 // --- Patron-scoped member assignment ---
 

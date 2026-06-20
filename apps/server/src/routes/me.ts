@@ -1,9 +1,22 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { and, eq, isNull } from 'drizzle-orm';
-import { MODULE_KEYS, MODULE_CONFIG, MODULES, type ModuleKey } from '@rp-compta/shared';
+import {
+  MODULE_KEYS,
+  MODULE_CONFIG,
+  MODULE_SPECIAL_ACTIONS,
+  MODULES,
+  type ModuleKey,
+} from '@rp-compta/shared';
 import { db } from '../db';
-import { memberships, companies, companyRoles, companyModules, rolePermissions } from '../db/schema';
+import {
+  memberships,
+  companies,
+  companyRoles,
+  companyModules,
+  rolePermissions,
+  roleSpecialPermissions,
+} from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getEffectiveModules, isModuleBlocked } from '../services/modules';
@@ -100,9 +113,22 @@ meRouter.get(
             canDelete: p.canDelete,
           });
       }
+      const specialMap = new Map<string, boolean>();
+      if (!staff && !e.canManage && e.gradeId) {
+        const sp = await db
+          .select()
+          .from(roleSpecialPermissions)
+          .where(eq(roleSpecialPermissions.companyRoleId, e.gradeId));
+        for (const s of sp) specialMap.set(`${s.moduleKey}.${s.actionKey}`, s.granted);
+      }
 
       const modules = effective.map((m) => {
         const p = permMap.get(m.key);
+        const special: Record<string, boolean> = {};
+        for (const a of MODULE_SPECIAL_ACTIONS[m.key] ?? []) {
+          special[a.key] =
+            staff || e.canManage ? true : specialMap.get(`${m.key}.${a.key}`) ?? false;
+        }
         return {
           key: m.key,
           label: m.label,
@@ -114,6 +140,7 @@ meRouter.get(
           canCreate: staff ? true : (p?.canCreate ?? false),
           canEdit: staff ? true : (p?.canEdit ?? false),
           canDelete: staff ? true : (p?.canDelete ?? false),
+          special,
           config: (configMap.get(m.key) as Record<string, unknown> | null) ?? {},
         };
       });

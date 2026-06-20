@@ -22,6 +22,7 @@ export function useModulePerms(moduleKey: ModuleKey): {
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
+  special: Record<string, boolean>;
 } {
   const { company, companyId } = useCompany();
   const m = company?.modules.find((x) => x.key === moduleKey);
@@ -32,5 +33,6 @@ export function useModulePerms(moduleKey: ModuleKey): {
     canCreate: m?.canCreate ?? false,
     canEdit: m?.canEdit ?? false,
     canDelete: m?.canDelete ?? false,
+    special: m?.special ?? {},
   };
 }

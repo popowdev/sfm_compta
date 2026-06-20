@@ -5,6 +5,7 @@ import {
   memberships,
   companyModules,
   rolePermissions,
+  roleSpecialPermissions,
   companyRoles,
   userAppRoles,
 } from '../db/schema';
@@ -55,6 +56,39 @@ export async function countActiveManagerMemberships(
       (opts.excludeMembershipId === undefined || r.mid !== opts.excludeMembershipId) &&
       (opts.excludeGradeId === undefined || r.gid !== opts.excludeGradeId),
   ).length;
+}
+
+export async function hasSpecialPermission(
+  userId: number,
+  companyId: number,
+  moduleKey: ModuleKey,
+  actionKey: string,
+): Promise<boolean> {
+  if (await isStaff(userId)) return true;
+  const rows = await db
+    .select({ canManage: companyRoles.canManage, granted: roleSpecialPermissions.granted })
+    .from(memberships)
+    .innerJoin(companyRoles, eq(memberships.companyRoleId, companyRoles.id))
+    .leftJoin(
+      roleSpecialPermissions,
+      and(
+        eq(roleSpecialPermissions.companyRoleId, companyRoles.id),
+        eq(roleSpecialPermissions.moduleKey, moduleKey),
+        eq(roleSpecialPermissions.actionKey, actionKey),
+      ),
+    )
+    .where(
+      and(
+        eq(memberships.userId, userId),
+        eq(memberships.companyId, companyId),
+        eq(memberships.active, true),
+      ),
+    )
+    .limit(1);
+  const row = rows[0];
+  if (!row) return false;
+  if (row.canManage) return true;
+  return row.granted ?? false;
 }
 
 export interface ModuleAccess {

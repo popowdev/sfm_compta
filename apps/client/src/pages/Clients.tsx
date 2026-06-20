@@ -36,11 +36,11 @@ const EMPTY = {
 };
 
 export default function Clients() {
-  const { company, companyId, canCreate, canEdit, canDelete } = useModulePerms('clients');
+  const { company, companyId, canCreate, canEdit, canDelete, special } = useModulePerms('clients');
   const cfg = company?.modules.find((m) => m.key === 'clients')?.config;
   const showLoyalty = moduleConfigBool(cfg, 'clients', 'loyalty');
   const showCredit = moduleConfigBool(cfg, 'clients', 'credit');
-  const canManage = company?.canManage ?? false;
+  const canAdjustBalance = special.adjust_balance ?? false;
   const queryClient = useQueryClient();
 
   const q = useQuery({ queryKey: ['clients', companyId], queryFn: () => getClients(companyId) });
@@ -206,9 +206,9 @@ export default function Clients() {
                   )}
                 </div>
               </div>
-              {(canEdit || canDelete || (showCredit && canManage)) && (
+              {(canEdit || canDelete || (showCredit && canAdjustBalance)) && (
                 <div className="flex shrink-0 gap-1">
-                  {showCredit && canManage && (
+                  {showCredit && canAdjustBalance && (
                     <button
                       type="button"
                       onClick={() => {

@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { and, eq, isNull } from 'drizzle-orm';
-import { MODULE_KEYS, type ModuleKey } from '@rp-compta/shared';
+import { MODULE_KEYS, MODULE_SPECIAL_ACTIONS, type ModuleKey } from '@rp-compta/shared';
 import { db } from '../db';
 import { companyRoles, companies, memberships } from '../db/schema';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
-import { getGradesWithPermissions, setRolePermission } from '../services/grades';
+import { getGradesWithPermissions, setRolePermission, setRoleSpecialPermission } from '../services/grades';
 import { canManageCompany, countActiveManagerMemberships } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
 
@@ -211,6 +211,31 @@ meGradesRouter.put(
     const parsed = fineSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     await setRolePermission(rid, key as ModuleKey, parsed.data);
+    emitInvalidate(['irs', `company:${companyId}`], [['grades', companyId], ['my-companies']]);
+    res.json({ ok: true });
+  }),
+);
+
+const specialSchema = z.object({ granted: z.boolean() });
+
+meGradesRouter.put(
+  '/:rid/special/:moduleKey/:actionKey',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId)!;
+    const rid = parseId(req.params.rid);
+    const moduleKey = req.params.moduleKey;
+    const actionKey = req.params.actionKey;
+    if (!rid || !moduleKey || !actionKey || !(MODULE_KEYS as readonly string[]).includes(moduleKey)) {
+      return res.status(400).json({ error: 'bad_request' });
+    }
+    const actions = MODULE_SPECIAL_ACTIONS[moduleKey as ModuleKey];
+    if (!actions?.some((a) => a.key === actionKey)) {
+      return res.status(400).json({ error: 'bad_request' });
+    }
+    if (!(await gradeInCompany(rid, companyId))) return res.status(404).json({ error: 'not_found' });
+    const parsed = specialSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    await setRoleSpecialPermission(rid, moduleKey as ModuleKey, actionKey, parsed.data.granted);
     emitInvalidate(['irs', `company:${companyId}`], [['grades', companyId], ['my-companies']]);
     res.json({ ok: true });
   }),

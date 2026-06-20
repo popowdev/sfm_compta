@@ -1,12 +1,18 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { and, asc, eq, sql } from 'drizzle-orm';
-import { LOYALTY_TIERS, LOYALTY_TIER_KEYS } from '@rp-compta/shared';
+import { LOYALTY_TIERS, LOYALTY_TIER_KEYS, moduleConfigBool } from '@rp-compta/shared';
 import { db } from '../db';
-import { companyClients, clientLoyaltyTiers } from '../db/schema';
+import { companyClients, clientLoyaltyTiers, companyModules } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
-import { getModuleAccess, canManageCompany, actionDenied, type PermAction } from '../services/access';
+import {
+  getModuleAccess,
+  canManageCompany,
+  hasSpecialPermission,
+  actionDenied,
+  type PermAction,
+} from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
 
 function methodAction(method: string): PermAction {
@@ -155,9 +161,20 @@ meClientsRouter.post(
     const companyId = parseId(req.params.companyId);
     const id = parseId(req.params.id);
     if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
-    if (!(await canManageCompany(req.user!.id, companyId))) return res.status(403).json({ error: 'forbidden' });
     const acc = await getModuleAccess(req.user!.id, companyId, 'clients');
     if (!acc || !acc.enabled || acc.blocked) return res.status(403).json({ error: 'module_unavailable' });
+    if (!acc.canView) return res.status(403).json({ error: 'forbidden' });
+    const cm = await db
+      .select({ config: companyModules.config })
+      .from(companyModules)
+      .where(and(eq(companyModules.companyId, companyId), eq(companyModules.moduleKey, 'clients')))
+      .limit(1);
+    if (!moduleConfigBool(cm[0]?.config as Record<string, unknown> | null, 'clients', 'credit')) {
+      return res.status(403).json({ error: 'module_unavailable' });
+    }
+    if (!(await hasSpecialPermission(req.user!.id, companyId, 'clients', 'adjust_balance'))) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
     const parsed = balanceSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     const result = await db

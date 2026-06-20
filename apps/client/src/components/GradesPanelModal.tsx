@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Plus, Trash2, ShieldCheck, UserPlus } from 'lucide-react';
-import { MODULES, type ModuleKey } from '@rp-compta/shared';
+import { MODULES, MODULE_SPECIAL_ACTIONS, type ModuleKey } from '@rp-compta/shared';
 import { ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,6 +10,7 @@ import {
   patchMyGrade,
   deleteMyGrade,
   setMyGradePermission,
+  setMyGradeSpecialPermission,
   getMyMembers,
   addMyMember,
   setMyMemberGrade,
@@ -82,6 +83,11 @@ export function GradesPanelModal({
       key: ModuleKey;
       perm: { canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean };
     }) => setMyGradePermission(companyId, v.rid, v.key, v.perm),
+    onSuccess: refresh,
+  });
+  const setSpecial = useMutation({
+    mutationFn: (v: { rid: number; moduleKey: string; actionKey: string; granted: boolean }) =>
+      setMyGradeSpecialPermission(companyId, v.rid, v.moduleKey, v.actionKey, v.granted),
     onSuccess: refresh,
   });
 
@@ -249,6 +255,63 @@ export function GradesPanelModal({
                     Créer / Modifier / Supprimer activent automatiquement « Voir ». Le Staff et les
                     grades « gérant » ont accès complet.
                   </p>
+
+                  {(() => {
+                    const specials = modules
+                      .map((m) => ({ m, actions: MODULE_SPECIAL_ACTIONS[m.key as ModuleKey] ?? [] }))
+                      .filter((x) => x.actions.length > 0);
+                    if (specials.length === 0) return null;
+                    return (
+                      <div className="mt-5">
+                        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Actions spéciales
+                        </h3>
+                        <div className="space-y-2.5 rounded-lg border p-3">
+                          {specials.flatMap(({ m, actions }) => {
+                            const canViewModule =
+                              grade.canManage || (grade.permissions[m.key]?.canView ?? false);
+                            return actions.map((a) => {
+                              const granted = grade.special?.[m.key]?.[a.key] ?? false;
+                              return (
+                                <label
+                                  key={`${m.key}.${a.key}`}
+                                  className={`flex items-start gap-2.5 text-sm ${
+                                    canViewModule ? '' : 'opacity-50'
+                                  }`}
+                                  title={canViewModule ? undefined : 'Nécessite l’accès « Voir » sur ce module'}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="mt-0.5 h-4 w-4 rounded border-input accent-primary"
+                                    checked={grade.canManage || granted}
+                                    disabled={grade.canManage || setSpecial.isPending || !canViewModule}
+                                    onChange={() =>
+                                      setSpecial.mutate({
+                                        rid: grade.id,
+                                        moduleKey: m.key,
+                                        actionKey: a.key,
+                                        granted: !granted,
+                                      })
+                                    }
+                                  />
+                                  <span>
+                                    <span className="font-medium">{a.label}</span>
+                                    <span className="text-muted-foreground"> · {m.label}</span>
+                                    {a.help && (
+                                      <span className="block text-xs text-muted-foreground">{a.help}</span>
+                                    )}
+                                  </span>
+                                </label>
+                              );
+                            });
+                          })}
+                        </div>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Les grades « gérant » disposent de toutes les actions spéciales d'office.
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </>
               ) : (
                 <div className="py-8 text-center text-sm text-muted-foreground">Aucun grade.</div>

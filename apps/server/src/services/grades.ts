@@ -1,7 +1,7 @@
 import { asc, eq, inArray } from 'drizzle-orm';
-import { MODULE_KEYS, type ModuleKey } from '@rp-compta/shared';
+import { MODULE_KEYS, MODULE_SPECIAL_ACTIONS, type ModuleKey } from '@rp-compta/shared';
 import { db } from '../db';
-import { companyRoles, rolePermissions } from '../db/schema';
+import { companyRoles, rolePermissions, roleSpecialPermissions } from '../db/schema';
 import { getEffectiveModules } from './modules';
 
 interface DefaultGrade {
@@ -59,6 +59,12 @@ export async function getGradesWithPermissions(companyId: number) {
   const perms = gradeIds.length
     ? await db.select().from(rolePermissions).where(inArray(rolePermissions.companyRoleId, gradeIds))
     : [];
+  const special = gradeIds.length
+    ? await db
+        .select()
+        .from(roleSpecialPermissions)
+        .where(inArray(roleSpecialPermissions.companyRoleId, gradeIds))
+    : [];
   const effective = await getEffectiveModules();
 
   return {
@@ -81,6 +87,17 @@ export async function getGradesWithPermissions(companyId: number) {
           canDelete,
         };
       }
+      const specialMap: Record<string, Record<string, boolean>> = {};
+      for (const [key, actions] of Object.entries(MODULE_SPECIAL_ACTIONS)) {
+        const actionMap: Record<string, boolean> = {};
+        for (const a of actions ?? []) {
+          const row = special.find(
+            (x) => x.companyRoleId === g.id && x.moduleKey === key && x.actionKey === a.key,
+          );
+          actionMap[a.key] = g.canManage ? true : row?.granted ?? false;
+        }
+        specialMap[key] = actionMap;
+      }
       return {
         id: g.id,
         name: g.name,
@@ -88,9 +105,22 @@ export async function getGradesWithPermissions(companyId: number) {
         isDefault: g.isDefault,
         canManage: g.canManage,
         permissions: map,
+        special: specialMap,
       };
     }),
   };
+}
+
+export async function setRoleSpecialPermission(
+  companyRoleId: number,
+  moduleKey: ModuleKey,
+  actionKey: string,
+  granted: boolean,
+): Promise<void> {
+  await db
+    .insert(roleSpecialPermissions)
+    .values({ companyRoleId, moduleKey, actionKey, granted })
+    .onDuplicateKeyUpdate({ set: { granted } });
 }
 
 export async function setRolePermission(

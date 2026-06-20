@@ -96,6 +96,22 @@ export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
   ],
 };
 
+export interface SpecialAction {
+  key: string;
+  label: string;
+  help?: string;
+}
+
+export const MODULE_SPECIAL_ACTIONS: Partial<Record<ModuleKey, SpecialAction[]>> = {
+  clients: [
+    {
+      key: 'adjust_balance',
+      label: "Ajuster le solde d'un client",
+      help: "Corriger le compte crédit en cas d'erreur. Les gérants l'ont d'office.",
+    },
+  ],
+};
+
 export const LOYALTY_TIERS = [
   { key: 'bronze', label: 'Bronze' },
   { key: 'silver', label: 'Argent' },

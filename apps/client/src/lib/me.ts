@@ -12,6 +12,7 @@ export interface MyModule {
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
+  special: Record<string, boolean>;
   config: Record<string, unknown>;
 }
 
