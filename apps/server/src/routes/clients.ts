@@ -208,19 +208,23 @@ meLoyaltyRouter.put(
     const companyId = parseId(req.params.companyId);
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
     if (!(await canManageCompany(req.user!.id, companyId))) return res.status(403).json({ error: 'forbidden' });
+    const acc = await getModuleAccess(req.user!.id, companyId, 'clients');
+    if (!acc || !acc.enabled || acc.blocked) return res.status(403).json({ error: 'module_unavailable' });
     const parsed = tiersSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
-    for (const t of parsed.data.tiers) {
-      await db
-        .insert(clientLoyaltyTiers)
-        .values({
-          companyId,
-          tier: t.tier as (typeof clientLoyaltyTiers.$inferInsert)['tier'],
-          name: t.name,
-          threshold: t.threshold,
-        })
-        .onDuplicateKeyUpdate({ set: { name: t.name, threshold: t.threshold } });
-    }
+    await db.transaction(async (tx) => {
+      for (const t of parsed.data.tiers) {
+        await tx
+          .insert(clientLoyaltyTiers)
+          .values({
+            companyId,
+            tier: t.tier as (typeof clientLoyaltyTiers.$inferInsert)['tier'],
+            name: t.name,
+            threshold: t.threshold,
+          })
+          .onDuplicateKeyUpdate({ set: { name: t.name, threshold: t.threshold } });
+      }
+    });
     emitInvalidate(['irs', `company:${companyId}`], [['loyalty-tiers', companyId], ['clients', companyId]]);
     res.json({ ok: true });
   }),

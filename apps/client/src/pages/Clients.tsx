@@ -412,7 +412,7 @@ export default function Clients() {
                 <div className="text-sm">
                   Nouveau solde :{' '}
                   <span className="font-semibold">
-                    {fmtMoney(balanceClient.accountBalance + (Number(delta) || 0))} $
+                    {fmtMoney(balanceClient.accountBalance + Math.round((Number(delta) || 0) * 100) / 100)} $
                   </span>
                 </div>
               )}

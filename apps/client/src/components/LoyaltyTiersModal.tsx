@@ -18,7 +18,11 @@ export function LoyaltyTiersModal({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const q = useQuery({ queryKey: ['loyalty-tiers', companyId], queryFn: () => getLoyaltyTiers(companyId) });
+  const q = useQuery({
+    queryKey: ['loyalty-tiers', companyId],
+    queryFn: () => getLoyaltyTiers(companyId),
+    enabled: open,
+  });
   const [rows, setRows] = useState<Record<string, { name: string; threshold: string }>>({});
   const seeded = useRef(false);
 
