@@ -17,6 +17,7 @@ import { fmtMoney } from '@/lib/declarations';
 import { useCompany } from '@/lib/useCompany';
 import { getCompanyDashboard } from '@/lib/dashboard';
 import { groupIcon } from '@/lib/moduleIcons';
+import { Kpi } from '@/components/ui/kpi';
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 const AXIS = 'rgba(148,163,184,0.6)';
@@ -33,28 +34,6 @@ const fmtDay = (d: string) => {
   const dt = new Date(`${d}T00:00:00`);
   return Number.isNaN(dt.getTime()) ? d : dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
 };
-
-function Kpi({
-  icon: Icon,
-  label,
-  value,
-  accent,
-}: {
-  icon: typeof ShoppingCart;
-  label: string;
-  value: string;
-  accent?: string;
-}) {
-  return (
-    <div className="rounded-xl border bg-card p-4">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <Icon className={`h-4 w-4 ${accent ?? 'text-muted-foreground'}`} />
-      </div>
-      <div className={`mt-2 text-xl font-bold ${accent ?? ''}`}>{value}</div>
-    </div>
-  );
-}
 
 export default function EntrepriseIndex() {
   const { company: mine, companyId, slug, isLoading } = useCompany();

@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, X, Coins } from 'lucide-react';
+import { Plus, Trash2, X, Coins, Banknote, Landmark, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Kpi, KpiSkeleton } from '@/components/ui/kpi';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirm';
 import { fmtMoney } from '@/lib/declarations';
 import { useModulePerms } from '@/lib/useCompany';
 import {
@@ -25,6 +30,8 @@ const EMPTY = { shareholderName: '', rib: '', gross: '', notes: '' };
 export default function Dividendes() {
   const { companyId, canCreate, canDelete } = useModulePerms('dividendes');
   const queryClient = useQueryClient();
+  const toast = useToast();
+  const confirm = useConfirm();
   const q = useQuery({ queryKey: ['dividends', companyId], queryFn: () => getDividends(companyId) });
 
   const [open, setOpen] = useState(false);
@@ -39,7 +46,7 @@ export default function Dividendes() {
       setForm({ ...EMPTY });
       invalidate();
     },
-    onError: () => alert('Échec de la déclaration (montant invalide ?).'),
+    onError: () => toast('Échec de la déclaration (montant invalide ?).', 'error'),
   });
   const remove = useMutation({
     mutationFn: (id: number) => deleteDividend(companyId, id),
@@ -69,46 +76,55 @@ export default function Dividendes() {
       notes: form.notes.trim() || undefined,
     });
 
+  if (q.isLoading) {
+    return (
+      <div className="space-y-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <KpiSkeleton />
+          <KpiSkeleton />
+          <KpiSkeleton />
+          <KpiSkeleton />
+        </div>
+        <div className="space-y-2">
+          <Skeleton className="h-16 rounded-xl" />
+          <Skeleton className="h-16 rounded-xl" />
+          <Skeleton className="h-16 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex flex-wrap gap-3">
-          <div className="rounded-lg border bg-card px-4 py-2">
-            <span className="text-sm text-muted-foreground">Versements </span>
-            <span className="font-semibold">{payouts.length}</span>
-          </div>
-          <div className="rounded-lg border bg-card px-4 py-2">
-            <span className="text-sm text-muted-foreground">Brut distribué </span>
-            <span className="font-semibold text-primary">{fmtMoney(totalGross)} $</span>
-          </div>
-          <div className="rounded-lg border bg-card px-4 py-2">
-            <span className="text-sm text-muted-foreground">Impôt IRS </span>
-            <span className="font-semibold text-amber-400">{fmtMoney(totalTax)} $</span>
-          </div>
-          <div className="rounded-lg border bg-card px-4 py-2">
-            <span className="text-sm text-muted-foreground">Net actionnaires </span>
-            <span className="font-semibold text-emerald-400">{fmtMoney(totalNet)} $</span>
-          </div>
-        </div>
-        {canCreate && (
-          <Button className="ml-auto" onClick={() => setOpen(true)}>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Kpi icon={Coins} label="Versements" value={String(payouts.length)} accent="text-sky-400" />
+        <Kpi icon={Banknote} label="Brut distribué" value={`${fmtMoney(totalGross)} $`} accent="text-primary" />
+        <Kpi icon={Landmark} label="Impôt IRS" value={`${fmtMoney(totalTax)} $`} accent="text-amber-400" />
+        <Kpi icon={Users} label="Net actionnaires" value={`${fmtMoney(totalNet)} $`} accent="text-emerald-400" />
+      </div>
+
+      {canCreate && (
+        <div className="flex justify-end">
+          <Button onClick={() => setOpen(true)}>
             <Plus className="h-4 w-4" />
             Déclarer un dividende
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {payouts.length === 0 ? (
-        <div className="grid place-items-center gap-3 rounded-xl border border-dashed bg-card p-12 text-center">
-          <Coins className="h-8 w-8 text-muted-foreground/60" />
-          <p className="text-sm text-muted-foreground">Aucun dividende déclaré.</p>
-          {canCreate && (
-            <Button variant="outline" onClick={() => setOpen(true)}>
-              <Plus className="h-4 w-4" />
-              Déclarer le premier
-            </Button>
-          )}
-        </div>
+        <EmptyState
+          icon={Coins}
+          title="Aucun dividende déclaré."
+          action={
+            canCreate ? (
+              <Button variant="outline" onClick={() => setOpen(true)}>
+                <Plus className="h-4 w-4" />
+                Déclarer le premier
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-card">
           <table className="w-full text-sm">
@@ -133,13 +149,20 @@ export default function Dividendes() {
                   <td className="px-3 py-2 text-right">{fmtMoney(p.gross)} $</td>
                   <td className="px-3 py-2 text-right text-amber-400">{fmtMoney(p.tax)} $</td>
                   <td className="px-3 py-2 text-right font-medium text-emerald-400">{fmtMoney(p.net)} $</td>
-                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{p.reference}</td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">{p.reference}</td>
                   <td className="px-3 py-2 text-right">
                     {canDelete && (
                       <button
                         type="button"
-                        onClick={() => {
-                          if (confirm(`Supprimer ${p.reference} ?`)) remove.mutate(p.id);
+                        onClick={async () => {
+                          if (
+                            await confirm({
+                              title: 'Supprimer ?',
+                              message: `Supprimer ${p.reference} ?`,
+                              destructive: true,
+                            })
+                          )
+                            remove.mutate(p.id);
                         }}
                         title="Supprimer"
                         className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"

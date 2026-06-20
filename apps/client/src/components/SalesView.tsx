@@ -1,8 +1,12 @@
 import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, ShoppingCart, X, FileDown } from 'lucide-react';
+import { Plus, Trash2, ShoppingCart, X, FileDown, Receipt, Loader2 } from 'lucide-react';
 import { PAYMENT_METHODS, type PaymentMethod } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirm';
 import { fmtMoney } from '@/lib/declarations';
 import { getClients } from '@/lib/clients';
 import {
@@ -47,6 +51,8 @@ export function SalesView({
   discountAllowed: boolean;
 }) {
   const queryClient = useQueryClient();
+  const toast = useToast();
+  const confirm = useConfirm();
   const uid = useRef(1);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [clientId, setClientId] = useState<number | ''>('');
@@ -80,14 +86,14 @@ export function SalesView({
       const warns: string[] = [];
       if (d.insufficient.length > 0) warns.push(`Stock négatif sur : ${d.insufficient.join(', ')}.`);
       if (d.creditExceeded) warns.push('Limite de crédit du client dépassée.');
-      if (warns.length) alert(`Vente enregistrée.\n${warns.join('\n')}`);
+      if (warns.length) toast(`Vente enregistrée. ${warns.join(' ')}`, 'info');
     },
-    onError: () => alert("Échec de l'encaissement."),
+    onError: () => toast("Échec de l'encaissement.", 'error'),
   });
   const cancel = useMutation({
     mutationFn: (id: number) => deleteSale(companyId, id),
     onSuccess: invalidateAll,
-    onError: () => alert("Échec de l'annulation."),
+    onError: () => toast("Échec de l'annulation.", 'error'),
   });
 
   const downloadInvoice = async (id: number) => {
@@ -112,7 +118,7 @@ export function SalesView({
       });
       downloadSvgAsPng(svg, `facture-${s.id}.png`);
     } catch {
-      alert('Échec du chargement de la facture.');
+      toast('Échec du chargement de la facture.', 'error');
     }
   };
 
@@ -189,9 +195,9 @@ export function SalesView({
             )}
           </div>
           {activeItems.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
+            <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
               Aucun article actif. Ajoute des articles dans Stock › Articles, ou utilise une ligne libre.
-            </p>
+            </div>
           ) : (
             <div className="flex flex-wrap gap-2">
               {activeItems.map((it) => (
@@ -349,17 +355,34 @@ export function SalesView({
             <p className="mt-2 text-[11px] text-amber-400">Le paiement « compte client » nécessite un client.</p>
           )}
           <Button className="mt-3 w-full" onClick={submit} disabled={!canSubmit}>
-            {sell.isPending ? 'Encaissement…' : `Encaisser ${fmtMoney(total)} $`}
+            {sell.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Encaissement…
+              </>
+            ) : (
+              `Encaisser ${fmtMoney(total)} $`
+            )}
           </Button>
         </div>
       </div>
 
       <div className="lg:col-span-2">
-        <h3 className="mb-2 text-sm font-semibold">Ventes récentes</h3>
-        {recent.length === 0 ? (
-          <div className="rounded-xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
-            Aucune vente enregistrée.
+        <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+          <Receipt className="h-4 w-4" /> Ventes récentes
+        </h3>
+        {salesQ.isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-16 rounded-xl" />
+            <Skeleton className="h-16 rounded-xl" />
+            <Skeleton className="h-16 rounded-xl" />
           </div>
+        ) : recent.length === 0 ? (
+          <EmptyState
+            icon={Receipt}
+            title="Aucune vente enregistrée."
+            hint="Ajoute un article au panier puis encaisse pour voir tes ventes ici."
+          />
         ) : (
           <div className="overflow-x-auto rounded-xl border bg-card">
             <table className="w-full text-sm">
@@ -404,8 +427,14 @@ export function SalesView({
                         {canDelete && (
                           <button
                             type="button"
-                            onClick={() => {
-                              if (confirm(`Annuler la vente #${s.id} ? (stock et client seront recrédités)`))
+                            onClick={async () => {
+                              if (
+                                await confirm({
+                                  title: `Annuler la vente #${s.id} ?`,
+                                  message: 'Le stock et le client seront recrédités.',
+                                  destructive: true,
+                                })
+                              )
                                 cancel.mutate(s.id);
                             }}
                             title="Annuler"

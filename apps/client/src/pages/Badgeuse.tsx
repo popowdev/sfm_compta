@@ -17,6 +17,9 @@ import {
 } from 'lucide-react';
 import { EMPLOYEE_POSITIONS, moduleConfigBool } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useConfirm } from '@/components/ui/confirm';
 import { fmtMoney } from '@/lib/declarations';
 import {
   getMyTimeclock,
@@ -58,6 +61,13 @@ function useNow(active: boolean): number {
 }
 
 function EntriesTable({ entries }: { entries: TimeEntry[] }) {
+  if (entries.length === 0) {
+    return (
+      <div className="p-4">
+        <EmptyState icon={Clock} title="Aucun pointage." />
+      </div>
+    );
+  }
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
@@ -100,13 +110,6 @@ function EntriesTable({ entries }: { entries: TimeEntry[] }) {
               </tr>
             );
           })}
-          {entries.length === 0 && (
-            <tr>
-              <td colSpan={7} className="px-4 py-4 text-muted-foreground">
-                Aucun pointage.
-              </td>
-            </tr>
-          )}
         </tbody>
       </table>
     </div>
@@ -131,7 +134,22 @@ function MyClock({ companyId, pausesEnabled }: { companyId: number; pausesEnable
   const stop = useMutation({ mutationFn: () => clockStop(companyId), onSuccess: invalidate });
   const busy = start.isPending || pause.isPending || resume.isPending || stop.isPending;
 
-  if (q.isLoading) return <div className="text-sm text-muted-foreground">Chargement…</div>;
+  if (q.isLoading)
+    return (
+      <div className="space-y-6">
+        <div className="rounded-xl border bg-card p-8">
+          <div className="grid place-items-center gap-5">
+            <Skeleton className="h-12 w-48 rounded-lg" />
+            <Skeleton className="h-4 w-32 rounded" />
+            <Skeleton className="h-11 w-56 rounded-lg" />
+          </div>
+        </div>
+        <div className="space-y-3 rounded-xl border bg-card p-5">
+          <Skeleton className="h-16 rounded-xl" />
+          <Skeleton className="h-16 rounded-xl" />
+        </div>
+      </div>
+    );
   if (!q.data?.employee) {
     return (
       <div className="grid place-items-center gap-2 rounded-xl border border-dashed bg-card p-12 text-center">
@@ -283,6 +301,14 @@ function EntriesTableWithDelete({
   entries: TimeEntry[];
   onDelete: (id: number) => void;
 }) {
+  const confirm = useConfirm();
+  if (entries.length === 0) {
+    return (
+      <div className="p-4">
+        <EmptyState icon={Clock} title="Aucun pointage." />
+      </div>
+    );
+  }
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
@@ -338,8 +364,17 @@ function EntriesTableWithDelete({
                 <td className="px-4 py-3 text-right">
                   <button
                     type="button"
-                    onClick={() => {
-                      if (confirm('Supprimer ce pointage ?')) onDelete(t.id);
+                    aria-label="Supprimer ce pointage"
+                    title="Supprimer ce pointage"
+                    onClick={async () => {
+                      if (
+                        await confirm({
+                          title: 'Supprimer ce pointage ?',
+                          message: 'Cette action est définitive.',
+                          destructive: true,
+                        })
+                      )
+                        onDelete(t.id);
                     }}
                     className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                   >
@@ -349,13 +384,6 @@ function EntriesTableWithDelete({
               </tr>
             );
           })}
-          {entries.length === 0 && (
-            <tr>
-              <td colSpan={7} className="px-4 py-4 text-muted-foreground">
-                Aucun pointage.
-              </td>
-            </tr>
-          )}
         </tbody>
       </table>
     </div>
@@ -391,6 +419,21 @@ function TeamView({ companyId }: { companyId: number }) {
   const list = all.filter((e) => e.active || e.entries.length > 0);
   const addable = all.filter((e) => e.active);
 
+  if (q.isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <Skeleton className="h-9 w-40 rounded-md" />
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="h-16 rounded-xl" />
+          <Skeleton className="h-16 rounded-xl" />
+          <Skeleton className="h-16 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -404,23 +447,33 @@ function TeamView({ companyId }: { companyId: number }) {
         {list.map((emp) => (
           <Timesheet key={emp.id} emp={emp} onDelete={(id) => remove.mutate(id)} />
         ))}
-        {list.length === 0 && (
-          <div className="grid place-items-center rounded-xl border border-dashed bg-card p-12 text-center text-sm text-muted-foreground">
-            {all.length === 0
-              ? 'Ajoute d’abord des employés dans le module RH.'
-              : 'Aucun pointage enregistré.'}
-          </div>
-        )}
+        {list.length === 0 &&
+          (all.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title="Aucun employé"
+              hint="Ajoute d’abord des employés dans le module RH."
+            />
+          ) : (
+            <EmptyState icon={Clock} title="Aucun pointage enregistré." />
+          ))}
       </div>
 
       {open && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={close}>
-          <div className="w-full max-w-md rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-md rounded-xl border bg-card shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h2 className="text-sm font-semibold">Nouveau pointage</h2>
               <button
                 type="button"
                 onClick={close}
+                aria-label="Fermer"
+                title="Fermer"
                 className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 <X className="h-4 w-4" />
@@ -498,6 +551,21 @@ export default function Badgeuse() {
     `inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
       active ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
     }`;
+
+  if (me.isLoading) {
+    return (
+      <div className="space-y-5">
+        <Skeleton className="h-11 w-72 rounded-lg" />
+        <div className="rounded-xl border bg-card p-8">
+          <div className="grid place-items-center gap-5">
+            <Skeleton className="h-12 w-48 rounded-lg" />
+            <Skeleton className="h-4 w-32 rounded" />
+            <Skeleton className="h-11 w-56 rounded-lg" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">

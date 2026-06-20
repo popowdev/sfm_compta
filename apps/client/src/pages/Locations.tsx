@@ -1,8 +1,22 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, X, Phone, CalendarDays } from 'lucide-react';
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+  Phone,
+  CalendarDays,
+  Wallet,
+  ShieldCheck,
+  CalendarClock,
+} from 'lucide-react';
 import { moduleConfigBool } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
+import { Kpi, KpiSkeleton } from '@/components/ui/kpi';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useConfirm } from '@/components/ui/confirm';
 import { fmtMoney } from '@/lib/declarations';
 import { useModulePerms } from '@/lib/useCompany';
 import {
@@ -48,6 +62,7 @@ export default function Locations() {
   const showDuration = moduleConfigBool(cfg, 'locations', 'duration');
   const showTime = moduleConfigBool(cfg, 'locations', 'time');
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
 
   const q = useQuery({ queryKey: ['rentals', companyId], queryFn: () => getRentals(companyId) });
 
@@ -129,24 +144,37 @@ export default function Locations() {
   const pending = create.isPending || update.isPending;
   const valid = form.clientName.trim() && form.label.trim() && form.eventDate;
 
+  if (q.isLoading) {
+    return (
+      <div className="space-y-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <KpiSkeleton />
+          {showDeposit && <KpiSkeleton />}
+          <KpiSkeleton />
+        </div>
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-3">
-          <div className="rounded-lg border bg-card px-4 py-2">
-            <span className="text-sm text-muted-foreground">CA locations </span>
-            <span className="font-semibold text-primary">{fmtMoney(revenue)} $</span>
-          </div>
+        <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-3">
+          <Kpi icon={Wallet} label="CA locations" value={`${fmtMoney(revenue)} $`} accent="text-primary" />
           {showDeposit && (
-            <div className="rounded-lg border bg-card px-4 py-2">
-              <span className="text-sm text-muted-foreground">Cautions détenues </span>
-              <span className="font-semibold text-emerald-400">{fmtMoney(held)} $</span>
-            </div>
+            <Kpi
+              icon={ShieldCheck}
+              label="Cautions détenues"
+              value={`${fmtMoney(held)} $`}
+              accent="text-emerald-400"
+            />
           )}
-          <div className="rounded-lg border bg-card px-4 py-2">
-            <span className="text-sm text-muted-foreground">À venir </span>
-            <span className="font-semibold text-amber-400">{upcoming}</span>
-          </div>
+          <Kpi icon={CalendarClock} label="À venir" value={String(upcoming)} accent="text-amber-400" />
         </div>
         {canCreate && (
           <Button className="ml-auto" onClick={openNew}>
@@ -203,8 +231,15 @@ export default function Locations() {
                   {canDelete && (
                     <button
                       type="button"
-                      onClick={() => {
-                        if (confirm('Supprimer cette location ?')) remove.mutate(r.id);
+                      onClick={async () => {
+                        if (
+                          await confirm({
+                            title: 'Supprimer cette location ?',
+                            message: 'Cette action est définitive.',
+                            destructive: true,
+                          })
+                        )
+                          remove.mutate(r.id);
                       }}
                       title="Supprimer"
                       className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
@@ -231,15 +266,18 @@ export default function Locations() {
           </div>
         ))}
         {list.length === 0 && (
-          <div className="grid place-items-center gap-3 rounded-xl border border-dashed bg-card p-12 text-center">
-            <p className="text-sm text-muted-foreground">Aucune location enregistrée.</p>
-            {canCreate && (
-              <Button variant="outline" onClick={openNew}>
-                <Plus className="h-4 w-4" />
-                Ajouter la première location
-              </Button>
-            )}
-          </div>
+          <EmptyState
+            icon={CalendarDays}
+            title="Aucune location enregistrée."
+            action={
+              canCreate ? (
+                <Button variant="outline" onClick={openNew}>
+                  <Plus className="h-4 w-4" />
+                  Ajouter la première location
+                </Button>
+              ) : undefined
+            }
+          />
         )}
       </div>
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { MessageSquare } from 'lucide-react';
 import { fmtDateTime, type Message } from '@/lib/messages';
 
 export function MessageThread({
@@ -17,7 +18,10 @@ export function MessageThread({
 
   if (messages.length === 0) {
     return (
-      <div className="grid place-items-center py-12 text-sm text-muted-foreground">{emptyLabel}</div>
+      <div className="grid place-items-center gap-2 py-12 text-center text-sm text-muted-foreground">
+        <MessageSquare className="h-6 w-6 text-muted-foreground/60" />
+        <span>{emptyLabel}</span>
+      </div>
     );
   }
 
@@ -68,6 +72,7 @@ export function MessageComposer({
         ref={ref}
         disabled={disabled}
         rows={2}
+        aria-label="Écrire un message"
         placeholder={disabled ? 'Lecture seule' : 'Écrire un message…'}
         className="h-[44px] max-h-40 min-h-[44px] flex-1 resize-y rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
         onKeyDown={(e) => {
@@ -80,6 +85,7 @@ export function MessageComposer({
       <button
         type="button"
         onClick={submit}
+        aria-label="Envoyer le message"
         disabled={pending || disabled}
         className="h-9 shrink-0 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
       >

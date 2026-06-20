@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, X, Phone, Mail, Search, Wallet } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Phone, Mail, Search, Wallet, Users, Coins } from 'lucide-react';
 import { LOYALTY_TIERS, moduleConfigBool, type LoyaltyTier } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
+import { Kpi, KpiSkeleton } from '@/components/ui/kpi';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useConfirm } from '@/components/ui/confirm';
 import { fmtMoney } from '@/lib/declarations';
 import { useModulePerms } from '@/lib/useCompany';
 import {
@@ -42,6 +46,7 @@ export default function Clients() {
   const showCredit = moduleConfigBool(cfg, 'clients', 'credit');
   const canAdjustBalance = special.adjust_balance ?? false;
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
 
   const q = useQuery({ queryKey: ['clients', companyId], queryFn: () => getClients(companyId) });
   const tiersQ = useQuery({
@@ -139,25 +144,35 @@ export default function Clients() {
   const balances = all.reduce((s, c) => s + c.accountBalance, 0);
   const pending = create.isPending || update.isPending;
 
+  if (q.isLoading) {
+    const kpiCount = 1 + (showLoyalty ? 1 : 0) + (showCredit ? 1 : 0);
+    return (
+      <div className="space-y-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {Array.from({ length: kpiCount }).map((_, i) => (
+            <KpiSkeleton key={i} />
+          ))}
+        </div>
+        <Skeleton className="h-9 rounded-md" />
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex flex-wrap gap-3">
-          <div className="rounded-lg border bg-card px-4 py-2">
-            <span className="text-sm text-muted-foreground">Clients </span>
-            <span className="font-semibold">{all.length}</span>
-          </div>
+        <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-3">
+          <Kpi icon={Users} label="Clients" value={String(all.length)} accent="text-sky-400" />
           {showLoyalty && (
-            <div className="rounded-lg border bg-card px-4 py-2">
-              <span className="text-sm text-muted-foreground">Total dépensé </span>
-              <span className="font-semibold text-primary">{fmtMoney(totalSpent)} $</span>
-            </div>
+            <Kpi icon={Wallet} label="Total dépensé" value={`${fmtMoney(totalSpent)} $`} accent="text-primary" />
           )}
           {showCredit && (
-            <div className="rounded-lg border bg-card px-4 py-2">
-              <span className="text-sm text-muted-foreground">Soldes crédit </span>
-              <span className="font-semibold text-emerald-400">{fmtMoney(balances)} $</span>
-            </div>
+            <Kpi icon={Coins} label="Soldes crédit" value={`${fmtMoney(balances)} $`} accent="text-emerald-400" />
           )}
         </div>
         {canCreate && (
@@ -174,6 +189,7 @@ export default function Clients() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Rechercher par nom, téléphone, email…"
+          aria-label="Rechercher un client"
           className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
@@ -234,8 +250,15 @@ export default function Clients() {
                   {canDelete && (
                     <button
                       type="button"
-                      onClick={() => {
-                        if (confirm(`Supprimer ${c.name} ?`)) remove.mutate(c.id);
+                      onClick={async () => {
+                        if (
+                          await confirm({
+                            title: 'Supprimer ?',
+                            message: `Supprimer ${c.name} ?`,
+                            destructive: true,
+                          })
+                        )
+                          remove.mutate(c.id);
                       }}
                       title="Supprimer"
                       className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
@@ -266,17 +289,19 @@ export default function Clients() {
           </div>
         ))}
         {list.length === 0 && (
-          <div className="grid place-items-center gap-3 rounded-xl border border-dashed bg-card p-12 text-center">
-            <p className="text-sm text-muted-foreground">
-              {all.length === 0 ? 'Aucun client enregistré.' : 'Aucun client trouvé.'}
-            </p>
-            {canCreate && all.length === 0 && (
-              <Button variant="outline" onClick={openNew}>
-                <Plus className="h-4 w-4" />
-                Ajouter le premier client
-              </Button>
-            )}
-          </div>
+          <EmptyState
+            icon={Users}
+            title={all.length === 0 ? 'Aucun client enregistré.' : 'Aucun client trouvé.'}
+            hint={all.length === 0 ? undefined : 'Essayez un autre terme de recherche.'}
+            action={
+              canCreate && all.length === 0 ? (
+                <Button variant="outline" onClick={openNew}>
+                  <Plus className="h-4 w-4" />
+                  Ajouter le premier client
+                </Button>
+              ) : undefined
+            }
+          />
         )}
       </div>
 
@@ -293,6 +318,8 @@ export default function Clients() {
               <button
                 type="button"
                 onClick={close}
+                title="Fermer"
+                aria-label="Fermer"
                 className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 <X className="h-4 w-4" />
@@ -378,6 +405,8 @@ export default function Clients() {
               <button
                 type="button"
                 onClick={() => setBalanceClient(null)}
+                title="Fermer"
+                aria-label="Fermer"
                 className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 <X className="h-4 w-4" />

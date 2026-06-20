@@ -7,7 +7,8 @@ import { toggleMyModule, uploadMyCompanyLogo, type MyModule } from '@/lib/me';
 import { useCompany } from '@/lib/useCompany';
 import { moduleIcon } from '@/lib/moduleIcons';
 import { Switch } from '@/components/ui/switch';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 import { ModuleConfigModal } from '@/components/ModuleConfigModal';
 import { LoyaltyTiersModal } from '@/components/LoyaltyTiersModal';
 import { GradesPanelModal } from '@/components/GradesPanelModal';
@@ -28,10 +29,12 @@ function initials(name: string): string {
 export default function CompanySettings() {
   const { company: mine, companyId, isLoading } = useCompany();
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const upload = useMutation({
     mutationFn: (file: File) => uploadMyCompanyLogo(companyId, file),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['my-companies'] }),
+    onError: () => toast("Échec de l'envoi du logo.", 'error'),
   });
   const toggle = useMutation({
     mutationFn: (v: { key: MyModule['key']; enabled: boolean }) =>
@@ -71,7 +74,7 @@ export default function CompanySettings() {
             )}
           </div>
           <label className="cursor-pointer">
-            <span className="inline-flex h-9 items-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
+            <span className={buttonVariants({ variant: 'outline' })}>
               {upload.isPending ? 'Envoi…' : 'Changer le logo'}
             </span>
             <input
@@ -91,6 +94,11 @@ export default function CompanySettings() {
       <div className="mt-4 rounded-xl border bg-card">
         <div className="border-b px-5 py-4 text-sm font-semibold">Modules de l'entreprise</div>
         <div className="space-y-5 p-5">
+          {groups.length === 0 && (
+            <div className="rounded-lg border border-dashed bg-background/40 p-6 text-center text-sm text-muted-foreground">
+              Aucun module disponible pour cette entreprise.
+            </div>
+          )}
           {groups.map((g) => (
             <div key={g.group}>
               <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -127,6 +135,7 @@ export default function CompanySettings() {
                       <Switch
                         checked={m.enabled && !m.blocked}
                         disabled={toggle.isPending || m.blocked}
+                        ariaLabel={`Activer ${m.label}`}
                         onChange={() => toggle.mutate({ key: m.key, enabled: !m.enabled })}
                       />
                     </div>

@@ -14,6 +14,8 @@ import {
   UserPlus,
   Coins,
   FileDown,
+  Users,
+  UserCheck,
 } from 'lucide-react';
 import {
   EMPLOYEE_POSITIONS,
@@ -35,6 +37,10 @@ import {
 import { getSalaryGrid } from '@/lib/salary';
 import { SalaryGridModal } from '@/components/SalaryGridModal';
 import { buildContractSvg, downloadSvgAsPng } from '@/lib/pngDoc';
+import { Kpi, KpiSkeleton } from '@/components/ui/kpi';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useConfirm } from '@/components/ui/confirm';
 
 const inputCls =
   'h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
@@ -109,6 +115,7 @@ export default function Employes() {
   const showCommission = moduleConfigBool(rhCfg, 'rh', 'commission');
   const showWarnings = moduleConfigBool(rhCfg, 'rh', 'warnings');
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
 
   const q = useQuery({ queryKey: ['employees', companyId], queryFn: () => getEmployees(companyId) });
   const grid = useQuery({ queryKey: ['salary-grid', companyId], queryFn: () => getSalaryGrid(companyId) });
@@ -235,40 +242,52 @@ export default function Employes() {
   const warnTotal = list.reduce((s, e) => s + e.warnings, 0);
   const pending = create.isPending || update.isPending;
 
+  if (q.isLoading) {
+    return (
+      <div className="space-y-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <KpiSkeleton />
+          <KpiSkeleton />
+          {showWarnings && <KpiSkeleton />}
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="h-16 rounded-xl" />
+          <Skeleton className="h-16 rounded-xl" />
+          <Skeleton className="h-16 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-3">
-          <div className="rounded-lg border bg-card px-4 py-2">
-            <span className="text-sm text-muted-foreground">Employés </span>
-            <span className="font-semibold">{list.length}</span>
-          </div>
-          <div className="rounded-lg border bg-card px-4 py-2">
-            <span className="text-sm text-muted-foreground">Actifs </span>
-            <span className="font-semibold text-primary">{activeCount}</span>
-          </div>
-          {showWarnings && (
-            <div className="rounded-lg border bg-card px-4 py-2">
-              <span className="text-sm text-muted-foreground">Avertissements </span>
-              <span className="font-semibold text-amber-400">{warnTotal}</span>
-            </div>
+      {(canCreate || canEdit) && (
+        <div className="flex flex-wrap justify-end gap-2">
+          {canEdit && (
+            <Button variant="outline" onClick={() => setGridOpen(true)}>
+              <Coins className="h-4 w-4" />
+              Grille salariale
+            </Button>
+          )}
+          {canCreate && (
+            <Button onClick={openNew}>
+              <Plus className="h-4 w-4" />
+              Nouvel employé
+            </Button>
           )}
         </div>
-        {(canCreate || canEdit) && (
-          <div className="ml-auto flex gap-2">
-            {canEdit && (
-              <Button variant="outline" onClick={() => setGridOpen(true)}>
-                <Coins className="h-4 w-4" />
-                Grille salariale
-              </Button>
-            )}
-            {canCreate && (
-              <Button onClick={openNew}>
-                <Plus className="h-4 w-4" />
-                Nouvel employé
-              </Button>
-            )}
-          </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <Kpi icon={Users} label="Employés" value={String(list.length)} />
+        <Kpi icon={UserCheck} label="Actifs" value={String(activeCount)} accent="text-primary" />
+        {showWarnings && (
+          <Kpi
+            icon={AlertTriangle}
+            label="Avertissements"
+            value={String(warnTotal)}
+            accent="text-amber-400"
+          />
         )}
       </div>
 
@@ -381,8 +400,15 @@ export default function Employes() {
                     {canDelete && (
                       <button
                         type="button"
-                        onClick={() => {
-                          if (confirm(`Supprimer ${e.name} ?`)) remove.mutate(e.id);
+                        onClick={async () => {
+                          if (
+                            await confirm({
+                              title: 'Supprimer ?',
+                              message: `Supprimer ${e.name} ?`,
+                              destructive: true,
+                            })
+                          )
+                            remove.mutate(e.id);
                         }}
                         title="Supprimer"
                         className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
@@ -405,7 +431,7 @@ export default function Employes() {
                     <Field label="Naissance" value={fmtDate(e.dateOfBirth)} />
                   </div>
 
-                  <div className="mt-4 rounded-lg border bg-background/40 p-3">
+                  <div className="mt-4 rounded-lg border bg-muted/30 p-3">
                     <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                       Performance
                     </div>
@@ -439,15 +465,18 @@ export default function Employes() {
           );
         })}
         {list.length === 0 && (
-          <div className="grid place-items-center gap-3 rounded-xl border border-dashed bg-card p-12 text-center">
-            <p className="text-sm text-muted-foreground">Aucun employé enregistré.</p>
-            {canCreate && (
-              <Button variant="outline" onClick={openNew}>
-                <Plus className="h-4 w-4" />
-                Ajouter le premier employé
-              </Button>
-            )}
-          </div>
+          <EmptyState
+            icon={Users}
+            title="Aucun employé enregistré"
+            action={
+              canCreate ? (
+                <Button variant="outline" onClick={openNew}>
+                  <Plus className="h-4 w-4" />
+                  Ajouter le premier employé
+                </Button>
+              ) : undefined
+            }
+          />
         )}
       </div>
 
