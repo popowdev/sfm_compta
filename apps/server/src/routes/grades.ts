@@ -7,6 +7,7 @@ import { companyRoles, companies } from '../db/schema';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getGradesWithPermissions, setRolePermission } from '../services/grades';
+import { canManageCompany } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
 
 export const gradesRouter = Router({ mergeParams: true });
@@ -110,6 +111,99 @@ gradesRouter.delete(
 
 const permSchema = z.object({ canView: z.boolean(), canWrite: z.boolean() });
 
+// --- Patron-scoped grades management (gated by canManageCompany) ---
+
+export const meGradesRouter = Router({ mergeParams: true });
+meGradesRouter.use(requireAuth);
+meGradesRouter.use(
+  asyncHandler(async (req, res, next) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    if (!(await canManageCompany(req.user!.id, companyId))) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    next();
+  }),
+);
+
+const fineSchema = z.object({
+  canView: z.boolean(),
+  canCreate: z.boolean(),
+  canEdit: z.boolean(),
+  canDelete: z.boolean(),
+});
+
+meGradesRouter.get(
+  '/',
+  asyncHandler(async (req, res) => {
+    res.json(await getGradesWithPermissions(parseId(req.params.companyId)!));
+  }),
+);
+
+meGradesRouter.post(
+  '/',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId)!;
+    const parsed = createSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    await db
+      .insert(companyRoles)
+      .values({ companyId, name: parsed.data.name, rank: parsed.data.rank ?? 100, isDefault: false });
+    emitInvalidate(['irs', `company:${companyId}`], [['grades', companyId], ['my-companies']]);
+    res.status(201).json({ ok: true });
+  }),
+);
+
+meGradesRouter.patch(
+  '/:rid',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId)!;
+    const rid = parseId(req.params.rid);
+    if (!rid) return res.status(400).json({ error: 'bad_request' });
+    if (!(await gradeInCompany(rid, companyId))) return res.status(404).json({ error: 'not_found' });
+    const parsed = patchSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    if (Object.keys(parsed.data).length > 0) {
+      await db.update(companyRoles).set(parsed.data).where(eq(companyRoles.id, rid));
+    }
+    emitInvalidate(['irs', `company:${companyId}`], [['grades', companyId], ['my-companies']]);
+    res.json({ ok: true });
+  }),
+);
+
+meGradesRouter.delete(
+  '/:rid',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId)!;
+    const rid = parseId(req.params.rid);
+    if (!rid) return res.status(400).json({ error: 'bad_request' });
+    const grade = await gradeInCompany(rid, companyId);
+    if (!grade) return res.status(404).json({ error: 'not_found' });
+    if (grade.isDefault) return res.status(400).json({ error: 'default_grade' });
+    await db.delete(companyRoles).where(eq(companyRoles.id, rid));
+    emitInvalidate(['irs', `company:${companyId}`], [['grades', companyId], ['my-companies']]);
+    res.json({ ok: true });
+  }),
+);
+
+meGradesRouter.put(
+  '/:rid/permissions/:key',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId)!;
+    const rid = parseId(req.params.rid);
+    const key = req.params.key;
+    if (!rid || !key || !(MODULE_KEYS as readonly string[]).includes(key)) {
+      return res.status(400).json({ error: 'bad_request' });
+    }
+    if (!(await gradeInCompany(rid, companyId))) return res.status(404).json({ error: 'not_found' });
+    const parsed = fineSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    await setRolePermission(rid, key as ModuleKey, parsed.data);
+    emitInvalidate(['irs', `company:${companyId}`], [['grades', companyId], ['my-companies']]);
+    res.json({ ok: true });
+  }),
+);
+
 gradesRouter.put(
   '/:rid/permissions/:key',
   asyncHandler(async (req, res) => {
@@ -122,7 +216,13 @@ gradesRouter.put(
     if (!(await gradeInCompany(rid, companyId))) return res.status(404).json({ error: 'not_found' });
     const parsed = permSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
-    await setRolePermission(rid, key as ModuleKey, parsed.data.canView, parsed.data.canWrite);
+    const { canView, canWrite } = parsed.data;
+    await setRolePermission(rid, key as ModuleKey, {
+      canView,
+      canCreate: canWrite,
+      canEdit: canWrite,
+      canDelete: canWrite,
+    });
     emitInvalidate(['irs', `company:${companyId}`], [['grades', companyId]]);
     res.json({ ok: true });
   }),

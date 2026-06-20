@@ -42,3 +42,60 @@ export const setGradePermission = (
     method: 'PUT',
     body: JSON.stringify({ canView, canWrite }),
   });
+
+// --- Patron-scoped (fine per-action) ---
+
+export interface GradePermFine {
+  canView: boolean;
+  canWrite: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+}
+
+export interface GradeFine {
+  id: number;
+  name: string;
+  rank: number;
+  isDefault: boolean;
+  canManage: boolean;
+  permissions: Record<string, GradePermFine>;
+}
+
+export interface GradesDataFine {
+  modules: { key: ModuleKey; label: string; group: string }[];
+  grades: GradeFine[];
+}
+
+export const getMyGrades = (companyId: number) =>
+  apiFetch<GradesDataFine>(`/api/me/companies/${companyId}/grades`);
+
+export const createMyGrade = (companyId: number, name: string) =>
+  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/grades`, {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+
+export const patchMyGrade = (
+  companyId: number,
+  rid: number,
+  body: { name?: string; canManage?: boolean },
+) =>
+  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/grades/${rid}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+
+export const deleteMyGrade = (companyId: number, rid: number) =>
+  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/grades/${rid}`, { method: 'DELETE' });
+
+export const setMyGradePermission = (
+  companyId: number,
+  rid: number,
+  key: ModuleKey,
+  perm: { canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean },
+) =>
+  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/grades/${rid}/permissions/${key}`, {
+    method: 'PUT',
+    body: JSON.stringify(perm),
+  });

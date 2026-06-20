@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings2, Award } from 'lucide-react';
+import { Settings2, Award, Users } from 'lucide-react';
 import { MODULES, MODULE_CONFIG, moduleConfigBool } from '@rp-compta/shared';
 import { toggleMyModule, uploadMyCompanyLogo, type MyModule } from '@/lib/me';
 import { useCompany } from '@/lib/useCompany';
@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { ModuleConfigModal } from '@/components/ModuleConfigModal';
 import { LoyaltyTiersModal } from '@/components/LoyaltyTiersModal';
+import { GradesPanelModal } from '@/components/GradesPanelModal';
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
@@ -39,6 +40,7 @@ export default function CompanySettings() {
   });
   const [configModule, setConfigModule] = useState<MyModule | null>(null);
   const [tiersOpen, setTiersOpen] = useState(false);
+  const [gradesOpen, setGradesOpen] = useState(false);
 
   if (isLoading) return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
   if (!mine || !mine.canManage) return <Navigate to="/" replace />;
@@ -160,9 +162,20 @@ export default function CompanySettings() {
         );
       })()}
 
-      <p className="mt-4 text-xs text-muted-foreground">
-        La gestion des grades et des membres arrivera prochainement côté patron.
-      </p>
+      <div className="mt-4 flex items-center justify-between rounded-xl border bg-card p-5">
+        <div className="flex items-center gap-2.5">
+          <Users className="h-4 w-4 text-muted-foreground" />
+          <div>
+            <div className="text-sm font-semibold">Grades & permissions</div>
+            <div className="text-xs text-muted-foreground">
+              Qui peut voir / créer / modifier / supprimer dans chaque module.
+            </div>
+          </div>
+        </div>
+        <Button variant="outline" onClick={() => setGradesOpen(true)}>
+          Gérer
+        </Button>
+      </div>
 
       <ModuleConfigModal
         companyId={companyId}
@@ -170,6 +183,7 @@ export default function CompanySettings() {
         onClose={() => setConfigModule(null)}
       />
       <LoyaltyTiersModal companyId={companyId} open={tiersOpen} onClose={() => setTiersOpen(false)} />
+      <GradesPanelModal companyId={companyId} open={gradesOpen} onClose={() => setGradesOpen(false)} />
     </div>
   );
 }

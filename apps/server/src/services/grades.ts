@@ -61,10 +61,22 @@ export async function getGradesWithPermissions(companyId: number) {
   return {
     modules: effective.map((m) => ({ key: m.key, label: m.label, group: m.group })),
     grades: grades.map((g) => {
-      const map: Record<string, { canView: boolean; canWrite: boolean }> = {};
+      const map: Record<
+        string,
+        { canView: boolean; canWrite: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }
+      > = {};
       for (const m of effective) {
         const p = perms.find((x) => x.companyRoleId === g.id && x.moduleKey === m.key);
-        map[m.key] = { canView: p?.canView ?? false, canWrite: p?.canWrite ?? false };
+        const canCreate = p?.canCreate ?? false;
+        const canEdit = p?.canEdit ?? false;
+        const canDelete = p?.canDelete ?? false;
+        map[m.key] = {
+          canView: p?.canView ?? false,
+          canWrite: canCreate || canEdit || canDelete,
+          canCreate,
+          canEdit,
+          canDelete,
+        };
       }
       return {
         id: g.id,
@@ -81,11 +93,12 @@ export async function getGradesWithPermissions(companyId: number) {
 export async function setRolePermission(
   companyRoleId: number,
   moduleKey: ModuleKey,
-  canView: boolean,
-  canWrite: boolean,
+  perms: { canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean },
 ): Promise<void> {
+  const canWrite = perms.canCreate || perms.canEdit || perms.canDelete;
+  const values = { ...perms, canWrite };
   await db
     .insert(rolePermissions)
-    .values({ companyRoleId, moduleKey, canView, canWrite })
-    .onDuplicateKeyUpdate({ set: { canView, canWrite } });
+    .values({ companyRoleId, moduleKey, ...values })
+    .onDuplicateKeyUpdate({ set: values });
 }
