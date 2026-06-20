@@ -5,6 +5,7 @@ import { moduleConfigBool } from '@rp-compta/shared';
 import { db } from '../db';
 import {
   exercices,
+  exercicePayroll,
   companyExpenses,
   companyEmployees,
   timeEntries,
@@ -40,7 +41,7 @@ async function gate(req: Request, companyId: number) {
   if (actionDenied(acc, methodAction(req.method))) {
     return { ok: false as const, status: 403, error: 'forbidden' };
   }
-  return { ok: true as const, canWrite: acc.canWrite };
+  return { ok: true as const, canWrite: acc.canWrite, canEdit: acc.canEdit };
 }
 
 function serialize(r: typeof exercices.$inferSelect) {
@@ -53,12 +54,15 @@ function serialize(r: typeof exercices.$inferSelect) {
     status: r.status,
     revenue: Number(r.revenue),
     dividends: Number(r.dividends),
+    hoursCap: Number(r.hoursCap),
+    salaryCap: Number(r.salaryCap),
     notes: r.notes,
     createdAt: r.createdAt,
   };
 }
 
 const money = z.number().nonnegative().finite().max(99_999_999_999.99);
+const hoursVal = z.number().nonnegative().finite().max(99_999.99);
 
 const createSchema = z
   .object({
@@ -67,6 +71,8 @@ const createSchema = z
     endDate: z.string().refine(isDate, 'invalid_date'),
     revenue: money.optional(),
     dividends: money.optional(),
+    hoursCap: hoursVal.optional(),
+    salaryCap: money.optional(),
     notes: z.string().max(2000).nullish().or(z.literal('')),
   })
   .refine((d) => d.endDate >= d.startDate, { message: 'invalid_range' })
@@ -80,6 +86,8 @@ const updateSchema = z.object({
   status: z.enum(['open', 'closed']).optional(),
   revenue: money.optional(),
   dividends: money.optional(),
+  hoursCap: hoursVal.optional(),
+  salaryCap: money.optional(),
   notes: z.string().max(2000).nullish().or(z.literal('')),
 });
 
@@ -120,6 +128,8 @@ meExercicesRouter.post(
         endDate: parsed.data.endDate,
         revenue: String(round2(parsed.data.revenue ?? 0)),
         dividends: String(round2(parsed.data.dividends ?? 0)),
+        hoursCap: String(round2(parsed.data.hoursCap ?? 0)),
+        salaryCap: String(round2(parsed.data.salaryCap ?? 0)),
         notes: blank(parsed.data.notes),
       });
     } catch (err) {
@@ -214,6 +224,8 @@ meExercicesRouter.put(
     if (d.status !== undefined) set.status = d.status;
     if (d.revenue !== undefined) set.revenue = String(round2(d.revenue));
     if (d.dividends !== undefined) set.dividends = String(round2(d.dividends));
+    if (d.hoursCap !== undefined) set.hoursCap = String(round2(d.hoursCap));
+    if (d.salaryCap !== undefined) set.salaryCap = String(round2(d.salaryCap));
     if (d.notes !== undefined) set.notes = blank(d.notes);
     if (Object.keys(set).length === 0) return res.json({ ok: true });
     const result = await db
@@ -271,8 +283,9 @@ meExercicesRouter.get(
     );
     const effectiveDividends = dividendsEnabled ? ex.dividends : 0;
 
-    const expRows = await db
+    const catRows = await db
       .select({
+        category: companyExpenses.category,
         total: sql<string>`COALESCE(SUM(${companyExpenses.amount}), 0)`,
         deductible: sql<string>`COALESCE(SUM(CASE WHEN ${companyExpenses.taxDeductible} THEN ${companyExpenses.amount} ELSE 0 END), 0)`,
       })
@@ -284,9 +297,20 @@ meExercicesRouter.get(
           gte(companyExpenses.expenseDate, ex.startDate),
           lte(companyExpenses.expenseDate, ex.endDate),
         ),
-      );
-    const expensesTotal = Number(expRows[0]?.total ?? 0);
-    const expensesDeductible = Number(expRows[0]?.deductible ?? 0);
+      )
+      .groupBy(companyExpenses.category);
+    const expensesByCategory = catRows
+      .map((r) => ({ category: r.category, total: Number(r.total) }))
+      .filter((r) => r.total !== 0)
+      .sort((a, b) => b.total - a.total);
+    const expensesTotal = round2(catRows.reduce((s, r) => s + Number(r.total), 0));
+    const expensesDeductible = round2(catRows.reduce((s, r) => s + Number(r.deductible), 0));
+
+    const overrideRows = await db
+      .select()
+      .from(exercicePayroll)
+      .where(eq(exercicePayroll.exerciceId, id));
+    const overrides = new Map(overrideRows.map((o) => [o.employeeId, o]));
 
     const payRows = await db
       .select({
@@ -309,18 +333,36 @@ meExercicesRouter.get(
       .groupBy(companyEmployees.id);
 
     const payroll = payRows.map((r) => {
-      const workedMin = Number(r.workedMin);
+      const rawHours = Number(r.workedMin) / 60;
+      const hours = round2(rawHours);
+      const cappedHours = ex.hoursCap > 0 ? Math.min(rawHours, ex.hoursCap) : rawHours;
       const rate = Number(r.hourlyRate);
+      const base = round2(cappedHours * rate);
+      const o = overrides.get(r.employeeId);
+      const commission = o ? Number(o.commission) : 0;
+      const bonus = o ? Number(o.bonus) : 0;
+      const deductions = o ? Number(o.deductions) : 0;
+      const theoretical = round2(Math.max(0, base + commission + bonus - deductions));
+      const paid = ex.salaryCap > 0 ? Math.min(theoretical, ex.salaryCap) : theoretical;
       return {
         employeeId: r.employeeId,
         name: r.name,
         position: r.position,
-        hours: round2(workedMin / 60),
+        hours,
+        cappedHours: round2(cappedHours),
         hourlyRate: rate,
-        salary: round2((workedMin / 60) * rate),
+        base,
+        commission,
+        bonus,
+        deductions,
+        theoretical,
+        paid: round2(paid),
+        excess: round2(Math.max(0, theoretical - paid)),
+        notes: o?.notes ?? null,
       };
     });
-    const payrollTotal = round2(payroll.reduce((s, p) => s + p.salary, 0));
+    const payrollTotal = round2(payroll.reduce((s, p) => s + p.paid, 0));
+    const excessToCompany = round2(payroll.reduce((s, p) => s + p.excess, 0));
 
     const badgeuseAcc = await getModuleAccess(req.user!.id, companyId, 'badgeuse');
     const payrollVisible =
@@ -328,7 +370,9 @@ meExercicesRouter.get(
 
     const charges = round2(expensesTotal + payrollTotal);
     const benefit = round2(ex.revenue - charges);
+    const taxableBenefit = Math.max(0, benefit);
     const taxes = await computeTaxes(benefit, effectiveDividends);
+    const effectiveRate = taxableBenefit > 0 ? round2((taxes.corporateTax / taxableBenefit) * 100) : 0;
     const netAfterTax = round2(
       benefit - taxes.corporateTax - effectiveDividends - taxes.dividendTax,
     );
@@ -336,14 +380,18 @@ meExercicesRouter.get(
     res.json({
       ...ex,
       canWrite: g.canWrite,
+      canEdit: g.canEdit,
       payrollVisible,
       summary: {
         revenue: ex.revenue,
         expensesTotal,
         expensesDeductible,
         payrollTotal,
+        excessToCompany,
         charges,
         benefit,
+        taxableBenefit,
+        effectiveRate,
         dividends: effectiveDividends,
         corporateTax: taxes.corporateTax,
         dividendTax: taxes.dividendTax,
@@ -351,7 +399,59 @@ meExercicesRouter.get(
         totalTax: taxes.totalTax,
         netAfterTax,
       },
+      expensesByCategory,
       payroll: payrollVisible ? payroll : [],
     });
+  }),
+);
+
+const payrollMoney = z.number().nonnegative().finite().max(9_999_999_999.99);
+const payrollSchema = z.object({
+  commission: payrollMoney,
+  bonus: payrollMoney,
+  deductions: payrollMoney,
+  notes: z.string().trim().max(200).nullish().or(z.literal('')),
+});
+
+meExercicesRouter.put(
+  '/:id/payroll/:employeeId',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const id = parseId(req.params.id);
+    const employeeId = parseId(req.params.employeeId);
+    if (!companyId || !id || !employeeId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    const badgeuseAcc = await getModuleAccess(req.user!.id, companyId, 'badgeuse');
+    if (!badgeuseAcc || !badgeuseAcc.enabled || badgeuseAcc.blocked || !badgeuseAcc.canView) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    const parsed = payrollSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    const exRow = await db
+      .select({ id: exercices.id })
+      .from(exercices)
+      .where(and(eq(exercices.id, id), eq(exercices.companyId, companyId)))
+      .limit(1);
+    if (!exRow[0]) return res.status(404).json({ error: 'not_found' });
+    const empRow = await db
+      .select({ id: companyEmployees.id })
+      .from(companyEmployees)
+      .where(and(eq(companyEmployees.id, employeeId), eq(companyEmployees.companyId, companyId)))
+      .limit(1);
+    if (!empRow[0]) return res.status(404).json({ error: 'not_found' });
+    const amounts = {
+      commission: String(round2(parsed.data.commission)),
+      bonus: String(round2(parsed.data.bonus)),
+      deductions: String(round2(parsed.data.deductions)),
+    };
+    const setOnUpdate: Record<string, unknown> = { ...amounts };
+    if (parsed.data.notes !== undefined) setOnUpdate.notes = blank(parsed.data.notes);
+    await db
+      .insert(exercicePayroll)
+      .values({ companyId, exerciceId: id, employeeId, ...amounts, notes: blank(parsed.data.notes) })
+      .onDuplicateKeyUpdate({ set: setOnUpdate });
+    emitInvalidate(['irs', `company:${companyId}`], [['exercice', companyId, id]]);
+    res.json({ ok: true });
   }),
 );

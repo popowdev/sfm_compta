@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
@@ -10,7 +10,7 @@ import {
   Lock,
   LockOpen,
 } from 'lucide-react';
-import { moduleConfigBool, EMPLOYEE_POSITIONS } from '@rp-compta/shared';
+import { moduleConfigBool, EMPLOYEE_POSITIONS, EXPENSE_CATEGORIES } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { fmtMoney } from '@/lib/declarations';
 import { ApiError } from '@/lib/api';
@@ -22,8 +22,10 @@ import {
   generateWeek,
   updateExercice,
   deleteExercice,
+  setExercicePayroll,
   type Exercice,
   type ExerciceInput,
+  type PayrollLine,
 } from '@/lib/exercices';
 
 const inputCls =
@@ -33,13 +35,25 @@ const labelCls = 'mb-1 block text-muted-foreground';
 const POSITION_LABEL: Record<string, string> = Object.fromEntries(
   EMPLOYEE_POSITIONS.map((p) => [p.key, p.label]),
 );
+const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
+  EXPENSE_CATEGORIES.map((c) => [c.key, c.label]),
+);
 
 function fmtDate(d: string): string {
   const dt = new Date(`${d}T00:00:00`);
   return Number.isNaN(dt.getTime()) ? d : dt.toLocaleDateString('fr-FR');
 }
 
-const EMPTY = { label: '', startDate: '', endDate: '', revenue: '', dividends: '', notes: '' };
+const EMPTY = {
+  label: '',
+  startDate: '',
+  endDate: '',
+  revenue: '',
+  dividends: '',
+  hoursCap: '',
+  salaryCap: '',
+  notes: '',
+};
 
 export default function Exercices() {
   const { company, companyId, canCreate, canEdit, canDelete } = useModulePerms('exercices');
@@ -109,6 +123,8 @@ export default function Exercices() {
       endDate: ex.endDate,
       revenue: String(ex.revenue),
       dividends: String(ex.dividends),
+      hoursCap: ex.hoursCap ? String(ex.hoursCap) : '',
+      salaryCap: ex.salaryCap ? String(ex.salaryCap) : '',
       notes: ex.notes ?? '',
     });
     setOpen(true);
@@ -121,25 +137,21 @@ export default function Exercices() {
     form.endDate >= form.startDate;
 
   const submit = () => {
-    const dividendsField = showDividends ? { dividends: Number(form.dividends) || 0 } : {};
+    const common = {
+      revenue: Number(form.revenue) || 0,
+      hoursCap: Number(form.hoursCap) || 0,
+      salaryCap: Number(form.salaryCap) || 0,
+      notes: form.notes.trim() || undefined,
+      ...(showDividends ? { dividends: Number(form.dividends) || 0 } : {}),
+    };
     if (editing !== null) {
-      update.mutate({
-        id: editing,
-        body: {
-          label: form.label.trim(),
-          revenue: Number(form.revenue) || 0,
-          ...dividendsField,
-          notes: form.notes.trim() || undefined,
-        },
-      });
+      update.mutate({ id: editing, body: { label: form.label.trim(), ...common } });
     } else {
       create.mutate({
         label: form.label.trim(),
         startDate: form.startDate,
         endDate: form.endDate,
-        revenue: Number(form.revenue) || 0,
-        ...dividendsField,
-        notes: form.notes.trim() || undefined,
+        ...common,
       });
     }
   };
@@ -342,6 +354,30 @@ export default function Exercices() {
                     />
                   </label>
                 )}
+                <label className="text-sm">
+                  <span className={labelCls}>Plafond d'heures / employé</span>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    className={inputCls}
+                    value={form.hoursCap}
+                    onChange={(e) => set('hoursCap', e.target.value)}
+                    placeholder="0 = illimité"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className={labelCls}>Plafond de salaire / employé ($)</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className={inputCls}
+                    value={form.salaryCap}
+                    onChange={(e) => set('salaryCap', e.target.value)}
+                    placeholder="0 = illimité"
+                  />
+                </label>
                 <label className="text-sm sm:col-span-2">
                   <span className={labelCls}>Notes</span>
                   <textarea
@@ -353,7 +389,9 @@ export default function Exercices() {
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
                 Le CA est saisi manuellement pour l'instant ; il se remplira automatiquement avec le
-                module Caisse. Dépenses et salaires sont agrégés depuis la période.
+                module Caisse. Dépenses et salaires sont agrégés depuis la période. Les plafonds
+                limitent les heures payées et le salaire par employé (le surplus reste à
+                l'entreprise).
               </p>
               <div className="mt-5 flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>
@@ -375,11 +413,139 @@ export default function Exercices() {
   );
 }
 
-function Row({ label, value, accent }: { label: string; value: string; accent?: string }) {
+function Row({
+  label,
+  value,
+  accent,
+  strong,
+}: {
+  label: string;
+  value: string;
+  accent?: string;
+  strong?: boolean;
+}) {
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 text-sm">
-      <span className="text-muted-foreground">{label}</span>
+      <span className={strong ? 'font-medium' : 'text-muted-foreground'}>{label}</span>
       <span className={`font-medium ${accent ?? ''}`}>{value}</span>
+    </div>
+  );
+}
+
+const cellInput =
+  'h-7 w-20 rounded border border-input bg-background px-1.5 text-right text-sm outline-none focus:ring-1 focus:ring-ring';
+
+function PayrollRow({
+  p,
+  editable,
+  onSave,
+}: {
+  p: PayrollLine;
+  editable: boolean;
+  onSave: (employeeId: number, body: { commission: number; bonus: number; deductions: number }) => void;
+}) {
+  const [commission, setCommission] = useState(p.commission ? String(p.commission) : '');
+  const [bonus, setBonus] = useState(p.bonus ? String(p.bonus) : '');
+  const [deductions, setDeductions] = useState(p.deductions ? String(p.deductions) : '');
+  const [focused, setFocused] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (focused !== 'commission') setCommission(p.commission ? String(p.commission) : '');
+    if (focused !== 'bonus') setBonus(p.bonus ? String(p.bonus) : '');
+    if (focused !== 'deductions') setDeductions(p.deductions ? String(p.deductions) : '');
+  }, [p.commission, p.bonus, p.deductions, focused]);
+
+  const num = (v: string) => {
+    const n = Number(v.replace(',', '.'));
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  };
+  const commit = () => {
+    setFocused(null);
+    const c = num(commission);
+    const b = num(bonus);
+    const d = num(deductions);
+    if (c === p.commission && b === p.bonus && d === p.deductions) return;
+    onSave(p.employeeId, { commission: c, bonus: b, deductions: d });
+  };
+  const capped = p.paid < p.theoretical;
+
+  return (
+    <tr className="border-t align-middle">
+      <td className="px-2 py-1.5">
+        <div className="font-medium">{p.name}</div>
+        <div className="text-[11px] text-muted-foreground">{POSITION_LABEL[p.position] ?? p.position}</div>
+      </td>
+      <td className="px-2 py-1.5 text-right">
+        {p.cappedHours.toLocaleString('fr-FR')} h
+        {p.cappedHours < p.hours && (
+          <div className="text-[10px] text-amber-400">/ {p.hours.toLocaleString('fr-FR')} h</div>
+        )}
+      </td>
+      <td className="px-2 py-1.5 text-right text-muted-foreground">{fmtMoney(p.base)} $</td>
+      <td className="px-2 py-1.5 text-right">
+        {editable ? (
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            className={cellInput}
+            value={commission}
+            onChange={(e) => setCommission(e.target.value)}
+            onFocus={() => setFocused('commission')}
+            onBlur={commit}
+            placeholder="0"
+          />
+        ) : (
+          `${fmtMoney(p.commission)} $`
+        )}
+      </td>
+      <td className="px-2 py-1.5 text-right">
+        {editable ? (
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            className={cellInput}
+            value={bonus}
+            onChange={(e) => setBonus(e.target.value)}
+            onFocus={() => setFocused('bonus')}
+            onBlur={commit}
+            placeholder="0"
+          />
+        ) : (
+          `${fmtMoney(p.bonus)} $`
+        )}
+      </td>
+      <td className="px-2 py-1.5 text-right">
+        {editable ? (
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            className={cellInput}
+            value={deductions}
+            onChange={(e) => setDeductions(e.target.value)}
+            onFocus={() => setFocused('deductions')}
+            onBlur={commit}
+            placeholder="0"
+          />
+        ) : (
+          `${fmtMoney(p.deductions)} $`
+        )}
+      </td>
+      <td className="px-2 py-1.5 text-right font-medium">
+        {fmtMoney(p.paid)} $
+        {capped && <div className="text-[10px] text-amber-400">plafonné</div>}
+      </td>
+    </tr>
+  );
+}
+
+function SoonPanel({ title }: { title: string }) {
+  return (
+    <div className="rounded-lg border border-dashed bg-background/40 p-3">
+      <div className="text-xs font-medium">{title}</div>
+      <div className="mt-1 text-[11px] text-muted-foreground">À venir avec le module Caisse.</div>
     </div>
   );
 }
@@ -393,56 +559,115 @@ function ExerciceDetailView({
   id: number;
   showDividends: boolean;
 }) {
+  const queryClient = useQueryClient();
   const q = useQuery({
     queryKey: ['exercice', companyId, id],
     queryFn: () => getExercice(companyId, id),
   });
+  const savePay = useMutation({
+    mutationFn: (v: { employeeId: number; body: { commission: number; bonus: number; deductions: number } }) =>
+      setExercicePayroll(companyId, id, v.employeeId, v.body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['exercice', companyId, id] }),
+    onError: () => {
+      alert("Échec de l'enregistrement de la paie.");
+      queryClient.invalidateQueries({ queryKey: ['exercice', companyId, id] });
+    },
+  });
+
   if (q.isLoading) return <div className="text-xs text-muted-foreground">Chargement…</div>;
   if (!q.data) return <div className="text-xs text-muted-foreground">Indisponible.</div>;
-  const { summary: s, payroll, payrollVisible } = q.data;
+  const { summary: s, payroll, payrollVisible, expensesByCategory, canEdit } = q.data;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <div className="rounded-lg border bg-background/40 p-4">
-        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Compte de résultat
+    <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border bg-background/40 p-4">
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Compte de résultat
+          </div>
+          <Row label="Chiffre d'affaires" value={`${fmtMoney(s.revenue)} $`} accent="text-primary" strong />
+          <div className="my-1 border-t" />
+          <Row label="Dépenses" value={`− ${fmtMoney(s.expensesTotal)} $`} />
+          <Row label="Salaires (badgeuse)" value={`− ${fmtMoney(s.payrollTotal)} $`} />
+          {s.excessToCompany > 0 && (
+            <div className="pl-3 text-[11px] text-muted-foreground">
+              plafonné : {fmtMoney(s.excessToCompany)} $ non versés (gardés par l'entreprise)
+            </div>
+          )}
+          <Row label="Total des charges" value={`− ${fmtMoney(s.charges)} $`} strong />
+          <div className="my-1 border-t" />
+          <Row
+            label="Bénéfice avant impôt"
+            value={`${fmtMoney(s.benefit)} $`}
+            strong
+            accent={s.benefit >= 0 ? 'text-emerald-400' : 'text-destructive'}
+          />
+          <Row label="Base imposable" value={`${fmtMoney(s.taxableBenefit)} $`} />
+          <Row
+            label={`Impôt société${s.effectiveRate > 0 ? ` (~${s.effectiveRate}%)` : ''}`}
+            value={`− ${fmtMoney(s.corporateTax)} $`}
+          />
+          {showDividends && (
+            <>
+              <Row label="Dividendes distribués" value={`− ${fmtMoney(s.dividends)} $`} />
+              <Row label={`Impôt dividendes (${s.dividendTaxRate}%)`} value={`− ${fmtMoney(s.dividendTax)} $`} />
+            </>
+          )}
+          <div className="my-1 border-t" />
+          <Row
+            label="Résultat net"
+            value={`${fmtMoney(s.netAfterTax)} $`}
+            strong
+            accent={s.netAfterTax >= 0 ? 'text-emerald-400' : 'text-destructive'}
+          />
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Les salaires proviennent de la badgeuse ; les dépenses de catégorie « Salaires » sont
+            exclues pour éviter le double comptage. Le CA détaillé arrivera avec le module Caisse.
+          </p>
         </div>
-        <Row label="Chiffre d'affaires" value={`${fmtMoney(s.revenue)} $`} accent="text-primary" />
-        <div className="my-1 border-t" />
-        <Row label="Dépenses" value={`− ${fmtMoney(s.expensesTotal)} $`} />
-        <Row label="Salaires (badgeuse)" value={`− ${fmtMoney(s.payrollTotal)} $`} />
-        <Row label="Total des charges" value={`− ${fmtMoney(s.charges)} $`} />
-        <div className="my-1 border-t" />
-        <Row
-          label="Bénéfice avant impôt"
-          value={`${fmtMoney(s.benefit)} $`}
-          accent={s.benefit >= 0 ? 'text-emerald-400' : 'text-destructive'}
-        />
-        <Row label="Impôt société (barème)" value={`− ${fmtMoney(s.corporateTax)} $`} />
-        {showDividends && (
-          <>
-            <Row label="Dividendes distribués" value={`− ${fmtMoney(s.dividends)} $`} />
-            <Row
-              label={`Impôt dividendes (${s.dividendTaxRate}%)`}
-              value={`− ${fmtMoney(s.dividendTax)} $`}
-            />
-          </>
-        )}
-        <div className="my-1 border-t" />
-        <Row
-          label="Résultat net"
-          value={`${fmtMoney(s.netAfterTax)} $`}
-          accent={s.netAfterTax >= 0 ? 'text-emerald-400' : 'text-destructive'}
-        />
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Les salaires proviennent de la badgeuse ; les dépenses de catégorie « Salaires » sont
-          exclues pour éviter le double comptage. Le CA détaillé arrivera avec le module Caisse.
-        </p>
+
+        <div className="rounded-lg border bg-background/40 p-4">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Dépenses par catégorie ({fmtMoney(s.expensesTotal)} $)
+          </div>
+          {expensesByCategory.length === 0 ? (
+            <div className="text-xs text-muted-foreground">Aucune dépense sur la période.</div>
+          ) : (
+            <div className="space-y-1.5">
+              {expensesByCategory.map((c) => {
+                const pct = s.expensesTotal > 0 ? (c.total / s.expensesTotal) * 100 : 0;
+                return (
+                  <div key={c.category}>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>{CATEGORY_LABEL[c.category] ?? c.category}</span>
+                      <span className="font-medium">{fmtMoney(c.total)} $</span>
+                    </div>
+                    <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full bg-primary/60" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {s.expensesDeductible > 0 && (
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              Dont fiscalement déductible : {fmtMoney(s.expensesDeductible)} $.
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="rounded-lg border bg-background/40 p-4">
-        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Paie de la période ({fmtMoney(s.payrollTotal)} $)
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Paie de la période — versée {fmtMoney(s.payrollTotal)} $
+          </div>
+          {canEdit && payrollVisible && payroll.length > 0 && (
+            <span className="text-[11px] text-muted-foreground">
+              Commission / prime / retenue éditables (sauvegarde auto)
+            </span>
+          )}
         </div>
         {!payrollVisible ? (
           <div className="text-xs text-muted-foreground">
@@ -459,35 +684,38 @@ function ExerciceDetailView({
                 <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-2 py-1.5 text-left font-semibold">Employé</th>
                   <th className="px-2 py-1.5 text-right font-semibold">Heures</th>
-                  <th className="px-2 py-1.5 text-right font-semibold">Taux</th>
-                  <th className="px-2 py-1.5 text-right font-semibold">Salaire</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">Base</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">Commission</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">Prime</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">Retenue</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">Versé</th>
                 </tr>
               </thead>
               <tbody>
-                {payroll.map((p, i) => (
-                  <tr key={p.employeeId} className={i > 0 ? 'border-t' : ''}>
-                    <td className="px-2 py-1.5">
-                      <div className="font-medium">{p.name}</div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {POSITION_LABEL[p.position] ?? p.position}
-                      </div>
-                    </td>
-                    <td className="px-2 py-1.5 text-right">{p.hours.toLocaleString('fr-FR')} h</td>
-                    <td className="px-2 py-1.5 text-right text-muted-foreground">
-                      {fmtMoney(p.hourlyRate)} $/h
-                    </td>
-                    <td className="px-2 py-1.5 text-right font-medium">{fmtMoney(p.salary)} $</td>
-                  </tr>
+                {payroll.map((p) => (
+                  <PayrollRow
+                    key={p.employeeId}
+                    p={p}
+                    editable={canEdit}
+                    onSave={(employeeId, body) => savePay.mutate({ employeeId, body })}
+                  />
                 ))}
               </tbody>
             </table>
           </div>
         )}
-        {s.expensesDeductible > 0 && (
-          <p className="mt-3 text-[11px] text-muted-foreground">
-            Dépenses fiscalement déductibles sur la période : {fmtMoney(s.expensesDeductible)} $.
-          </p>
-        )}
+      </div>
+
+      <div className="rounded-lg border bg-background/40 p-4">
+        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Ventes
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <SoonPanel title="Ventes par jour" />
+          <SoonPanel title="Ventes par employé" />
+          <SoonPanel title="Top produits" />
+          <SoonPanel title="Marge & coût de production" />
+        </div>
       </div>
     </div>
   );

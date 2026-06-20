@@ -458,6 +458,8 @@ export const exercices = mysqlTable(
     status: mysqlEnum('status', ['open', 'closed']).notNull().default('open'),
     revenue: decimal('revenue', { precision: 14, scale: 2 }).notNull().default('0'),
     dividends: decimal('dividends', { precision: 14, scale: 2 }).notNull().default('0'),
+    hoursCap: decimal('hours_cap', { precision: 10, scale: 2 }).notNull().default('0'),
+    salaryCap: decimal('salary_cap', { precision: 14, scale: 2 }).notNull().default('0'),
     notes: text('notes'),
     createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at')
@@ -465,6 +467,27 @@ export const exercices = mysqlTable(
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (t) => ({ uq: unique('uq_exercice_period').on(t.companyId, t.startDate, t.endDate) }),
+);
+
+export const exercicePayroll = mysqlTable(
+  'exercice_payroll',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    companyId: int('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    exerciceId: int('exercice_id')
+      .notNull()
+      .references(() => exercices.id, { onDelete: 'cascade' }),
+    employeeId: int('employee_id')
+      .notNull()
+      .references(() => companyEmployees.id, { onDelete: 'cascade' }),
+    commission: decimal('commission', { precision: 12, scale: 2 }).notNull().default('0'),
+    bonus: decimal('bonus', { precision: 12, scale: 2 }).notNull().default('0'),
+    deductions: decimal('deductions', { precision: 12, scale: 2 }).notNull().default('0'),
+    notes: varchar('notes', { length: 200 }),
+  },
+  (t) => ({ uq: unique('uq_exercice_payroll').on(t.exerciceId, t.employeeId) }),
 );
 
 export const sessions = mysqlTable('sessions', {

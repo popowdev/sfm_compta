@@ -11,6 +11,8 @@ export interface Exercice {
   status: ExerciceStatus;
   revenue: number;
   dividends: number;
+  hoursCap: number;
+  salaryCap: number;
   notes: string | null;
   createdAt: string;
 }
@@ -21,6 +23,8 @@ export interface ExerciceInput {
   endDate: string;
   revenue?: number;
   dividends?: number;
+  hoursCap?: number;
+  salaryCap?: number;
   notes?: string;
 }
 
@@ -29,6 +33,8 @@ export interface ExercicePatch {
   status?: ExerciceStatus;
   revenue?: number;
   dividends?: number;
+  hoursCap?: number;
+  salaryCap?: number;
   notes?: string;
 }
 
@@ -37,8 +43,23 @@ export interface PayrollLine {
   name: string;
   position: string;
   hours: number;
+  cappedHours: number;
   hourlyRate: number;
-  salary: number;
+  base: number;
+  commission: number;
+  bonus: number;
+  deductions: number;
+  theoretical: number;
+  paid: number;
+  excess: number;
+  notes: string | null;
+}
+
+export interface PayrollInput {
+  commission: number;
+  bonus: number;
+  deductions: number;
+  notes?: string;
 }
 
 export interface ExerciceSummary {
@@ -46,8 +67,11 @@ export interface ExerciceSummary {
   expensesTotal: number;
   expensesDeductible: number;
   payrollTotal: number;
+  excessToCompany: number;
   charges: number;
   benefit: number;
+  taxableBenefit: number;
+  effectiveRate: number;
   dividends: number;
   corporateTax: number;
   dividendTax: number;
@@ -56,10 +80,17 @@ export interface ExerciceSummary {
   netAfterTax: number;
 }
 
+export interface ExpenseCategoryLine {
+  category: string;
+  total: number;
+}
+
 export interface ExerciceDetail extends Exercice {
   canWrite: boolean;
+  canEdit: boolean;
   payrollVisible: boolean;
   summary: ExerciceSummary;
+  expensesByCategory: ExpenseCategoryLine[];
   payroll: PayrollLine[];
 }
 
@@ -89,3 +120,14 @@ export const updateExercice = (companyId: number, id: number, body: ExercicePatc
 
 export const deleteExercice = (companyId: number, id: number) =>
   apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/exercices/${id}`, { method: 'DELETE' });
+
+export const setExercicePayroll = (
+  companyId: number,
+  id: number,
+  employeeId: number,
+  body: PayrollInput,
+) =>
+  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/exercices/${id}/payroll/${employeeId}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
