@@ -94,7 +94,50 @@ export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
     { key: 'loyalty', label: 'Gérer la fidélité (points & paliers)', type: 'boolean', default: true },
     { key: 'credit', label: 'Gérer le compte crédit (solde)', type: 'boolean', default: true },
   ],
+  stocks: [
+    {
+      key: 'valuation',
+      label: 'Gérer la valorisation',
+      type: 'boolean',
+      default: true,
+      help: 'Coût unitaire des articles + valeur totale du stock.',
+    },
+    {
+      key: 'threshold',
+      label: "Gérer les seuils d'alerte",
+      type: 'boolean',
+      default: true,
+      help: 'Seuil de stock bas + alertes sur les articles concernés.',
+    },
+    {
+      key: 'supplier',
+      label: 'Gérer le fournisseur',
+      type: 'boolean',
+      default: true,
+      help: 'Champ fournisseur sur les entrées de stock.',
+    },
+  ],
 };
+
+export const STOCK_UNITS = [
+  { key: 'piece', label: 'pièce', short: 'pc' },
+  { key: 'kg', label: 'kilogramme', short: 'kg' },
+  { key: 'g', label: 'gramme', short: 'g' },
+  { key: 'liter', label: 'litre', short: 'L' },
+  { key: 'cl', label: 'centilitre', short: 'cl' },
+  { key: 'box', label: 'carton', short: 'carton' },
+  { key: 'pack', label: 'pack', short: 'pack' },
+  { key: 'other', label: 'unité', short: 'u' },
+] as const;
+export type StockUnit = (typeof STOCK_UNITS)[number]['key'];
+export const STOCK_UNIT_KEYS = STOCK_UNITS.map((u) => u.key) as StockUnit[];
+
+export const STOCK_MOVEMENT_TYPES = [
+  { key: 'in', label: 'Entrée' },
+  { key: 'out', label: 'Sortie' },
+  { key: 'adjust', label: 'Ajustement' },
+] as const;
+export type StockMovementType = (typeof STOCK_MOVEMENT_TYPES)[number]['key'];
 
 export interface SpecialAction {
   key: string;

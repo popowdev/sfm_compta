@@ -404,6 +404,47 @@ export const clientLoyaltyTiers = mysqlTable(
   (t) => ({ uq: unique('uq_loyalty_tier').on(t.companyId, t.tier) }),
 );
 
+export const stockItems = mysqlTable('stock_items', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 150 }).notNull(),
+  category: varchar('category', { length: 80 }),
+  unit: mysqlEnum('unit', ['piece', 'kg', 'g', 'liter', 'cl', 'box', 'pack', 'other'])
+    .notNull()
+    .default('piece'),
+  quantity: decimal('quantity', { precision: 12, scale: 3 }).notNull().default('0'),
+  unitCost: decimal('unit_cost', { precision: 12, scale: 2 }).notNull().default('0'),
+  lowStockThreshold: decimal('low_stock_threshold', { precision: 12, scale: 3 })
+    .notNull()
+    .default('0'),
+  notes: text('notes'),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const stockMovements = mysqlTable('stock_movements', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  stockItemId: int('stock_item_id')
+    .notNull()
+    .references(() => stockItems.id, { onDelete: 'cascade' }),
+  type: mysqlEnum('type', ['in', 'out', 'adjust']).notNull(),
+  quantity: decimal('quantity', { precision: 12, scale: 3 }).notNull(),
+  unitCost: decimal('unit_cost', { precision: 12, scale: 2 }),
+  supplier: varchar('supplier', { length: 150 }),
+  reason: varchar('reason', { length: 200 }),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const sessions = mysqlTable('sessions', {
   id: varchar('id', { length: 64 }).primaryKey(),
   userId: int('user_id')

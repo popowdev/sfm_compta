@@ -183,6 +183,13 @@
       "when": 1781960255519,
       "tag": "0025_common_firebrand",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "5",
+      "when": 1781962246060,
+      "tag": "0026_kind_gargoyle",
+      "breakpoints": true
     }
   ]
 }
