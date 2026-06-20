@@ -177,9 +177,11 @@ meCatalogRouter.post(
     if (parsed.data.categoryId && !(await categoryInCompany(parsed.data.categoryId, companyId))) {
       return res.status(400).json({ error: 'invalid_category' });
     }
-    await db.insert(catalogItems).values({ companyId, createdByUserId: req.user!.id, ...toItemRow(parsed.data) });
+    const inserted = await db
+      .insert(catalogItems)
+      .values({ companyId, createdByUserId: req.user!.id, ...toItemRow(parsed.data) });
     emitInvalidate(['irs', `company:${companyId}`], [['catalog', companyId]]);
-    res.status(201).json({ ok: true });
+    res.status(201).json({ ok: true, id: Number(inserted[0].insertId) });
   }),
 );
 

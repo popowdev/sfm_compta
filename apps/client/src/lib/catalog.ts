@@ -55,7 +55,7 @@ export const getCatalog = (companyId: number) =>
   }>(`/api/me/companies/${companyId}/catalog`);
 
 export const createCatalogItem = (companyId: number, body: CatalogItemInput) =>
-  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/catalog`, {
+  apiFetch<{ ok: boolean; id: number }>(`/api/me/companies/${companyId}/catalog`, {
     method: 'POST',
     body: JSON.stringify(body),
   });
