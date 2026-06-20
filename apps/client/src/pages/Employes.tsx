@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useCompany } from '@/lib/useCompany';
+import { useModulePerms } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
@@ -102,7 +102,7 @@ function seniority(hireDate: string | null): string {
 }
 
 export default function Employes() {
-  const { company, companyId } = useCompany();
+  const { company, companyId, canCreate, canEdit, canDelete } = useModulePerms('rh');
   const rhCfg = company?.modules.find((m) => m.key === 'rh')?.config;
   const showCommission = moduleConfigBool(rhCfg, 'rh', 'commission');
   const showWarnings = moduleConfigBool(rhCfg, 'rh', 'warnings');
@@ -211,7 +211,6 @@ export default function Employes() {
     else create.mutate(body);
   };
 
-  const canWrite = q.data?.canWrite ?? false;
   const list = q.data?.employees ?? [];
   const members = q.data?.members ?? [];
   const activeCount = list.filter((e) => e.active).length;
@@ -237,16 +236,20 @@ export default function Employes() {
             </div>
           )}
         </div>
-        {canWrite && (
+        {(canCreate || canEdit) && (
           <div className="ml-auto flex gap-2">
-            <Button variant="outline" onClick={() => setGridOpen(true)}>
-              <Coins className="h-4 w-4" />
-              Grille salariale
-            </Button>
-            <Button onClick={openNew}>
-              <Plus className="h-4 w-4" />
-              Nouvel employé
-            </Button>
+            {canEdit && (
+              <Button variant="outline" onClick={() => setGridOpen(true)}>
+                <Coins className="h-4 w-4" />
+                Grille salariale
+              </Button>
+            )}
+            {canCreate && (
+              <Button onClick={openNew}>
+                <Plus className="h-4 w-4" />
+                Nouvel employé
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -268,7 +271,7 @@ export default function Employes() {
                     {m.gradeName ?? 'membre'} · accès site, pas de fiche RH
                   </span>
                 </div>
-                {canWrite && (
+                {canCreate && (
                   <button
                     type="button"
                     onClick={() => openFromMember(m)}
@@ -345,26 +348,30 @@ export default function Employes() {
                     )}
                   </div>
                 </button>
-                {canWrite && (
+                {(canEdit || canDelete) && (
                   <div className="flex shrink-0 gap-1">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(e)}
-                      title="Modifier"
-                      className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (confirm(`Supprimer ${e.name} ?`)) remove.mutate(e.id);
-                      }}
-                      title="Supprimer"
-                      className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(e)}
+                        title="Modifier"
+                        className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Supprimer ${e.name} ?`)) remove.mutate(e.id);
+                        }}
+                        title="Supprimer"
+                        className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -410,7 +417,7 @@ export default function Employes() {
         {list.length === 0 && (
           <div className="grid place-items-center gap-3 rounded-xl border border-dashed bg-card p-12 text-center">
             <p className="text-sm text-muted-foreground">Aucun employé enregistré.</p>
-            {canWrite && (
+            {canCreate && (
               <Button variant="outline" onClick={openNew}>
                 <Plus className="h-4 w-4" />
                 Ajouter le premier employé

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useCompany } from '@/lib/useCompany';
+import { useModulePerms } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { EXPENSE_CATEGORIES, moduleConfigBool, type ExpenseCategory } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
@@ -34,7 +34,7 @@ const EMPTY = {
 };
 
 export default function Depenses() {
-  const { company, companyId } = useCompany();
+  const { company, companyId, canCreate, canEdit, canDelete } = useModulePerms('depenses');
   const showDeductible = moduleConfigBool(
     company?.modules.find((m) => m.key === 'depenses')?.config,
     'depenses',
@@ -121,7 +121,7 @@ export default function Depenses() {
         </div>
       </div>
 
-      {canWrite && (
+      {(canCreate || canEdit) && (
         <form
           className="rounded-xl border bg-card p-5"
           onSubmit={(e) => {
@@ -219,7 +219,9 @@ export default function Depenses() {
                 <th className="px-4 py-3 text-left font-semibold">Catégorie</th>
                 <th className="px-4 py-3 text-right font-semibold">Montant</th>
                 {showDeductible && <th className="px-4 py-3 text-center font-semibold">Déduct.</th>}
-                {canWrite && <th className="px-4 py-3 text-right font-semibold">Actions</th>}
+                {(canEdit || canDelete) && (
+                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -247,31 +249,35 @@ export default function Depenses() {
                       )}
                     </td>
                   )}
-                  {canWrite && (
+                  {(canEdit || canDelete) && (
                     <td className="whitespace-nowrap px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => startEdit(e)}
-                        className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        Modifier
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (confirm('Supprimer cette dépense ?')) remove.mutate(e.id);
-                        }}
-                        className="ml-3 text-xs font-medium text-destructive/80 transition-colors hover:text-destructive"
-                      >
-                        Suppr.
-                      </button>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => startEdit(e)}
+                          className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          Modifier
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm('Supprimer cette dépense ?')) remove.mutate(e.id);
+                          }}
+                          className="ml-3 text-xs font-medium text-destructive/80 transition-colors hover:text-destructive"
+                        >
+                          Suppr.
+                        </button>
+                      )}
                     </td>
                   )}
                 </tr>
               ))}
               {list.length === 0 && (
                 <tr>
-                  <td colSpan={(canWrite ? 5 : 4) + (showDeductible ? 1 : 0)} className="px-4 py-4 text-muted-foreground">
+                  <td colSpan={((canEdit || canDelete) ? 5 : 4) + (showDeductible ? 1 : 0)} className="px-4 py-4 text-muted-foreground">
                     Aucune dépense enregistrée.
                   </td>
                 </tr>

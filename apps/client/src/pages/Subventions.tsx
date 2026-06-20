@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useCompany } from '@/lib/useCompany';
+import { useModulePerms } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { fmtMoney } from '@/lib/declarations';
@@ -23,7 +23,7 @@ export const SUB_STATUS: Record<SubventionStatus, { label: string; cls: string }
 const EMPTY = { motif: '', requesterName: '', amountRequested: '', notes: '' };
 
 export default function Subventions() {
-  const { companyId } = useCompany();
+  const { companyId, canCreate } = useModulePerms('subventions');
   const queryClient = useQueryClient();
 
   const q = useQuery({
@@ -42,7 +42,6 @@ export default function Subventions() {
     },
   });
 
-  const canWrite = q.data?.canWrite ?? false;
   const list = q.data?.subventions ?? [];
   const granted = list
     .filter((s) => s.status === 'approved' || s.status === 'paid')
@@ -66,7 +65,7 @@ export default function Subventions() {
         </div>
       </div>
 
-      {canWrite && (
+      {canCreate && (
         <form
           className="rounded-xl border bg-card p-5"
           onSubmit={(e) => {

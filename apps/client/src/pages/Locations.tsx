@@ -4,7 +4,7 @@ import { Plus, Pencil, Trash2, X, Phone, CalendarDays } from 'lucide-react';
 import { moduleConfigBool } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { fmtMoney } from '@/lib/declarations';
-import { useCompany } from '@/lib/useCompany';
+import { useModulePerms } from '@/lib/useCompany';
 import {
   getRentals,
   createRental,
@@ -42,7 +42,7 @@ const EMPTY = {
 };
 
 export default function Locations() {
-  const { company, companyId } = useCompany();
+  const { company, companyId, canCreate, canEdit, canDelete } = useModulePerms('locations');
   const cfg = company?.modules.find((m) => m.key === 'locations')?.config;
   const showDeposit = moduleConfigBool(cfg, 'locations', 'deposit');
   const showDuration = moduleConfigBool(cfg, 'locations', 'duration');
@@ -122,7 +122,6 @@ export default function Locations() {
     else create.mutate(body);
   };
 
-  const canWrite = q.data?.canWrite ?? false;
   const list = q.data?.rentals ?? [];
   const revenue = list.filter((r) => r.status !== 'cancelled').reduce((s, r) => s + r.rentalPrice, 0);
   const held = list.filter((r) => r.depositStatus === 'paid').reduce((s, r) => s + r.deposit, 0);
@@ -149,7 +148,7 @@ export default function Locations() {
             <span className="font-semibold text-amber-400">{upcoming}</span>
           </div>
         </div>
-        {canWrite && (
+        {canCreate && (
           <Button className="ml-auto" onClick={openNew}>
             <Plus className="h-4 w-4" />
             Nouvelle location
@@ -189,26 +188,30 @@ export default function Locations() {
                   </span>
                 </div>
               </div>
-              {canWrite && (
+              {(canEdit || canDelete) && (
                 <div className="flex shrink-0 gap-1">
-                  <button
-                    type="button"
-                    onClick={() => openEdit(r)}
-                    title="Modifier"
-                    className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (confirm('Supprimer cette location ?')) remove.mutate(r.id);
-                    }}
-                    title="Supprimer"
-                    className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => openEdit(r)}
+                      title="Modifier"
+                      className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm('Supprimer cette location ?')) remove.mutate(r.id);
+                      }}
+                      title="Supprimer"
+                      className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -230,7 +233,7 @@ export default function Locations() {
         {list.length === 0 && (
           <div className="grid place-items-center gap-3 rounded-xl border border-dashed bg-card p-12 text-center">
             <p className="text-sm text-muted-foreground">Aucune location enregistrée.</p>
-            {canWrite && (
+            {canCreate && (
               <Button variant="outline" onClick={openNew}>
                 <Plus className="h-4 w-4" />
                 Ajouter la première location

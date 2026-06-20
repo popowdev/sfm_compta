@@ -4,7 +4,7 @@ import { Plus, Pencil, Trash2, X, Phone, Mail, Search, Wallet } from 'lucide-rea
 import { LOYALTY_TIERS, moduleConfigBool, type LoyaltyTier } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { fmtMoney } from '@/lib/declarations';
-import { useCompany } from '@/lib/useCompany';
+import { useModulePerms } from '@/lib/useCompany';
 import {
   getClients,
   createClient,
@@ -36,7 +36,7 @@ const EMPTY = {
 };
 
 export default function Clients() {
-  const { company, companyId } = useCompany();
+  const { company, companyId, canCreate, canEdit, canDelete } = useModulePerms('clients');
   const cfg = company?.modules.find((m) => m.key === 'clients')?.config;
   const showLoyalty = moduleConfigBool(cfg, 'clients', 'loyalty');
   const showCredit = moduleConfigBool(cfg, 'clients', 'credit');
@@ -128,7 +128,6 @@ export default function Clients() {
     else create.mutate(body);
   };
 
-  const canWrite = q.data?.canWrite ?? false;
   const all = q.data?.clients ?? [];
   const term = search.trim().toLowerCase();
   const list = term
@@ -161,7 +160,7 @@ export default function Clients() {
             </div>
           )}
         </div>
-        {canWrite && (
+        {canCreate && (
           <Button className="ml-auto" onClick={openNew}>
             <Plus className="h-4 w-4" />
             Nouveau client
@@ -207,7 +206,7 @@ export default function Clients() {
                   )}
                 </div>
               </div>
-              {(canWrite || (showCredit && canManage)) && (
+              {(canEdit || canDelete || (showCredit && canManage)) && (
                 <div className="flex shrink-0 gap-1">
                   {showCredit && canManage && (
                     <button
@@ -222,27 +221,27 @@ export default function Clients() {
                       <Wallet className="h-4 w-4" />
                     </button>
                   )}
-                  {canWrite && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => openEdit(c)}
-                        title="Modifier"
-                        className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (confirm(`Supprimer ${c.name} ?`)) remove.mutate(c.id);
-                        }}
-                        title="Supprimer"
-                        className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => openEdit(c)}
+                      title="Modifier"
+                      className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm(`Supprimer ${c.name} ?`)) remove.mutate(c.id);
+                      }}
+                      title="Supprimer"
+                      className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   )}
                 </div>
               )}
@@ -271,7 +270,7 @@ export default function Clients() {
             <p className="text-sm text-muted-foreground">
               {all.length === 0 ? 'Aucun client enregistré.' : 'Aucun client trouvé.'}
             </p>
-            {canWrite && all.length === 0 && (
+            {canCreate && all.length === 0 && (
               <Button variant="outline" onClick={openNew}>
                 <Plus className="h-4 w-4" />
                 Ajouter le premier client

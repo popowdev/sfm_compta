@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { and, eq, isNull } from 'drizzle-orm';
 import { MODULE_KEYS, type ModuleKey } from '@rp-compta/shared';
 import { db } from '../db';
-import { companyRoles, companies } from '../db/schema';
+import { companyRoles, companies, memberships } from '../db/schema';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getGradesWithPermissions, setRolePermission } from '../services/grades';
@@ -163,6 +163,15 @@ meGradesRouter.patch(
     if (!(await gradeInCompany(rid, companyId))) return res.status(404).json({ error: 'not_found' });
     const parsed = patchSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    if (parsed.data.canManage === false) {
+      const managers = await db
+        .select({ id: companyRoles.id })
+        .from(companyRoles)
+        .where(and(eq(companyRoles.companyId, companyId), eq(companyRoles.canManage, true)));
+      if (!managers.some((m) => m.id !== rid)) {
+        return res.status(400).json({ error: 'last_manager' });
+      }
+    }
     if (Object.keys(parsed.data).length > 0) {
       await db.update(companyRoles).set(parsed.data).where(eq(companyRoles.id, rid));
     }
@@ -180,6 +189,12 @@ meGradesRouter.delete(
     const grade = await gradeInCompany(rid, companyId);
     if (!grade) return res.status(404).json({ error: 'not_found' });
     if (grade.isDefault) return res.status(400).json({ error: 'default_grade' });
+    const assigned = await db
+      .select({ id: memberships.id })
+      .from(memberships)
+      .where(eq(memberships.companyRoleId, rid))
+      .limit(1);
+    if (assigned[0]) return res.status(400).json({ error: 'grade_in_use' });
     await db.delete(companyRoles).where(eq(companyRoles.id, rid));
     emitInvalidate(['irs', `company:${companyId}`], [['grades', companyId], ['my-companies']]);
     res.json({ ok: true });

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useCompany } from '@/lib/useCompany';
+import { useModulePerms } from '@/lib/useCompany';
 import { computeCorporateTax } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { getMyCompanies } from '@/lib/me';
@@ -34,7 +34,7 @@ const EMPTY = {
 };
 
 export default function Declarations() {
-  const { companyId } = useCompany();
+  const { companyId, canCreate } = useModulePerms('declarations');
   const queryClient = useQueryClient();
 
   const my = useQuery({ queryKey: ['my-companies'], queryFn: getMyCompanies });
@@ -75,12 +75,11 @@ export default function Declarations() {
   const divTax = Math.round(((dividends * divRate) / 100) * 100) / 100;
   const total = Math.round((corpTax + divTax) * 100) / 100;
 
-  const canWrite = decls.data?.canWrite ?? false;
   const list = decls.data?.declarations ?? [];
 
   return (
     <div className="max-w-5xl space-y-6">
-      {canWrite && (
+      {canCreate && (
         <form
           className="rounded-xl border bg-card p-5"
           onSubmit={(e) => {

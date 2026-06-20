@@ -59,6 +59,7 @@ export function GradesPanelModal({
     mutationFn: (v: { rid: number; body: { name?: string; canManage?: boolean } }) =>
       patchMyGrade(companyId, v.rid, v.body),
     onSuccess: refresh,
+    onError: () => alert('Au moins un grade doit rester « gérant ».'),
   });
   const remove = useMutation({
     mutationFn: (rid: number) => deleteMyGrade(companyId, rid),
@@ -66,6 +67,7 @@ export function GradesPanelModal({
       setSelected(null);
       refresh();
     },
+    onError: () => alert('Impossible : des membres sont encore assignés à ce grade.'),
   });
   const setPerm = useMutation({
     mutationFn: (v: {

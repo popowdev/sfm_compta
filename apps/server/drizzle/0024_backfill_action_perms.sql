@@ -1,0 +1,1 @@
+UPDATE `role_permissions` SET `can_create` = `can_write`, `can_edit` = `can_write`, `can_delete` = `can_write` WHERE `can_create` = false AND `can_edit` = false AND `can_delete` = false AND `can_write` = true;

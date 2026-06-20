@@ -31,6 +31,9 @@ export async function seedCompanyRoles(companyId: number): Promise<void> {
         moduleKey: key,
         canView: g.canView,
         canWrite: g.canWrite,
+        canCreate: g.canWrite,
+        canEdit: g.canWrite,
+        canDelete: g.canWrite,
       })),
     );
   }

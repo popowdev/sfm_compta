@@ -1,10 +1,10 @@
-import { useCompany } from '@/lib/useCompany';
+import { useModulePerms } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getMyMessages, sendMyMessage } from '@/lib/messages';
 import { MessageThread, MessageComposer } from '@/components/MessageThread';
 
 export default function Messagerie() {
-  const { companyId } = useCompany();
+  const { companyId, canCreate } = useModulePerms('messagerie');
   const queryClient = useQueryClient();
 
   const q = useQuery({
@@ -17,7 +17,6 @@ export default function Messagerie() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['messages', companyId] }),
   });
 
-  const canWrite = q.data?.canWrite ?? false;
   const messages = q.data?.messages ?? [];
 
   return (
@@ -34,7 +33,7 @@ export default function Messagerie() {
           />
         </div>
       </div>
-      <MessageComposer onSend={(b) => send.mutate(b)} pending={send.isPending} disabled={!canWrite} />
+      <MessageComposer onSend={(b) => send.mutate(b)} pending={send.isPending} disabled={!canCreate} />
     </div>
   );
 }
