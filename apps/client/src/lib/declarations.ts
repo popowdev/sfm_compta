@@ -42,6 +42,18 @@ export const submitDeclaration = (companyId: number, body: SubmitDeclarationInpu
     body: JSON.stringify(body),
   });
 
+export interface DeclarationPrefill {
+  weekLabel: string;
+  caNet: number;
+  expenses: number;
+  payroll: number;
+  charges: number;
+  benefit: number;
+}
+
+export const getDeclarationPrefill = (companyId: number, offset = 0) =>
+  apiFetch<DeclarationPrefill>(`/api/me/companies/${companyId}/declarations/prefill?offset=${offset}`);
+
 export const getAllDeclarations = () => apiFetch<Declaration[]>('/api/declarations');
 
 export const setDeclarationStatus = (id: number, status: 'submitted' | 'paid' | 'cancelled') =>

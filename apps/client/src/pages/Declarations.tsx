@@ -9,6 +9,7 @@ import { getFiscalConfig } from '@/lib/fiscal';
 import {
   getMyDeclarations,
   submitDeclaration,
+  getDeclarationPrefill,
   fmtMoney,
   type Declaration,
 } from '@/lib/declarations';
@@ -65,6 +66,20 @@ export default function Declarations() {
     },
   });
 
+  const prefill = useMutation({
+    mutationFn: (offset: number) => getDeclarationPrefill(companyId, offset),
+    onSuccess: (d) => {
+      setForm((f) => ({
+        ...f,
+        weekLabel: d.weekLabel,
+        caNet: String(d.caNet),
+        charges: String(d.charges),
+        benefit: String(d.benefit),
+      }));
+    },
+    onError: () => alert('Échec du préremplissage.'),
+  });
+
   const company = my.data?.find((c) => c.company.id === companyId);
   if (!my.isLoading && !company) return <Navigate to="/" replace />;
 
@@ -87,7 +102,21 @@ export default function Declarations() {
             if (form.weekLabel.trim() && form.declarantName.trim()) submit.mutate();
           }}
         >
-          <div className="mb-4 text-sm font-semibold">Nouvelle déclaration</div>
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-semibold">Nouvelle déclaration</span>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => prefill.mutate(-1)} disabled={prefill.isPending}>
+                Pré-remplir (semaine dernière)
+              </Button>
+              <Button type="button" variant="outline" onClick={() => prefill.mutate(0)} disabled={prefill.isPending}>
+                {prefill.isPending ? 'Calcul…' : 'Pré-remplir (semaine en cours)'}
+              </Button>
+            </div>
+          </div>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Le préremplissage calcule le CA (ventes Caisse), les charges (dépenses + salaires
+            badgeuse) et le bénéfice de la semaine. Vérifie, ajuste si besoin, puis envoie.
+          </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="text-sm">
               <span className="mb-1 block text-muted-foreground">Semaine déclarée</span>

@@ -1,13 +1,22 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, gte, isNotNull, lte, ne, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { declarations, companies } from '../db/schema';
+import {
+  declarations,
+  companies,
+  sales,
+  companyExpenses,
+  companyEmployees,
+  timeEntries,
+} from '../db/schema';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess } from '../services/access';
 import { computeTaxes } from '../services/declarations';
 import { emitInvalidate } from '../realtime/socket';
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 function parseId(value: string | undefined): number | null {
   const n = Number(value);
@@ -57,6 +66,80 @@ meDeclarationsRouter.get(
       .where(eq(declarations.companyId, companyId))
       .orderBy(desc(declarations.createdAt));
     res.json({ canWrite: acc.canWrite, declarations: rows.map(serialize) });
+  }),
+);
+
+meDeclarationsRouter.get(
+  '/prefill',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const acc = await getModuleAccess(req.user!.id, companyId, 'declarations');
+    if (!acc) return res.status(404).json({ error: 'not_member' });
+    if (!acc.enabled || acc.blocked) return res.status(403).json({ error: 'module_unavailable' });
+    if (!acc.canView) return res.status(403).json({ error: 'forbidden' });
+
+    const offset = Number.isFinite(Number(req.query.offset)) ? Number(req.query.offset) : 0;
+    const now = new Date();
+    now.setUTCDate(now.getUTCDate() + offset * 7);
+    const day = now.getUTCDay();
+    const monday = new Date(now);
+    monday.setUTCDate(now.getUTCDate() - (day === 0 ? 6 : day - 1));
+    const sunday = new Date(monday);
+    sunday.setUTCDate(monday.getUTCDate() + 6);
+    const start = monday.toISOString().slice(0, 10);
+    const end = sunday.toISOString().slice(0, 10);
+    const weekLabel = `Semaine du ${monday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })} au ${sunday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}`;
+
+    const [salesRow, expRow, payRows] = await Promise.all([
+      db
+        .select({ total: sql<string>`COALESCE(SUM(${sales.total}), 0)` })
+        .from(sales)
+        .where(
+          and(
+            eq(sales.companyId, companyId),
+            gte(sql`DATE(${sales.createdAt})`, start),
+            lte(sql`DATE(${sales.createdAt})`, end),
+          ),
+        ),
+      db
+        .select({ total: sql<string>`COALESCE(SUM(${companyExpenses.amount}), 0)` })
+        .from(companyExpenses)
+        .where(
+          and(
+            eq(companyExpenses.companyId, companyId),
+            ne(companyExpenses.category, 'salary'),
+            gte(companyExpenses.expenseDate, start),
+            lte(companyExpenses.expenseDate, end),
+          ),
+        ),
+      db
+        .select({
+          rate: companyEmployees.hourlyRate,
+          workedMin: sql<string>`COALESCE(SUM(GREATEST(0, TIMESTAMPDIFF(MINUTE, ${timeEntries.clockIn}, ${timeEntries.clockOut}) - ${timeEntries.pauseMinutes})), 0)`,
+        })
+        .from(timeEntries)
+        .innerJoin(companyEmployees, eq(timeEntries.employeeId, companyEmployees.id))
+        .where(
+          and(
+            eq(timeEntries.companyId, companyId),
+            isNotNull(timeEntries.clockOut),
+            gte(sql`DATE(${timeEntries.clockIn})`, start),
+            lte(sql`DATE(${timeEntries.clockIn})`, end),
+          ),
+        )
+        .groupBy(companyEmployees.id),
+    ]);
+
+    const caNet = round2(Number(salesRow[0]?.total ?? 0));
+    const expenses = round2(Number(expRow[0]?.total ?? 0));
+    const payroll = round2(
+      payRows.reduce((s, r) => s + (Number(r.workedMin) / 60) * Number(r.rate), 0),
+    );
+    const charges = round2(expenses + payroll);
+    const benefit = round2(caNet - charges);
+
+    res.json({ weekLabel, caNet, expenses, payroll, charges, benefit });
   }),
 );
 
