@@ -1,19 +1,40 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, User, Plus, X, LogIn, LogOut, Trash2 } from 'lucide-react';
+import {
+  ChevronDown,
+  User,
+  Users,
+  Plus,
+  X,
+  LogIn,
+  LogOut,
+  Trash2,
+  Clock,
+  Play,
+  Coffee,
+  Square,
+} from 'lucide-react';
 import { EMPLOYEE_POSITIONS } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { fmtMoney } from '@/lib/declarations';
 import {
+  getMyTimeclock,
   getTimeclock,
   addTimeEntry,
   deleteTimeEntry,
+  clockStart,
+  clockPause,
+  clockResume,
+  clockStop,
   fmtHours,
+  fmtClock,
   fmtTime,
   fmtDay,
+  parseLocal,
   type AddTimeEntryInput,
   type EmployeeTimesheet,
+  type TimeEntry,
 } from '@/lib/timeclock';
 
 const POS_LABEL: Record<string, string> = Object.fromEntries(
@@ -26,6 +47,189 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [active]);
+  return now;
+}
+
+function EntriesTable({ entries }: { entries: TimeEntry[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+            <th className="px-4 py-3 text-left font-semibold">Date</th>
+            <th className="px-4 py-3 text-left font-semibold">Début</th>
+            <th className="px-4 py-3 text-left font-semibold">Fin</th>
+            <th className="px-4 py-3 text-left font-semibold">Travaillé</th>
+            <th className="px-4 py-3 text-left font-semibold">Pauses</th>
+            <th className="px-4 py-3 text-right font-semibold">Salaire</th>
+            <th className="px-4 py-3 text-left font-semibold">Statut</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((t) => {
+            const day = fmtDay(t.clockIn);
+            return (
+              <tr key={t.id} className="border-b last:border-b-0">
+                <td className="px-4 py-3">
+                  <div className="font-medium">{day.date}</div>
+                  <div className="text-xs capitalize text-muted-foreground">{day.weekday}</div>
+                </td>
+                <td className="px-4 py-3 text-sky-300">{fmtTime(t.clockIn)}</td>
+                <td className="px-4 py-3 text-rose-300">{t.clockOut ? fmtTime(t.clockOut) : '—'}</td>
+                <td className="px-4 py-3 font-medium">{fmtHours(t.workedMinutes)}</td>
+                <td className="px-4 py-3 text-muted-foreground">{fmtHours(t.pauseMinutes)}</td>
+                <td className="px-4 py-3 text-right font-medium text-emerald-400">
+                  {fmtMoney(t.salary)} $
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`rounded-md px-2 py-0.5 text-xs font-medium ${
+                      t.complete ? 'bg-primary/10 text-primary' : 'bg-amber-500/10 text-amber-400'
+                    }`}
+                  >
+                    {t.complete ? 'terminé' : 'en cours'}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+          {entries.length === 0 && (
+            <tr>
+              <td colSpan={7} className="px-4 py-4 text-muted-foreground">
+                Aucun pointage.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function MyClock({ companyId }: { companyId: number }) {
+  const queryClient = useQueryClient();
+  const q = useQuery({ queryKey: ['timeclock-me', companyId], queryFn: () => getMyTimeclock(companyId) });
+  const current = q.data?.current ?? null;
+  const paused = !!current?.pauseStart;
+  const now = useNow(!!current && !paused);
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['timeclock-me', companyId] });
+    queryClient.invalidateQueries({ queryKey: ['timeclock', companyId] });
+  };
+
+  const start = useMutation({ mutationFn: () => clockStart(companyId), onSuccess: invalidate });
+  const pause = useMutation({ mutationFn: () => clockPause(companyId), onSuccess: invalidate });
+  const resume = useMutation({ mutationFn: () => clockResume(companyId), onSuccess: invalidate });
+  const stop = useMutation({ mutationFn: () => clockStop(companyId), onSuccess: invalidate });
+  const busy = start.isPending || pause.isPending || resume.isPending || stop.isPending;
+
+  if (q.isLoading) return <div className="text-sm text-muted-foreground">Chargement…</div>;
+  if (!q.data?.employee) {
+    return (
+      <div className="grid place-items-center gap-2 rounded-xl border border-dashed bg-card p-12 text-center">
+        <User className="h-8 w-8 text-muted-foreground/60" />
+        <p className="text-sm text-muted-foreground">
+          Aucune fiche RH liée à ton compte. Demande à ton patron de créer ta fiche dans le module RH.
+        </p>
+      </div>
+    );
+  }
+
+  let workedSec = 0;
+  if (current && q.data) {
+    const serverNow = parseLocal(q.data.now);
+    const baseGross = (serverNow - parseLocal(current.clockIn)) / 1000;
+    const basePause = current.pauseStart ? (serverNow - parseLocal(current.pauseStart)) / 1000 : 0;
+    const baseWorked = baseGross - current.pauseMinutes * 60 - basePause;
+    const sinceFetch = paused ? 0 : Math.max(0, (now - q.dataUpdatedAt) / 1000);
+    workedSec = Math.max(0, baseWorked + sinceFetch);
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-xl border bg-card p-8">
+        <div className="grid place-items-center gap-5">
+          <div
+            className={`font-mono text-5xl font-bold tabular-nums ${
+              !current ? 'text-muted-foreground/40' : paused ? 'text-amber-400' : 'text-emerald-400'
+            }`}
+          >
+            {fmtClock(workedSec)}
+          </div>
+          {current && (
+            <div className="text-sm text-muted-foreground">
+              Début : {current.clockIn.slice(11, 19)}
+              {paused && <span className="ml-2 font-medium text-amber-400">· en pause</span>}
+            </div>
+          )}
+          <div className="flex flex-wrap justify-center gap-3">
+            {!current ? (
+              <button
+                type="button"
+                onClick={() => start.mutate()}
+                disabled={busy}
+                className="inline-flex h-11 items-center gap-2 rounded-lg bg-emerald-600 px-6 font-semibold text-white transition-colors hover:bg-emerald-600/90 disabled:opacity-50"
+              >
+                <Play className="h-5 w-5" />
+                Prendre son service
+              </button>
+            ) : (
+              <>
+                {paused ? (
+                  <button
+                    type="button"
+                    onClick={() => resume.mutate()}
+                    disabled={busy}
+                    className="inline-flex h-11 items-center gap-2 rounded-lg bg-amber-500 px-6 font-semibold text-white transition-colors hover:bg-amber-500/90 disabled:opacity-50"
+                  >
+                    <Play className="h-5 w-5" />
+                    Reprendre
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => pause.mutate()}
+                    disabled={busy}
+                    className="inline-flex h-11 items-center gap-2 rounded-lg bg-amber-500 px-6 font-semibold text-white transition-colors hover:bg-amber-500/90 disabled:opacity-50"
+                  >
+                    <Coffee className="h-5 w-5" />
+                    Prendre une pause
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => stop.mutate()}
+                  disabled={busy}
+                  className="inline-flex h-11 items-center gap-2 rounded-lg bg-destructive px-6 font-semibold text-white transition-colors hover:bg-destructive/90 disabled:opacity-50"
+                >
+                  <Square className="h-5 w-5" />
+                  Fin de service
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="flex items-center gap-2 border-b px-5 py-4 text-sm font-semibold">
+          <Clock className="h-4 w-4 text-muted-foreground" />
+          Mes derniers pointages
+        </div>
+        <EntriesTable entries={q.data.recent} />
+      </div>
+    </div>
+  );
+}
+
 function StatBox({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
     <div className="rounded-lg border bg-background/40 px-3 py-1.5 text-center">
@@ -35,15 +239,7 @@ function StatBox({ label, value, accent }: { label: string; value: string; accen
   );
 }
 
-function Timesheet({
-  emp,
-  canWrite,
-  onDelete,
-}: {
-  emp: EmployeeTimesheet;
-  canWrite: boolean;
-  onDelete: (id: number) => void;
-}) {
+function Timesheet({ emp, onDelete }: { emp: EmployeeTimesheet; onDelete: (id: number) => void }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-xl border bg-card">
@@ -69,98 +265,103 @@ function Timesheet({
           <StatBox label="Jours" value={`${emp.totals.days}`} accent="text-foreground" />
         </div>
       </button>
-
       {open && (
-        <div className="overflow-x-auto border-t">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-3 text-left font-semibold">Date</th>
-                <th className="px-4 py-3 text-left font-semibold">Arrivée</th>
-                <th className="px-4 py-3 text-left font-semibold">Départ</th>
-                <th className="px-4 py-3 text-left font-semibold">Heures</th>
-                <th className="px-4 py-3 text-right font-semibold">Salaire</th>
-                <th className="px-4 py-3 text-left font-semibold">Statut</th>
-                {canWrite && <th className="px-4 py-3"></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {emp.entries.map((t) => {
-                const day = fmtDay(t.clockIn);
-                const complete = t.clockOut !== null;
-                return (
-                  <tr key={t.id} className="border-b last:border-b-0">
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{day.date}</div>
-                      <div className="text-xs capitalize text-muted-foreground">{day.weekday}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-2 rounded-md bg-sky-500/10 px-2 py-1 text-sky-300">
-                        <LogIn className="h-3.5 w-3.5" />
-                        {fmtTime(t.clockIn)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {t.clockOut ? (
-                        <span className="inline-flex items-center gap-2 rounded-md bg-rose-500/10 px-2 py-1 text-rose-300">
-                          <LogOut className="h-3.5 w-3.5" />
-                          {fmtTime(t.clockOut)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-sky-400">{fmtHours(t.minutes)}</td>
-                    <td className="px-4 py-3 text-right font-medium text-emerald-400">
-                      {fmtMoney(t.salary)} $
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-md px-2 py-0.5 text-xs font-medium ${
-                          complete
-                            ? 'bg-primary/10 text-primary'
-                            : 'bg-amber-500/10 text-amber-400'
-                        }`}
-                      >
-                        {complete ? 'complet' : 'en cours'}
-                      </span>
-                    </td>
-                    {canWrite && (
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (confirm('Supprimer ce pointage ?')) onDelete(t.id);
-                          }}
-                          className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-              {emp.entries.length === 0 && (
-                <tr>
-                  <td colSpan={canWrite ? 7 : 6} className="px-4 py-4 text-muted-foreground">
-                    Aucun pointage.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="border-t">
+          <EntriesTableWithDelete entries={emp.entries} onDelete={onDelete} />
         </div>
       )}
     </div>
   );
 }
 
-export default function Badgeuse() {
-  const { id } = useParams();
-  const companyId = Number(id);
-  const queryClient = useQueryClient();
+function EntriesTableWithDelete({
+  entries,
+  onDelete,
+}: {
+  entries: TimeEntry[];
+  onDelete: (id: number) => void;
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+            <th className="px-4 py-3 text-left font-semibold">Date</th>
+            <th className="px-4 py-3 text-left font-semibold">Arrivée</th>
+            <th className="px-4 py-3 text-left font-semibold">Départ</th>
+            <th className="px-4 py-3 text-left font-semibold">Travaillé</th>
+            <th className="px-4 py-3 text-right font-semibold">Salaire</th>
+            <th className="px-4 py-3 text-left font-semibold">Statut</th>
+            <th className="px-4 py-3"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((t) => {
+            const day = fmtDay(t.clockIn);
+            return (
+              <tr key={t.id} className="border-b last:border-b-0">
+                <td className="px-4 py-3">
+                  <div className="font-medium">{day.date}</div>
+                  <div className="text-xs capitalize text-muted-foreground">{day.weekday}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <span className="inline-flex items-center gap-2 rounded-md bg-sky-500/10 px-2 py-1 text-sky-300">
+                    <LogIn className="h-3.5 w-3.5" />
+                    {fmtTime(t.clockIn)}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  {t.clockOut ? (
+                    <span className="inline-flex items-center gap-2 rounded-md bg-rose-500/10 px-2 py-1 text-rose-300">
+                      <LogOut className="h-3.5 w-3.5" />
+                      {fmtTime(t.clockOut)}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 font-medium text-sky-400">{fmtHours(t.workedMinutes)}</td>
+                <td className="px-4 py-3 text-right font-medium text-emerald-400">
+                  {fmtMoney(t.salary)} $
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`rounded-md px-2 py-0.5 text-xs font-medium ${
+                      t.complete ? 'bg-primary/10 text-primary' : 'bg-amber-500/10 text-amber-400'
+                    }`}
+                  >
+                    {t.complete ? 'terminé' : 'en cours'}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm('Supprimer ce pointage ?')) onDelete(t.id);
+                    }}
+                    className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+          {entries.length === 0 && (
+            <tr>
+              <td colSpan={7} className="px-4 py-4 text-muted-foreground">
+                Aucun pointage.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
+function TeamView({ companyId }: { companyId: number }) {
+  const queryClient = useQueryClient();
   const q = useQuery({ queryKey: ['timeclock', companyId], queryFn: () => getTimeclock(companyId) });
 
   const [open, setOpen] = useState(false);
@@ -174,36 +375,32 @@ export default function Badgeuse() {
       close();
     },
   });
-
   function close() {
     setOpen(false);
     setF({ employeeId: '', date: today(), clockIn: '', clockOut: '' });
     add.reset();
   }
   const remove = useMutation({
-    mutationFn: (eid: number) => deleteTimeEntry(companyId, eid),
+    mutationFn: (id: number) => deleteTimeEntry(companyId, id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['timeclock', companyId] }),
   });
 
-  const canWrite = q.data?.canWrite ?? false;
   const all = q.data?.employees ?? [];
   const list = all.filter((e) => e.active || e.entries.length > 0);
   const addable = all.filter((e) => e.active);
 
   return (
-    <div className="max-w-5xl space-y-4">
-      {canWrite && (
-        <div className="flex justify-end">
-          <Button onClick={() => setOpen(true)} disabled={addable.length === 0}>
-            <Plus className="h-4 w-4" />
-            Nouveau pointage
-          </Button>
-        </div>
-      )}
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button onClick={() => setOpen(true)} disabled={addable.length === 0}>
+          <Plus className="h-4 w-4" />
+          Nouveau pointage
+        </Button>
+      </div>
 
       <div className="space-y-3">
         {list.map((emp) => (
-          <Timesheet key={emp.id} emp={emp} canWrite={canWrite} onDelete={(eid) => remove.mutate(eid)} />
+          <Timesheet key={emp.id} emp={emp} onDelete={(id) => remove.mutate(id)} />
         ))}
         {list.length === 0 && (
           <div className="grid place-items-center rounded-xl border border-dashed bg-card p-12 text-center text-sm text-muted-foreground">
@@ -216,10 +413,7 @@ export default function Badgeuse() {
 
       {open && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={close}>
-          <div
-            className="w-full max-w-md rounded-xl border bg-card shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="w-full max-w-md rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h2 className="text-sm font-semibold">Nouveau pointage</h2>
               <button
@@ -245,11 +439,7 @@ export default function Badgeuse() {
             >
               <label className="block text-sm">
                 <span className="mb-1 block text-muted-foreground">Employé</span>
-                <select
-                  className={inputCls}
-                  value={f.employeeId}
-                  onChange={(e) => setField('employeeId', e.target.value)}
-                >
+                <select className={inputCls} value={f.employeeId} onChange={(e) => setField('employeeId', e.target.value)}>
                   <option value="">— choisir —</option>
                   {addable.map((e) => (
                     <option key={e.id} value={e.id}>
@@ -260,37 +450,20 @@ export default function Badgeuse() {
               </label>
               <label className="block text-sm">
                 <span className="mb-1 block text-muted-foreground">Date</span>
-                <input
-                  type="date"
-                  className={inputCls}
-                  value={f.date}
-                  onChange={(e) => setField('date', e.target.value)}
-                />
+                <input type="date" className={inputCls} value={f.date} onChange={(e) => setField('date', e.target.value)} />
               </label>
               <div className="grid grid-cols-2 gap-4">
                 <label className="block text-sm">
                   <span className="mb-1 block text-muted-foreground">Arrivée</span>
-                  <input
-                    type="time"
-                    className={inputCls}
-                    value={f.clockIn}
-                    onChange={(e) => setField('clockIn', e.target.value)}
-                  />
+                  <input type="time" className={inputCls} value={f.clockIn} onChange={(e) => setField('clockIn', e.target.value)} />
                 </label>
                 <label className="block text-sm">
                   <span className="mb-1 block text-muted-foreground">Départ (optionnel)</span>
-                  <input
-                    type="time"
-                    className={inputCls}
-                    value={f.clockOut}
-                    onChange={(e) => setField('clockOut', e.target.value)}
-                  />
+                  <input type="time" className={inputCls} value={f.clockOut} onChange={(e) => setField('clockOut', e.target.value)} />
                 </label>
               </div>
               {add.isError && (
-                <p className="text-sm text-destructive">
-                  Échec de l'ajout. Vérifie l'employé et les horaires.
-                </p>
+                <p className="text-sm text-destructive">Échec de l'ajout. Vérifie l'employé et les horaires.</p>
               )}
               <div className="flex justify-end gap-2 pt-1">
                 <Button type="button" variant="outline" onClick={close}>
@@ -304,6 +477,38 @@ export default function Badgeuse() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+export default function Badgeuse() {
+  const { id } = useParams();
+  const companyId = Number(id);
+  const [tab, setTab] = useState<'me' | 'team'>('me');
+  const me = useQuery({ queryKey: ['timeclock-me', companyId], queryFn: () => getMyTimeclock(companyId) });
+  const canManageTeam = me.data?.canManageTeam ?? false;
+
+  const tabCls = (active: boolean) =>
+    `inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+      active ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
+    }`;
+
+  return (
+    <div className="space-y-5">
+      {canManageTeam && (
+        <div className="inline-flex gap-1 rounded-lg border bg-card p-1">
+          <button type="button" className={tabCls(tab === 'me')} onClick={() => setTab('me')}>
+            <Clock className="h-4 w-4" />
+            Mon pointage
+          </button>
+          <button type="button" className={tabCls(tab === 'team')} onClick={() => setTab('team')}>
+            <Users className="h-4 w-4" />
+            Résumé équipe
+          </button>
+        </div>
+      )}
+
+      {canManageTeam && tab === 'team' ? <TeamView companyId={companyId} /> : <MyClock companyId={companyId} />}
     </div>
   );
 }

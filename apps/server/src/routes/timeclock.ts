@@ -1,6 +1,6 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { db } from '../db';
 import { timeEntries, companyEmployees } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
@@ -8,20 +8,45 @@ import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
 
+type Entry = typeof timeEntries.$inferSelect;
+
 function parseId(value: string | undefined): number | null {
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-function minutesBetween(inStr: string, outStr: string | null): number | null {
-  if (!outStr) return null;
-  const a = new Date(inStr.replace(' ', 'T')).getTime();
-  const b = new Date(outStr.replace(' ', 'T')).getTime();
-  if (Number.isNaN(a) || Number.isNaN(b)) return null;
-  return Math.max(0, Math.round((b - a) / 60000));
+function nowStr(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+function minutesBetween(a: string, b: string | null): number | null {
+  if (!b) return null;
+  const x = new Date(a.replace(' ', 'T')).getTime();
+  const y = new Date(b.replace(' ', 'T')).getTime();
+  if (Number.isNaN(x) || Number.isNaN(y)) return null;
+  return Math.max(0, Math.round((y - x) / 60000));
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+function computeEntry(t: Entry, rate: number, now: string) {
+  const end = t.clockOut ?? now;
+  const gross = minutesBetween(t.clockIn, end) ?? 0;
+  const livePause = !t.clockOut && t.pauseStart ? (minutesBetween(t.pauseStart, now) ?? 0) : 0;
+  const pause = t.pauseMinutes + livePause;
+  const worked = Math.max(0, gross - pause);
+  return {
+    id: t.id,
+    clockIn: t.clockIn,
+    clockOut: t.clockOut,
+    workedMinutes: worked,
+    pauseMinutes: pause,
+    salary: round2((worked / 60) * rate),
+    complete: t.clockOut !== null,
+  };
+}
 
 export const meTimeclockRouter = Router({ mergeParams: true });
 meTimeclockRouter.use(requireAuth);
@@ -35,20 +60,153 @@ async function gate(userId: number, companyId: number, write: boolean) {
   return { ok: true as const, canWrite: acc.canWrite };
 }
 
+async function myEmployee(userId: number, companyId: number) {
+  const rows = await db
+    .select()
+    .from(companyEmployees)
+    .where(and(eq(companyEmployees.companyId, companyId), eq(companyEmployees.userId, userId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+async function openEntry(employeeId: number) {
+  const rows = await db
+    .select()
+    .from(timeEntries)
+    .where(and(eq(timeEntries.employeeId, employeeId), isNull(timeEntries.clockOut)))
+    .orderBy(desc(timeEntries.clockIn));
+  // Self-heal a concurrency race: at most one open entry per employee.
+  // Close any orphan opens at zero duration (clockOut = clockIn).
+  for (const r of rows.slice(1)) {
+    await db
+      .update(timeEntries)
+      .set({ clockOut: r.clockIn, pauseStart: null })
+      .where(eq(timeEntries.id, r.id));
+  }
+  return rows[0] ?? null;
+}
+
+// --- Self-service (requires canView) ---
+
 meTimeclockRouter.get(
-  '/',
+  '/me',
   asyncHandler(async (req, res) => {
     const companyId = parseId(req.params.companyId);
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req.user!.id, companyId, false);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
+    const emp = await myEmployee(req.user!.id, companyId);
+    if (!emp) {
+      return res.json({ canManageTeam: g.canWrite, employee: null, current: null, recent: [], now: nowStr() });
+    }
+    const rate = Number(emp.hourlyRate);
+    const open = await openEntry(emp.id);
+    const now = nowStr();
+    const rows = await db
+      .select()
+      .from(timeEntries)
+      .where(eq(timeEntries.employeeId, emp.id))
+      .orderBy(desc(timeEntries.clockIn))
+      .limit(20);
+    res.json({
+      canManageTeam: g.canWrite,
+      employee: { id: emp.id, name: emp.name, hourlyRate: rate },
+      current: open
+        ? { id: open.id, clockIn: open.clockIn, pauseStart: open.pauseStart, pauseMinutes: open.pauseMinutes }
+        : null,
+      recent: rows.map((r) => computeEntry(r, rate, now)),
+      now,
+    });
+  }),
+);
 
+type ActionErr = { status: number; error: string } | void;
+
+async function selfAction(
+  req: Request,
+  res: Response,
+  fn: (emp: NonNullable<Awaited<ReturnType<typeof myEmployee>>>, open: Entry | null) => Promise<ActionErr>,
+) {
+  const companyId = parseId(req.params.companyId);
+  if (!companyId) return res.status(400).json({ error: 'bad_request' });
+  const g = await gate(req.user!.id, companyId, false);
+  if (!g.ok) return res.status(g.status).json({ error: g.error });
+  const emp = await myEmployee(req.user!.id, companyId);
+  if (!emp) return res.status(404).json({ error: 'no_fiche' });
+  const open = await openEntry(emp.id);
+  const err = await fn(emp, open);
+  if (err) return res.status(err.status).json({ error: err.error });
+  emitInvalidate(['irs', `company:${companyId}`], [['timeclock', companyId], ['timeclock-me', companyId]]);
+  res.json({ ok: true });
+}
+
+meTimeclockRouter.post(
+  '/me/start',
+  asyncHandler(async (req, res) => {
+    await selfAction(req, res, async (emp, open) => {
+      if (open) return { status: 409, error: 'already_open' };
+      await db.insert(timeEntries).values({ companyId: emp.companyId, employeeId: emp.id, clockIn: nowStr() });
+    });
+  }),
+);
+
+meTimeclockRouter.post(
+  '/me/pause',
+  asyncHandler(async (req, res) => {
+    await selfAction(req, res, async (_emp, open) => {
+      if (!open) return { status: 409, error: 'not_open' };
+      if (open.pauseStart) return { status: 409, error: 'already_paused' };
+      await db.update(timeEntries).set({ pauseStart: nowStr() }).where(eq(timeEntries.id, open.id));
+    });
+  }),
+);
+
+meTimeclockRouter.post(
+  '/me/resume',
+  asyncHandler(async (req, res) => {
+    await selfAction(req, res, async (_emp, open) => {
+      if (!open || !open.pauseStart) return { status: 409, error: 'not_paused' };
+      const add = minutesBetween(open.pauseStart, nowStr()) ?? 0;
+      await db
+        .update(timeEntries)
+        .set({ pauseStart: null, pauseMinutes: open.pauseMinutes + add })
+        .where(eq(timeEntries.id, open.id));
+    });
+  }),
+);
+
+meTimeclockRouter.post(
+  '/me/stop',
+  asyncHandler(async (req, res) => {
+    await selfAction(req, res, async (_emp, open) => {
+      if (!open) return { status: 409, error: 'not_open' };
+      const now = nowStr();
+      const extra = open.pauseStart ? (minutesBetween(open.pauseStart, now) ?? 0) : 0;
+      await db
+        .update(timeEntries)
+        .set({ clockOut: now, pauseStart: null, pauseMinutes: open.pauseMinutes + extra })
+        .where(eq(timeEntries.id, open.id));
+    });
+  }),
+);
+
+// --- Team view (requires canWrite) ---
+
+meTimeclockRouter.get(
+  '/',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req.user!.id, companyId, true);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+
+    const now = nowStr();
     const [emps, entries] = await Promise.all([
       db.select().from(companyEmployees).where(eq(companyEmployees.companyId, companyId)).orderBy(asc(companyEmployees.name)),
       db.select().from(timeEntries).where(eq(timeEntries.companyId, companyId)).orderBy(asc(timeEntries.clockIn)),
     ]);
 
-    const byEmp = new Map<number, typeof entries>();
+    const byEmp = new Map<number, Entry[]>();
     for (const e of entries) {
       const arr = byEmp.get(e.employeeId) ?? [];
       arr.push(e);
@@ -62,14 +220,11 @@ meTimeclockRouter.get(
       let totalMin = 0;
       let totalSalary = 0;
       const list = raw.map((t) => {
-        const minutes = minutesBetween(t.clockIn, t.clockOut);
-        const salary = minutes === null ? 0 : round2((minutes / 60) * rate);
+        const c = computeEntry(t, rate, now);
         days.add(t.clockIn.slice(0, 10));
-        if (minutes !== null) {
-          totalMin += minutes;
-          totalSalary += salary;
-        }
-        return { id: t.id, clockIn: t.clockIn, clockOut: t.clockOut, minutes, salary };
+        totalMin += c.workedMinutes;
+        totalSalary += c.salary;
+        return c;
       });
       return {
         id: emp.id,
@@ -86,7 +241,7 @@ meTimeclockRouter.get(
   }),
 );
 
-const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const timeRe = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const createSchema = z.object({
   employeeId: z.number().int().positive(),
   date: z
@@ -96,8 +251,8 @@ const createSchema = z.object({
       const d = new Date(`${v}T00:00:00Z`);
       return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
     }, 'invalid_date'),
-  clockIn: time,
-  clockOut: time.optional(),
+  clockIn: timeRe,
+  clockOut: timeRe.optional(),
 });
 
 function addDay(date: string): string {
@@ -130,7 +285,6 @@ meTimeclockRouter.post(
       const outDate = d.clockOut < d.clockIn ? addDay(d.date) : d.date;
       clockOut = `${outDate} ${d.clockOut}:00`;
     }
-
     await db.insert(timeEntries).values({ companyId, employeeId: d.employeeId, clockIn, clockOut });
     emitInvalidate(['irs', `company:${companyId}`], [['timeclock', companyId]]);
     res.status(201).json({ ok: true });

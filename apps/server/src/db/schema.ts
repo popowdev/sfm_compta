@@ -288,6 +288,8 @@ export const timeEntries = mysqlTable('time_entries', {
     .references(() => companyEmployees.id, { onDelete: 'cascade' }),
   clockIn: datetime('clock_in', { mode: 'string' }).notNull(),
   clockOut: datetime('clock_out', { mode: 'string' }),
+  pauseStart: datetime('pause_start', { mode: 'string' }),
+  pauseMinutes: int('pause_minutes').notNull().default(0),
   createdAt: timestamp('created_at')
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
