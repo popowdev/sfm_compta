@@ -5,6 +5,7 @@ import {
   varchar,
   boolean,
   timestamp,
+  datetime,
   date,
   int,
   json,
@@ -276,6 +277,21 @@ export const companyEmployees = mysqlTable('company_employees', {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const timeEntries = mysqlTable('time_entries', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  employeeId: int('employee_id')
+    .notNull()
+    .references(() => companyEmployees.id, { onDelete: 'cascade' }),
+  clockIn: datetime('clock_in', { mode: 'string' }).notNull(),
+  clockOut: datetime('clock_out', { mode: 'string' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const messages = mysqlTable('messages', {
   id: int('id').autoincrement().primaryKey(),
   companyId: int('company_id')
@@ -330,8 +346,17 @@ export const messagesRelations = relations(messages, ({ one }) => ({
   company: one(companies, { fields: [messages.companyId], references: [companies.id] }),
 }));
 
-export const companyEmployeesRelations = relations(companyEmployees, ({ one }) => ({
+export const companyEmployeesRelations = relations(companyEmployees, ({ one, many }) => ({
   company: one(companies, { fields: [companyEmployees.companyId], references: [companies.id] }),
+  timeEntries: many(timeEntries),
+}));
+
+export const timeEntriesRelations = relations(timeEntries, ({ one }) => ({
+  company: one(companies, { fields: [timeEntries.companyId], references: [companies.id] }),
+  employee: one(companyEmployees, {
+    fields: [timeEntries.employeeId],
+    references: [companyEmployees.id],
+  }),
 }));
 
 export const companyExpensesRelations = relations(companyExpenses, ({ one }) => ({
@@ -386,6 +411,7 @@ export type CompanyExpense = typeof companyExpenses.$inferSelect;
 export type Subvention = typeof subventions.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type CompanyEmployee = typeof companyEmployees.$inferSelect;
+export type TimeEntry = typeof timeEntries.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type TaxBracketRow = typeof taxBrackets.$inferSelect;
 export type FiscalConfigRow = typeof fiscalConfig.$inferSelect;

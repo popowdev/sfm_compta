@@ -10,6 +10,7 @@ import Subventions from '@/pages/Subventions';
 import Messagerie from '@/pages/Messagerie';
 import Employes from '@/pages/Employes';
 import Stats from '@/pages/Stats';
+import Badgeuse from '@/pages/Badgeuse';
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
@@ -20,6 +21,7 @@ const CONTENT: Partial<Record<string, ComponentType>> = {
   messagerie: Messagerie,
   rh: Employes,
   stats: Stats,
+  badgeuse: Badgeuse,
 };
 
 function Placeholder({ mod }: { mod: MyModule }) {
