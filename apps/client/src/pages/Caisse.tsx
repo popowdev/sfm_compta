@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, X, ChevronDown, Boxes, Wrench } from 'lucide-react';
-import { CATALOG_ITEM_TYPES, type CatalogItemType } from '@rp-compta/shared';
+import { CATALOG_ITEM_TYPES, moduleConfigBool, type CatalogItemType } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { fmtMoney } from '@/lib/declarations';
 import { useModulePerms } from '@/lib/useCompany';
+import { SalesView } from '@/components/SalesView';
 import {
   getCatalog,
   createCatalogItem,
@@ -32,7 +33,10 @@ const EMPTY = {
 };
 
 export default function Caisse() {
-  const { companyId, canCreate, canEdit, canDelete } = useModulePerms('caisse');
+  const { company, companyId, canCreate, canEdit, canDelete } = useModulePerms('caisse');
+  const cfg = company?.modules.find((m) => m.key === 'caisse')?.config;
+  const clientLink = moduleConfigBool(cfg, 'caisse', 'clients');
+  const discountAllowed = moduleConfigBool(cfg, 'caisse', 'discount');
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<'catalog' | 'sales'>('catalog');
 
@@ -129,13 +133,14 @@ export default function Caisse() {
       </div>
 
       {tab === 'sales' ? (
-        <div className="grid place-items-center gap-2 rounded-xl border border-dashed bg-card p-12 text-center">
-          <p className="text-sm font-medium">Caisse / tickets de vente</p>
-          <p className="text-sm text-muted-foreground">
-            Étape 2 à venir : encaisser des ventes à partir du catalogue (ou en lignes libres pour les
-            services), avec décrément du stock et lien client.
-          </p>
-        </div>
+        <SalesView
+          companyId={companyId}
+          catalogItems={items}
+          canCreate={canCreate}
+          canDelete={canDelete}
+          clientLink={clientLink}
+          discountAllowed={discountAllowed}
+        />
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-3">

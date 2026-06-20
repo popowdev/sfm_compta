@@ -10,6 +10,7 @@ import {
   companyEmployees,
   timeEntries,
   companyModules,
+  sales,
 } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
@@ -368,8 +369,21 @@ meExercicesRouter.get(
     const payrollVisible =
       !!badgeuseAcc && badgeuseAcc.enabled && !badgeuseAcc.blocked && badgeuseAcc.canView;
 
+    const srRows = await db
+      .select({ total: sql<string>`COALESCE(SUM(${sales.total}), 0)` })
+      .from(sales)
+      .where(
+        and(
+          eq(sales.companyId, companyId),
+          gte(sql`DATE(${sales.createdAt})`, ex.startDate),
+          lte(sql`DATE(${sales.createdAt})`, ex.endDate),
+        ),
+      );
+    const salesRevenue = Number(srRows[0]?.total ?? 0);
+    const totalRevenue = round2(ex.revenue + salesRevenue);
+
     const charges = round2(expensesTotal + payrollTotal);
-    const benefit = round2(ex.revenue - charges);
+    const benefit = round2(totalRevenue - charges);
     const taxableBenefit = Math.max(0, benefit);
     const taxes = await computeTaxes(benefit, effectiveDividends);
     const effectiveRate = taxableBenefit > 0 ? round2((taxes.corporateTax / taxableBenefit) * 100) : 0;
@@ -384,6 +398,8 @@ meExercicesRouter.get(
       payrollVisible,
       summary: {
         revenue: ex.revenue,
+        salesRevenue,
+        totalRevenue,
         expensesTotal,
         expensesDeductible,
         payrollTotal,

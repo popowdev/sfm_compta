@@ -126,9 +126,21 @@ meClientsRouter.put(
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const parsed = bodySchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    const d = parsed.data;
+    const set: Record<string, unknown> = {
+      name: d.name,
+      phone: blank(d.phone),
+      email: blank(d.email),
+      notes: blank(d.notes),
+      loyaltyTier: (d.loyaltyTier ?? 'bronze') as (typeof companyClients.$inferInsert)['loyaltyTier'],
+      creditLimit: String(round2(d.creditLimit ?? 0)),
+    };
+    if (d.loyaltyPoints !== undefined) set.loyaltyPoints = d.loyaltyPoints;
+    if (d.totalSpent !== undefined) set.totalSpent = String(round2(d.totalSpent));
+    if (d.accountBalance !== undefined) set.accountBalance = String(round2(d.accountBalance));
     const result = await db
       .update(companyClients)
-      .set(toRow(parsed.data))
+      .set(set)
       .where(and(eq(companyClients.id, id), eq(companyClients.companyId, companyId)));
     if (!result[0].affectedRows) return res.status(404).json({ error: 'not_found' });
     emitInvalidate(['irs', `company:${companyId}`], [['clients', companyId]]);

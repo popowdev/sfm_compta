@@ -439,10 +439,50 @@ export const stockMovements = mysqlTable('stock_movements', {
   unitCost: decimal('unit_cost', { precision: 12, scale: 2 }),
   supplier: varchar('supplier', { length: 150 }),
   reason: varchar('reason', { length: 200 }),
+  saleId: int('sale_id'),
   createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at')
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const sales = mysqlTable('sales', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  employeeId: int('employee_id').references(() => companyEmployees.id, { onDelete: 'set null' }),
+  clientId: int('client_id').references(() => companyClients.id, { onDelete: 'set null' }),
+  subtotal: decimal('subtotal', { precision: 14, scale: 2 }).notNull().default('0'),
+  discount: decimal('discount', { precision: 14, scale: 2 }).notNull().default('0'),
+  total: decimal('total', { precision: 14, scale: 2 }).notNull().default('0'),
+  productionCost: decimal('production_cost', { precision: 14, scale: 2 }).notNull().default('0'),
+  paymentMethod: mysqlEnum('payment_method', ['cash', 'card', 'transfer', 'account'])
+    .notNull()
+    .default('cash'),
+  pointsAwarded: int('points_awarded').notNull().default(0),
+  notes: varchar('notes', { length: 300 }),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const saleItems = mysqlTable('sale_items', {
+  id: int('id').autoincrement().primaryKey(),
+  saleId: int('sale_id')
+    .notNull()
+    .references(() => sales.id, { onDelete: 'cascade' }),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  catalogItemId: int('catalog_item_id').references(() => catalogItems.id, { onDelete: 'set null' }),
+  name: varchar('name', { length: 150 }).notNull(),
+  itemType: mysqlEnum('item_type', ['product', 'service']).notNull().default('service'),
+  unitPrice: decimal('unit_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  quantity: decimal('quantity', { precision: 12, scale: 3 }).notNull().default('0'),
+  lineTotal: decimal('line_total', { precision: 14, scale: 2 }).notNull().default('0'),
+  productionCost: decimal('production_cost', { precision: 14, scale: 2 }).notNull().default('0'),
 });
 
 export const exercices = mysqlTable(

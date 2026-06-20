@@ -176,6 +176,15 @@ export const CATALOG_ITEM_TYPES = [
 ] as const;
 export type CatalogItemType = (typeof CATALOG_ITEM_TYPES)[number]['key'];
 
+export const PAYMENT_METHODS = [
+  { key: 'cash', label: 'Espèces' },
+  { key: 'card', label: 'Carte' },
+  { key: 'transfer', label: 'Virement' },
+  { key: 'account', label: 'Compte client' },
+] as const;
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number]['key'];
+export const PAYMENT_METHOD_KEYS = PAYMENT_METHODS.map((p) => p.key) as PaymentMethod[];
+
 export interface SpecialAction {
   key: string;
   label: string;

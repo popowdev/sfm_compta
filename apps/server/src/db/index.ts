@@ -14,6 +14,12 @@ export const pool = mysql.createPool({
   enableKeepAlive: true,
 });
 
+// Pin the session timezone to UTC so DATE()-based period bucketing (exercices,
+// sales) is deterministic regardless of the host/MySQL default timezone.
+pool.on('connection', (conn) => {
+  conn.query("SET time_zone = '+00:00'");
+});
+
 export const db = drizzle(pool, { schema, mode: 'default' });
 
 export async function pingDb(): Promise<void> {

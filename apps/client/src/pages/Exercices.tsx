@@ -585,7 +585,13 @@ function ExerciceDetailView({
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Compte de résultat
           </div>
-          <Row label="Chiffre d'affaires" value={`${fmtMoney(s.revenue)} $`} accent="text-primary" strong />
+          <Row label="Chiffre d'affaires" value={`${fmtMoney(s.totalRevenue)} $`} accent="text-primary" strong />
+          {s.salesRevenue > 0 && (
+            <div className="pl-3 text-[11px] text-muted-foreground">
+              dont Caisse {fmtMoney(s.salesRevenue)} $
+              {s.revenue > 0 && ` · saisi ${fmtMoney(s.revenue)} $`}
+            </div>
+          )}
           <div className="my-1 border-t" />
           <Row label="Dépenses" value={`− ${fmtMoney(s.expensesTotal)} $`} />
           <Row label="Salaires (badgeuse)" value={`− ${fmtMoney(s.payrollTotal)} $`} />
@@ -621,8 +627,9 @@ function ExerciceDetailView({
             accent={s.netAfterTax >= 0 ? 'text-emerald-400' : 'text-destructive'}
           />
           <p className="mt-2 text-[11px] text-muted-foreground">
-            Les salaires proviennent de la badgeuse ; les dépenses de catégorie « Salaires » sont
-            exclues pour éviter le double comptage. Le CA détaillé arrivera avec le module Caisse.
+            Le CA s'alimente automatiquement des ventes Caisse de la période (+ CA saisi éventuel). Les
+            salaires viennent de la badgeuse ; les dépenses « Salaires » sont exclues (anti double
+            comptage).
           </p>
         </div>
 

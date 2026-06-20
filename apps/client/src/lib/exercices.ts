@@ -64,6 +64,8 @@ export interface PayrollInput {
 
 export interface ExerciceSummary {
   revenue: number;
+  salesRevenue: number;
+  totalRevenue: number;
   expensesTotal: number;
   expensesDeductible: number;
   payrollTotal: number;
