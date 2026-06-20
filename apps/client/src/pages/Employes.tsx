@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Link2,
   UserPlus,
+  Coins,
 } from 'lucide-react';
 import {
   EMPLOYEE_POSITIONS,
@@ -29,6 +30,8 @@ import {
   type EmployeeInput,
   type CompanyMemberRef,
 } from '@/lib/employees';
+import { getSalaryGrid } from '@/lib/salary';
+import { SalaryGridModal } from '@/components/SalaryGridModal';
 
 const inputCls =
   'h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
@@ -103,11 +106,15 @@ export default function Employes() {
   const queryClient = useQueryClient();
 
   const q = useQuery({ queryKey: ['employees', companyId], queryFn: () => getEmployees(companyId) });
+  const grid = useQuery({ queryKey: ['salary-grid', companyId], queryFn: () => getSalaryGrid(companyId) });
+  const gridRate = (pos: string) =>
+    grid.data?.grid.find((g) => g.position === pos)?.hourlyRate ?? 0;
 
   const [form, setForm] = useState({ ...EMPTY });
   const [editing, setEditing] = useState<number | null>(null);
   const [linkUserId, setLinkUserId] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
+  const [gridOpen, setGridOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const set = <K extends keyof typeof EMPTY>(k: K, v: (typeof EMPTY)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -143,16 +150,20 @@ export default function Employes() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees', companyId] }),
   });
 
+  const defaultRate = () => {
+    const r = gridRate(EMPTY.position);
+    return r > 0 ? String(r) : '';
+  };
   const openNew = () => {
     setEditing(null);
     setLinkUserId(null);
-    setForm({ ...EMPTY });
+    setForm({ ...EMPTY, hourlyRate: defaultRate() });
     setOpen(true);
   };
   const openFromMember = (m: CompanyMemberRef) => {
     setEditing(null);
     setLinkUserId(m.userId);
-    setForm({ ...EMPTY, name: m.name });
+    setForm({ ...EMPTY, name: m.name, hourlyRate: defaultRate() });
     setOpen(true);
   };
   const openEdit = (e: Employee) => {
@@ -222,12 +233,20 @@ export default function Employes() {
           </div>
         </div>
         {canWrite && (
-          <Button className="ml-auto" onClick={openNew}>
-            <Plus className="h-4 w-4" />
-            Nouvel employé
-          </Button>
+          <div className="ml-auto flex gap-2">
+            <Button variant="outline" onClick={() => setGridOpen(true)}>
+              <Coins className="h-4 w-4" />
+              Grille salariale
+            </Button>
+            <Button onClick={openNew}>
+              <Plus className="h-4 w-4" />
+              Nouvel employé
+            </Button>
+          </div>
         )}
       </div>
+
+      <SalaryGridModal companyId={companyId} open={gridOpen} onClose={() => setGridOpen(false)} />
 
       {members.length > 0 && (
         <div className="rounded-xl border border-dashed bg-card p-4">
@@ -432,7 +451,14 @@ export default function Employes() {
                   <select
                     className={inputCls}
                     value={form.position}
-                    onChange={(e) => set('position', e.target.value as EmployeePosition)}
+                    onChange={(e) => {
+                      const pos = e.target.value as EmployeePosition;
+                      set('position', pos);
+                      if (editing === null) {
+                        const r = gridRate(pos);
+                        if (r > 0) set('hourlyRate', String(r));
+                      }
+                    }}
                   >
                     {EMPLOYEE_POSITIONS.map((p) => (
                       <option key={p.key} value={p.key}>

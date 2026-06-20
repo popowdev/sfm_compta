@@ -295,6 +295,20 @@ export const timeEntries = mysqlTable('time_entries', {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const salaryGrid = mysqlTable(
+  'salary_grid',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    companyId: int('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    position: mysqlEnum('position', ['pdg', 'patron', 'co_patron', 'gerant', 'employe', 'apprenti']).notNull(),
+    hourlyRate: decimal('hourly_rate', { precision: 10, scale: 2 }).notNull().default('0'),
+    baseSalary: decimal('base_salary', { precision: 12, scale: 2 }).notNull().default('0'),
+  },
+  (t) => ({ uq: unique('uq_salary_grid').on(t.companyId, t.position) }),
+);
+
 export const messages = mysqlTable('messages', {
   id: int('id').autoincrement().primaryKey(),
   companyId: int('company_id')
@@ -415,6 +429,7 @@ export type Subvention = typeof subventions.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type CompanyEmployee = typeof companyEmployees.$inferSelect;
 export type TimeEntry = typeof timeEntries.$inferSelect;
+export type SalaryGridRow = typeof salaryGrid.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type TaxBracketRow = typeof taxBrackets.$inferSelect;
 export type FiscalConfigRow = typeof fiscalConfig.$inferSelect;
