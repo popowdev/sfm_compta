@@ -19,10 +19,11 @@ import {
   LogOut,
   Search,
 } from 'lucide-react';
-import { hasAppAccess, MODULES } from '@rp-compta/shared';
+import { hasAppAccess, MODULES, moduleConfigBool } from '@rp-compta/shared';
 import { useAuth } from '@/auth/AuthContext';
 import { getMyCompanies, type MyCompany } from '@/lib/me';
 import { moduleIcon } from '@/lib/moduleIcons';
+import { QuickClock } from '@/components/QuickClock';
 
 const COMPANY_PAGE_KEYS = new Set<string>(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
@@ -160,6 +161,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
     : groups;
 
   const logoUrl = currentCompany?.company.logoUrl;
+  const badgeuseMod = currentCompany?.modules.find((m) => m.key === 'badgeuse');
+  const showClock =
+    immersive && !!badgeuseMod && badgeuseMod.enabled && !badgeuseMod.blocked && badgeuseMod.canView;
+  const pausesEnabled = moduleConfigBool(badgeuseMod?.config, 'badgeuse', 'pauses');
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -280,6 +285,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="border-t p-2">
+          {showClock && currentCompany && (
+            <QuickClock
+              companyId={currentCompany.company.id}
+              pausesEnabled={pausesEnabled}
+              collapsed={collapsed}
+            />
+          )}
           {collapsed ? (
             <div className="flex flex-col items-center gap-2">
               {user?.avatarUrl && <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full" />}

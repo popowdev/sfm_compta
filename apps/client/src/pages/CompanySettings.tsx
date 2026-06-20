@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings2, Award, Users } from 'lucide-react';
-import { MODULES, MODULE_CONFIG, moduleConfigBool } from '@rp-compta/shared';
+import { Settings2, Award, Users, type LucideIcon } from 'lucide-react';
+import { MODULES, MODULE_CONFIG, moduleConfigBool, type ModuleKey } from '@rp-compta/shared';
 import { toggleMyModule, uploadMyCompanyLogo, type MyModule } from '@/lib/me';
 import { useCompany } from '@/lib/useCompany';
 import { moduleIcon } from '@/lib/moduleIcons';
@@ -15,6 +15,23 @@ import { GradesPanelModal } from '@/components/GradesPanelModal';
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
+const MODULE_DESC: Partial<Record<ModuleKey, string>> = {
+  caisse: 'Encaisser des ventes, articles et services.',
+  clients: 'Fichier clients, fidélité et crédits.',
+  stocks: 'Matières premières, articles et inventaire.',
+  locations: 'Locations et cautions.',
+  declarations: 'Déclarations fiscales hebdomadaires.',
+  depenses: 'Dépenses et charges déductibles.',
+  subventions: 'Demandes de subventions à l’IRS.',
+  dividendes: 'Versements de dividendes aux actionnaires.',
+  exercices: 'Périodes comptables et compte de résultat.',
+  messagerie: 'Échanges avec l’IRS.',
+  rh: 'Fiches employés, postes et performances.',
+  badgeuse: 'Pointage et heures travaillées.',
+  stats: 'Graphiques et statistiques de l’activité.',
+  tickets: 'Support et tickets internes.',
+};
+
 function initials(name: string): string {
   return (
     name
@@ -23,6 +40,46 @@ function initials(name: string): string {
       .slice(0, 2)
       .map((w) => w[0]?.toUpperCase() ?? '')
       .join('') || '?'
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function AdminRow({
+  icon: Icon,
+  title,
+  desc,
+  actionLabel,
+  onAction,
+  border,
+}: {
+  icon: LucideIcon;
+  title: string;
+  desc: string;
+  actionLabel: string;
+  onAction: () => void;
+  border: boolean;
+}) {
+  return (
+    <div className={`flex items-center gap-3 p-4 ${border ? 'border-t' : ''}`}>
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+        <Icon className="h-[18px] w-[18px]" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-semibold">{title}</div>
+        <div className="text-xs text-muted-foreground">{desc}</div>
+      </div>
+      <Button variant="outline" onClick={onAction}>
+        {actionLabel}
+      </Button>
+    </div>
   );
 }
 
@@ -37,8 +94,7 @@ export default function CompanySettings() {
     onError: () => toast("Échec de l'envoi du logo.", 'error'),
   });
   const toggle = useMutation({
-    mutationFn: (v: { key: MyModule['key']; enabled: boolean }) =>
-      toggleMyModule(companyId, v.key, v.enabled),
+    mutationFn: (v: { key: MyModule['key']; enabled: boolean }) => toggleMyModule(companyId, v.key, v.enabled),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['my-companies'] }),
   });
   const [configModule, setConfigModule] = useState<MyModule | null>(null);
@@ -58,20 +114,29 @@ export default function CompanySettings() {
     g.items.push(m);
   }
 
-  return (
-    <div className="max-w-5xl p-8">
-      <h1 className="text-2xl font-bold tracking-tight">Paramètres</h1>
-      <p className="mt-1 text-sm text-muted-foreground">{mine.company.name}</p>
+  const clientsMod = mine.modules.find((m) => m.key === 'clients');
+  const loyaltyOn =
+    !!clientsMod?.enabled && !clientsMod.blocked && moduleConfigBool(clientsMod.config, 'clients', 'loyalty');
 
-      <div className="mt-6 rounded-xl border bg-card p-5">
-        <div className="mb-3 text-sm font-semibold">Logo</div>
-        <div className="flex items-center gap-4">
+  return (
+    <div className="max-w-5xl space-y-8 p-8">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Paramètres</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{mine.company.name}</p>
+      </div>
+
+      <Section title="Identité">
+        <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-card p-5">
           <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border bg-background text-sm font-semibold text-primary">
             {mine.company.logoUrl ? (
               <img src={mine.company.logoUrl} alt="" className="h-full w-full object-cover" />
             ) : (
               initials(mine.company.name)
             )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold">{mine.company.name}</div>
+            <div className="text-xs text-muted-foreground">Le nom de l’entreprise est géré par l’IRS.</div>
           </div>
           <label className="cursor-pointer">
             <span className={buttonVariants({ variant: 'outline' })}>
@@ -89,108 +154,102 @@ export default function CompanySettings() {
             />
           </label>
         </div>
-      </div>
+      </Section>
 
-      <div className="mt-4 rounded-xl border bg-card">
-        <div className="border-b px-5 py-4 text-sm font-semibold">Modules de l'entreprise</div>
-        <div className="space-y-5 p-5">
-          {groups.length === 0 && (
-            <div className="rounded-lg border border-dashed bg-background/40 p-6 text-center text-sm text-muted-foreground">
-              Aucun module disponible pour cette entreprise.
-            </div>
-          )}
-          {groups.map((g) => (
-            <div key={g.group}>
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {g.group}
-              </div>
-              <div className="overflow-hidden rounded-lg border">
-                {g.items.map((m, i) => {
-                  const Icon = moduleIcon(m.key);
-                  return (
-                  <div
-                    key={m.key}
-                    className={`flex items-center justify-between px-4 py-3 ${i > 0 ? 'border-t' : ''}`}
-                  >
-                    <span className="flex items-center gap-2.5 text-sm">
-                      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className={m.blocked ? 'text-muted-foreground' : ''}>{m.label}</span>
-                      {m.blocked && (
-                        <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-400">
-                          maintenance
-                        </span>
-                      )}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      {m.enabled && !m.blocked && (MODULE_CONFIG[m.key]?.length ?? 0) > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setConfigModule(m)}
-                          title="Options du module"
-                          className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      <Section title="Modules">
+        <p className="mb-3 -mt-1 text-xs text-muted-foreground">
+          Active les fonctionnalités visibles dans le menu de l’entreprise. La roue ⚙ règle les options d’un module.
+        </p>
+        {groups.length === 0 ? (
+          <div className="rounded-xl border border-dashed bg-card p-6 text-center text-sm text-muted-foreground">
+            Aucun module disponible pour cette entreprise.
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {groups.map((g) => (
+              <div key={g.group}>
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+                  {g.group}
+                </div>
+                <div className="overflow-hidden rounded-xl border bg-card">
+                  {g.items.map((m, i) => {
+                    const Icon = moduleIcon(m.key);
+                    const on = m.enabled && !m.blocked;
+                    return (
+                      <div key={m.key} className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? 'border-t' : ''}`}>
+                        <div
+                          className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                            on ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                          }`}
                         >
-                          <Settings2 className="h-4 w-4" />
-                        </button>
-                      )}
-                      <Switch
-                        checked={m.enabled && !m.blocked}
-                        disabled={toggle.isPending || m.blocked}
-                        ariaLabel={`Activer ${m.label}`}
-                        onChange={() => toggle.mutate({ key: m.key, enabled: !m.enabled })}
-                      />
-                    </div>
-                  </div>
-                  );
-                })}
+                          <Icon className="h-[18px] w-[18px]" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-medium ${m.blocked ? 'text-muted-foreground' : ''}`}>
+                              {m.label}
+                            </span>
+                            {m.blocked && (
+                              <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-400">
+                                maintenance
+                              </span>
+                            )}
+                          </div>
+                          {MODULE_DESC[m.key] && (
+                            <div className="truncate text-xs text-muted-foreground">{MODULE_DESC[m.key]}</div>
+                          )}
+                        </div>
+                        {on && (MODULE_CONFIG[m.key]?.length ?? 0) > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setConfigModule(m)}
+                            title="Options du module"
+                            aria-label={`Options de ${m.label}`}
+                            className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                          >
+                            <Settings2 className="h-4 w-4" />
+                          </button>
+                        )}
+                        <Switch
+                          checked={on}
+                          disabled={toggle.isPending || m.blocked}
+                          ariaLabel={`Activer ${m.label}`}
+                          onChange={() => toggle.mutate({ key: m.key, enabled: !m.enabled })}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {(() => {
-        const clientsMod = mine.modules.find((m) => m.key === 'clients');
-        const loyaltyOn =
-          clientsMod?.enabled &&
-          !clientsMod.blocked &&
-          moduleConfigBool(clientsMod.config, 'clients', 'loyalty');
-        if (!loyaltyOn) return null;
-        return (
-          <div className="mt-4 flex items-center justify-between rounded-xl border bg-card p-5">
-            <div className="flex items-center gap-2.5">
-              <Award className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <div className="text-sm font-semibold">Paliers de fidélité</div>
-                <div className="text-xs text-muted-foreground">Renommer les paliers et fixer leurs seuils.</div>
-              </div>
-            </div>
-            <Button variant="outline" onClick={() => setTiersOpen(true)}>
-              Personnaliser
-            </Button>
+            ))}
           </div>
-        );
-      })()}
+        )}
+      </Section>
 
-      <div className="mt-4 flex items-center justify-between rounded-xl border bg-card p-5">
-        <div className="flex items-center gap-2.5">
-          <Users className="h-4 w-4 text-muted-foreground" />
-          <div>
-            <div className="text-sm font-semibold">Grades & permissions</div>
-            <div className="text-xs text-muted-foreground">
-              Qui peut voir / créer / modifier / supprimer dans chaque module.
-            </div>
-          </div>
+      <Section title="Gestion avancée">
+        <div className="overflow-hidden rounded-xl border bg-card">
+          {loyaltyOn && (
+            <AdminRow
+              icon={Award}
+              title="Paliers de fidélité"
+              desc="Renommer les paliers et fixer leurs seuils."
+              actionLabel="Personnaliser"
+              onAction={() => setTiersOpen(true)}
+              border={false}
+            />
+          )}
+          <AdminRow
+            icon={Users}
+            title="Grades & permissions"
+            desc="Qui peut voir / créer / modifier / supprimer dans chaque module."
+            actionLabel="Gérer"
+            onAction={() => setGradesOpen(true)}
+            border={loyaltyOn}
+          />
         </div>
-        <Button variant="outline" onClick={() => setGradesOpen(true)}>
-          Gérer
-        </Button>
-      </div>
+      </Section>
 
-      <ModuleConfigModal
-        companyId={companyId}
-        module={configModule}
-        onClose={() => setConfigModule(null)}
-      />
+      <ModuleConfigModal companyId={companyId} module={configModule} onClose={() => setConfigModule(null)} />
       <LoyaltyTiersModal companyId={companyId} open={tiersOpen} onClose={() => setTiersOpen(false)} />
       <GradesPanelModal companyId={companyId} open={gradesOpen} onClose={() => setGradesOpen(false)} />
     </div>
