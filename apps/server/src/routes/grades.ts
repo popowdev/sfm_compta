@@ -7,7 +7,7 @@ import { companyRoles, companies, memberships } from '../db/schema';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getGradesWithPermissions, setRolePermission } from '../services/grades';
-import { canManageCompany } from '../services/access';
+import { canManageCompany, countActiveManagerMemberships } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
 
 export const gradesRouter = Router({ mergeParams: true });
@@ -164,11 +164,8 @@ meGradesRouter.patch(
     const parsed = patchSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     if (parsed.data.canManage === false) {
-      const managers = await db
-        .select({ id: companyRoles.id })
-        .from(companyRoles)
-        .where(and(eq(companyRoles.companyId, companyId), eq(companyRoles.canManage, true)));
-      if (!managers.some((m) => m.id !== rid)) {
+      const total = await countActiveManagerMemberships(companyId);
+      if (total > 0 && (await countActiveManagerMemberships(companyId, { excludeGradeId: rid })) === 0) {
         return res.status(400).json({ error: 'last_manager' });
       }
     }

@@ -35,6 +35,28 @@ export async function canManageCompany(userId: number, companyId: number): Promi
   return rows[0]?.canManage ?? false;
 }
 
+export async function countActiveManagerMemberships(
+  companyId: number,
+  opts: { excludeMembershipId?: number; excludeGradeId?: number } = {},
+): Promise<number> {
+  const rows = await db
+    .select({ mid: memberships.id, gid: companyRoles.id })
+    .from(memberships)
+    .innerJoin(companyRoles, eq(memberships.companyRoleId, companyRoles.id))
+    .where(
+      and(
+        eq(memberships.companyId, companyId),
+        eq(memberships.active, true),
+        eq(companyRoles.canManage, true),
+      ),
+    );
+  return rows.filter(
+    (r) =>
+      (opts.excludeMembershipId === undefined || r.mid !== opts.excludeMembershipId) &&
+      (opts.excludeGradeId === undefined || r.gid !== opts.excludeGradeId),
+  ).length;
+}
+
 export interface ModuleAccess {
   enabled: boolean;
   blocked: boolean;

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Plus, Trash2, ShieldCheck } from 'lucide-react';
+import { X, Plus, Trash2, ShieldCheck, UserPlus } from 'lucide-react';
 import { MODULES, type ModuleKey } from '@rp-compta/shared';
+import { ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import {
   getMyGrades,
@@ -9,6 +10,11 @@ import {
   patchMyGrade,
   deleteMyGrade,
   setMyGradePermission,
+  getMyMembers,
+  addMyMember,
+  setMyMemberGrade,
+  removeMyMember,
+  type GradeFine,
 } from '@/lib/grades';
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
@@ -29,6 +35,7 @@ export function GradesPanelModal({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const [tab, setTab] = useState<'perms' | 'members'>('perms');
   const q = useQuery({ queryKey: ['my-grades', companyId], queryFn: () => getMyGrades(companyId), enabled: open });
   const [selected, setSelected] = useState<number | null>(null);
   const [newName, setNewName] = useState('');
@@ -105,7 +112,29 @@ export function GradesPanelModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b px-5 py-4">
-          <h2 className="text-sm font-semibold">Grades & permissions</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-semibold">Grades & membres</h2>
+            <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
+              <button
+                type="button"
+                onClick={() => setTab('perms')}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  tab === 'perms' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
+                }`}
+              >
+                Permissions
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab('members')}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  tab === 'members' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
+                }`}
+              >
+                Membres
+              </button>
+            </div>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -115,115 +144,297 @@ export function GradesPanelModal({
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-b px-5 py-3">
-          {grades.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              onClick={() => setSelected(g.id)}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                g.id === selected ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {g.name}
-              {g.canManage && <ShieldCheck className="h-3.5 w-3.5" />}
-            </button>
-          ))}
-          <div className="ml-auto flex items-center gap-2">
-            <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="Nouveau grade"
-              className="h-8 w-36 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => newName.trim() && create.mutate()}
-              disabled={!newName.trim() || create.isPending}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-5">
-          {grade ? (
-            <>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-input accent-primary"
-                    checked={grade.canManage}
-                    onChange={() => patch.mutate({ rid: grade.id, body: { canManage: !grade.canManage } })}
-                  />
-                  <span>Grade « gérant » (paramètres, soldes, grades)</span>
-                </label>
-                {!grade.isDefault && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (confirm(`Supprimer le grade ${grade.name} ?`)) remove.mutate(grade.id);
-                    }}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-destructive/80 hover:text-destructive"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Supprimer ce grade
-                  </button>
-                )}
+        {tab === 'perms' ? (
+          <>
+            <div className="flex flex-wrap items-center gap-2 border-b px-5 py-3">
+              {grades.map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => setSelected(g.id)}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    g.id === selected ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {g.name}
+                  {g.canManage && <ShieldCheck className="h-3.5 w-3.5" />}
+                </button>
+              ))}
+              <div className="ml-auto flex items-center gap-2">
+                <input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Nouveau grade"
+                  className="h-8 w-36 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => newName.trim() && create.mutate()}
+                  disabled={!newName.trim() || create.isPending}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
               </div>
+            </div>
 
-              <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-                      <th className="px-4 py-2 text-left font-semibold">Module</th>
-                      {ACTIONS.map((a) => (
-                        <th key={a.key} className="px-3 py-2 text-center font-semibold">
-                          {a.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {modules.map((m, i) => {
-                      const perm = grade.permissions[m.key] ?? {
-                        canView: false,
-                        canCreate: false,
-                        canEdit: false,
-                        canDelete: false,
-                      };
-                      return (
-                        <tr key={m.key} className={i > 0 ? 'border-t' : ''}>
-                          <td className="px-4 py-2 font-medium">{m.label}</td>
+            <div className="flex-1 overflow-y-auto p-5">
+              {grade ? (
+                <>
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-input accent-primary"
+                        checked={grade.canManage}
+                        onChange={() => patch.mutate({ rid: grade.id, body: { canManage: !grade.canManage } })}
+                      />
+                      <span>Grade « gérant » (paramètres, soldes, grades)</span>
+                    </label>
+                    {!grade.isDefault && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Supprimer le grade ${grade.name} ?`)) remove.mutate(grade.id);
+                        }}
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-destructive/80 hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Supprimer ce grade
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                          <th className="px-4 py-2 text-left font-semibold">Module</th>
                           {ACTIONS.map((a) => (
-                            <td key={a.key} className="px-3 py-2 text-center">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 rounded border-input accent-primary"
-                                checked={perm[a.key]}
-                                disabled={setPerm.isPending}
-                                onChange={() => toggle(m.key, a.key)}
-                              />
-                            </td>
+                            <th key={a.key} className="px-3 py-2 text-center font-semibold">
+                              {a.label}
+                            </th>
                           ))}
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                Créer / Modifier / Supprimer activent automatiquement « Voir ». Le Staff et les
-                grades « gérant » ont accès complet.
-              </p>
-            </>
-          ) : (
-            <div className="py-8 text-center text-sm text-muted-foreground">Aucun grade.</div>
-          )}
-        </div>
+                      </thead>
+                      <tbody>
+                        {modules.map((m, i) => {
+                          const perm = grade.permissions[m.key] ?? {
+                            canView: false,
+                            canCreate: false,
+                            canEdit: false,
+                            canDelete: false,
+                          };
+                          return (
+                            <tr key={m.key} className={i > 0 ? 'border-t' : ''}>
+                              <td className="px-4 py-2 font-medium">{m.label}</td>
+                              {ACTIONS.map((a) => (
+                                <td key={a.key} className="px-3 py-2 text-center">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-input accent-primary"
+                                    checked={perm[a.key]}
+                                    disabled={setPerm.isPending}
+                                    onChange={() => toggle(m.key, a.key)}
+                                  />
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Créer / Modifier / Supprimer activent automatiquement « Voir ». Le Staff et les
+                    grades « gérant » ont accès complet.
+                  </p>
+                </>
+              ) : (
+                <div className="py-8 text-center text-sm text-muted-foreground">Aucun grade.</div>
+              )}
+            </div>
+          </>
+        ) : (
+          <MembersSection companyId={companyId} grades={grades} />
+        )}
       </div>
     </div>
+  );
+}
+
+function memberError(e: unknown, fallback: string): string {
+  const code = e instanceof ApiError ? e.code : null;
+  switch (code) {
+    case 'last_manager':
+      return 'Au moins un membre « gérant » doit rester dans l\'entreprise.';
+    case 'invalid_grade':
+      return 'Grade introuvable pour cette entreprise.';
+    case 'bad_request':
+      return 'ID Discord invalide (15–32 chiffres) ou champ manquant.';
+    case 'forbidden':
+      return 'Vous n\'avez pas les droits de gestion sur cette entreprise.';
+    default:
+      return fallback;
+  }
+}
+
+function MembersSection({ companyId, grades }: { companyId: number; grades: GradeFine[] }) {
+  const queryClient = useQueryClient();
+  const q = useQuery({
+    queryKey: ['my-members', companyId],
+    queryFn: () => getMyMembers(companyId),
+  });
+  const [discordId, setDiscordId] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [gradeId, setGradeId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (gradeId === null && grades[0]) setGradeId(grades[0].id);
+  }, [grades, gradeId]);
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['my-members', companyId] });
+    queryClient.invalidateQueries({ queryKey: ['my-grades', companyId] });
+  };
+
+  const add = useMutation({
+    mutationFn: () =>
+      addMyMember(companyId, {
+        discordId: discordId.trim(),
+        displayName: displayName.trim(),
+        gradeId: gradeId!,
+      }),
+    onSuccess: () => {
+      setDiscordId('');
+      setDisplayName('');
+      refresh();
+    },
+    onError: (e) => alert(memberError(e, "Échec de l'ajout du membre.")),
+  });
+  const setGrade = useMutation({
+    mutationFn: (v: { mid: number; gradeId: number }) => setMyMemberGrade(companyId, v.mid, v.gradeId),
+    onSuccess: refresh,
+    onError: (e) => alert(memberError(e, 'Échec du changement de grade.')),
+  });
+  const remove = useMutation({
+    mutationFn: (mid: number) => removeMyMember(companyId, mid),
+    onSuccess: refresh,
+    onError: (e) => alert(memberError(e, 'Échec du retrait du membre.')),
+  });
+
+  const members = q.data ?? [];
+  const canSubmit = /^\d{15,32}$/.test(discordId.trim()) && displayName.trim().length > 0 && gradeId !== null;
+
+  return (
+    <>
+      <div className="flex flex-wrap items-end gap-2 border-b px-5 py-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted-foreground">ID Discord</label>
+          <input
+            value={discordId}
+            onChange={(e) => setDiscordId(e.target.value.replace(/\D/g, ''))}
+            placeholder="123456789012345678"
+            className="h-8 w-48 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted-foreground">Nom affiché</label>
+          <input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Pseudo RP"
+            className="h-8 w-40 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted-foreground">Grade</label>
+          <select
+            value={gradeId ?? ''}
+            onChange={(e) => setGradeId(Number(e.target.value))}
+            className="h-8 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+          >
+            {grades.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <Button type="button" onClick={() => add.mutate()} disabled={!canSubmit || add.isPending}>
+          <UserPlus className="mr-1.5 h-4 w-4" />
+          Ajouter
+        </Button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-5">
+        {members.length === 0 ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">Aucun membre assigné.</div>
+        ) : (
+          <div className="overflow-hidden rounded-lg border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2 text-left font-semibold">Membre</th>
+                  <th className="px-4 py-2 text-left font-semibold">Grade</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((m, i) => (
+                  <tr key={m.membershipId} className={i > 0 ? 'border-t' : ''}>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        {m.avatarUrl ? (
+                          <img src={m.avatarUrl} alt="" className="h-7 w-7 rounded-full" />
+                        ) : (
+                          <div className="grid h-7 w-7 place-items-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                            {m.displayName.slice(0, 1).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="leading-tight">
+                          <div className="font-medium">{m.displayName}</div>
+                          <div className="text-xs text-muted-foreground">{m.discordId}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <select
+                        value={m.gradeId ?? ''}
+                        onChange={(e) => setGrade.mutate({ mid: m.membershipId, gradeId: Number(e.target.value) })}
+                        disabled={setGrade.isPending}
+                        className="h-8 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+                      >
+                        {m.gradeId === null && <option value="">— Aucun —</option>}
+                        {grades.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Retirer ${m.displayName} de l'entreprise ?`)) remove.mutate(m.membershipId);
+                        }}
+                        className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="mt-3 text-xs text-muted-foreground">
+          Le membre apparaît dès qu'il s'est connecté au moins une fois via Discord ; sinon il est
+          créé et lié à son ID. Les membres assignés alimentent automatiquement la partie RH.
+        </p>
+      </div>
+    </>
   );
 }

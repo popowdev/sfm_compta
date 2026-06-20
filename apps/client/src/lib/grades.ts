@@ -99,3 +99,37 @@ export const setMyGradePermission = (
     method: 'PUT',
     body: JSON.stringify(perm),
   });
+
+// --- Patron-scoped member assignment ---
+
+export interface CompanyMember {
+  membershipId: number;
+  userId: number;
+  discordId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  gradeId: number | null;
+  gradeName: string | null;
+  active: boolean;
+}
+
+export const getMyMembers = (companyId: number) =>
+  apiFetch<CompanyMember[]>(`/api/me/companies/${companyId}/members`);
+
+export const addMyMember = (
+  companyId: number,
+  body: { discordId: string; displayName: string; gradeId: number },
+) =>
+  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/members`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+
+export const setMyMemberGrade = (companyId: number, mid: number, gradeId: number) =>
+  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/members/${mid}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ gradeId }),
+  });
+
+export const removeMyMember = (companyId: number, mid: number) =>
+  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/members/${mid}`, { method: 'DELETE' });
