@@ -349,6 +349,28 @@ export const companyRentals = mysqlTable('company_rentals', {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const companyClients = mysqlTable('company_clients', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 150 }).notNull(),
+  phone: varchar('phone', { length: 50 }),
+  email: varchar('email', { length: 150 }),
+  notes: text('notes'),
+  loyaltyTier: mysqlEnum('loyalty_tier', ['bronze', 'silver', 'gold', 'platinum'])
+    .notNull()
+    .default('bronze'),
+  loyaltyPoints: int('loyalty_points').notNull().default(0),
+  totalSpent: decimal('total_spent', { precision: 12, scale: 2 }).notNull().default('0'),
+  accountBalance: decimal('account_balance', { precision: 12, scale: 2 }).notNull().default('0'),
+  creditLimit: decimal('credit_limit', { precision: 12, scale: 2 }).notNull().default('0'),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const sessions = mysqlTable('sessions', {
   id: varchar('id', { length: 64 }).primaryKey(),
   userId: int('user_id')
@@ -457,6 +479,7 @@ export type CompanyEmployee = typeof companyEmployees.$inferSelect;
 export type TimeEntry = typeof timeEntries.$inferSelect;
 export type SalaryGridRow = typeof salaryGrid.$inferSelect;
 export type CompanyRental = typeof companyRentals.$inferSelect;
+export type CompanyClient = typeof companyClients.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type TaxBracketRow = typeof taxBrackets.$inferSelect;
 export type FiscalConfigRow = typeof fiscalConfig.$inferSelect;

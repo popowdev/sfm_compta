@@ -90,7 +90,20 @@ export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
   badgeuse: [
     { key: 'pauses', label: 'Autoriser les pauses', type: 'boolean', default: true },
   ],
+  clients: [
+    { key: 'loyalty', label: 'Gérer la fidélité (points & paliers)', type: 'boolean', default: true },
+    { key: 'credit', label: 'Gérer le compte crédit (solde)', type: 'boolean', default: true },
+  ],
 };
+
+export const LOYALTY_TIERS = [
+  { key: 'bronze', label: 'Bronze' },
+  { key: 'silver', label: 'Argent' },
+  { key: 'gold', label: 'Or' },
+  { key: 'platinum', label: 'Platine' },
+] as const;
+export type LoyaltyTier = (typeof LOYALTY_TIERS)[number]['key'];
+export const LOYALTY_TIER_KEYS = LOYALTY_TIERS.map((t) => t.key) as LoyaltyTier[];
 
 export function moduleConfigBool(
   config: Record<string, unknown> | null | undefined,
