@@ -453,11 +453,15 @@ export default function Employes() {
                     value={form.position}
                     onChange={(e) => {
                       const pos = e.target.value as EmployeePosition;
-                      set('position', pos);
                       if (editing === null) {
-                        const r = gridRate(pos);
-                        if (r > 0) set('hourlyRate', String(r));
+                        const cur = form.hourlyRate.trim();
+                        const untouched = cur === '' || Number(cur) === gridRate(form.position);
+                        if (untouched) {
+                          const r = gridRate(pos);
+                          set('hourlyRate', r > 0 ? String(r) : '');
+                        }
                       }
+                      set('position', pos);
                     }}
                   >
                     {EMPLOYEE_POSITIONS.map((p) => (

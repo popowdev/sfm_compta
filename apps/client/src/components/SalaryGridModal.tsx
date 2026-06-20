@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { EMPLOYEE_POSITIONS, type EmployeePosition } from '@rp-compta/shared';
@@ -20,9 +20,15 @@ export function SalaryGridModal({
   const queryClient = useQueryClient();
   const q = useQuery({ queryKey: ['salary-grid', companyId], queryFn: () => getSalaryGrid(companyId) });
   const [rows, setRows] = useState<Record<string, { hourlyRate: string; baseSalary: string }>>({});
+  const seeded = useRef(false);
 
   useEffect(() => {
-    if (open && q.data) {
+    if (!open) {
+      seeded.current = false;
+      return;
+    }
+    if (q.data && !seeded.current) {
+      seeded.current = true;
       const next: Record<string, { hourlyRate: string; baseSalary: string }> = {};
       for (const r of q.data.grid) {
         next[r.position] = { hourlyRate: String(r.hourlyRate), baseSalary: String(r.baseSalary) };

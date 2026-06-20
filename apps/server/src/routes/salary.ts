@@ -50,13 +50,16 @@ meSalaryRouter.get(
 );
 
 const putSchema = z.object({
-  grid: z.array(
-    z.object({
-      position: z.enum(EMPLOYEE_POSITION_KEYS as [string, ...string[]]),
-      hourlyRate: z.number().nonnegative().finite().max(99_999_999.99),
-      baseSalary: z.number().nonnegative().finite().max(9_999_999_999.99),
-    }),
-  ),
+  grid: z
+    .array(
+      z.object({
+        position: z.enum(EMPLOYEE_POSITION_KEYS as [string, ...string[]]),
+        hourlyRate: z.number().nonnegative().finite().max(99_999_999.99),
+        baseSalary: z.number().nonnegative().finite().max(9_999_999_999.99),
+      }),
+    )
+    .max(EMPLOYEE_POSITION_KEYS.length)
+    .refine((g) => new Set(g.map((r) => r.position)).size === g.length, 'duplicate_position'),
 });
 
 meSalaryRouter.put(
