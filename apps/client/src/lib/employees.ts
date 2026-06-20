@@ -4,6 +4,7 @@ import type { EmployeePosition, ContractType } from '@rp-compta/shared';
 export interface Employee {
   id: number;
   companyId: number;
+  userId: number | null;
   name: string;
   phone: string | null;
   dateOfBirth: string | null;
@@ -18,9 +19,18 @@ export interface Employee {
   active: boolean;
   notes: string | null;
   createdAt: string;
+  gradeName: string | null;
+  linkedName: string | null;
+}
+
+export interface CompanyMemberRef {
+  userId: number;
+  name: string;
+  gradeName: string | null;
 }
 
 export interface EmployeeInput {
+  userId?: number;
   name: string;
   phone?: string;
   dateOfBirth?: string;
@@ -37,7 +47,7 @@ export interface EmployeeInput {
 }
 
 export const getEmployees = (companyId: number) =>
-  apiFetch<{ canWrite: boolean; employees: Employee[] }>(
+  apiFetch<{ canWrite: boolean; employees: Employee[]; members: CompanyMemberRef[] }>(
     `/api/me/companies/${companyId}/employees`,
   );
 

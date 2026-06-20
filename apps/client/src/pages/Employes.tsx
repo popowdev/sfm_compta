@@ -10,6 +10,8 @@ import {
   CalendarDays,
   AlertTriangle,
   ChevronDown,
+  Link2,
+  UserPlus,
 } from 'lucide-react';
 import {
   EMPLOYEE_POSITIONS,
@@ -25,6 +27,7 @@ import {
   deleteEmployee,
   type Employee,
   type EmployeeInput,
+  type CompanyMemberRef,
 } from '@/lib/employees';
 
 const inputCls =
@@ -103,6 +106,7 @@ export default function Employes() {
 
   const [form, setForm] = useState({ ...EMPTY });
   const [editing, setEditing] = useState<number | null>(null);
+  const [linkUserId, setLinkUserId] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const set = <K extends keyof typeof EMPTY>(k: K, v: (typeof EMPTY)[K]) =>
@@ -118,6 +122,7 @@ export default function Employes() {
   const close = () => {
     setOpen(false);
     setEditing(null);
+    setLinkUserId(null);
     setForm({ ...EMPTY });
   };
   const invalidate = () => {
@@ -140,11 +145,19 @@ export default function Employes() {
 
   const openNew = () => {
     setEditing(null);
+    setLinkUserId(null);
     setForm({ ...EMPTY });
+    setOpen(true);
+  };
+  const openFromMember = (m: CompanyMemberRef) => {
+    setEditing(null);
+    setLinkUserId(m.userId);
+    setForm({ ...EMPTY, name: m.name });
     setOpen(true);
   };
   const openEdit = (e: Employee) => {
     setEditing(e.id);
+    setLinkUserId(null);
     setForm({
       name: e.name,
       position: e.position,
@@ -165,6 +178,7 @@ export default function Employes() {
 
   const submit = () => {
     const body: EmployeeInput = {
+      userId: linkUserId ?? undefined,
       name: form.name.trim(),
       position: form.position,
       contractType: form.contractType,
@@ -185,6 +199,7 @@ export default function Employes() {
 
   const canWrite = q.data?.canWrite ?? false;
   const list = q.data?.employees ?? [];
+  const members = q.data?.members ?? [];
   const activeCount = list.filter((e) => e.active).length;
   const warnTotal = list.reduce((s, e) => s + e.warnings, 0);
   const pending = create.isPending || update.isPending;
@@ -213,6 +228,37 @@ export default function Employes() {
           </Button>
         )}
       </div>
+
+      {members.length > 0 && (
+        <div className="rounded-xl border border-dashed bg-card p-4">
+          <div className="mb-3 text-sm font-semibold">
+            Membres sans fiche RH{' '}
+            <span className="text-muted-foreground">({members.length})</span>
+          </div>
+          <div className="space-y-2">
+            {members.map((m: CompanyMemberRef) => (
+              <div key={m.userId} className="flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <span className="font-medium">{m.name}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {m.gradeName ?? 'membre'} · accès site, pas de fiche RH
+                  </span>
+                </div>
+                {canWrite && (
+                  <button
+                    type="button"
+                    onClick={() => openFromMember(m)}
+                    className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent"
+                  >
+                    <UserPlus className="h-3.5 w-3.5" />
+                    Créer la fiche
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">
         {list.map((e) => {
@@ -243,6 +289,12 @@ export default function Employes() {
                     >
                       {e.active ? 'actif' : 'inactif'}
                     </span>
+                    {e.userId && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-400">
+                        <Link2 className="h-3 w-3" />
+                        {e.gradeName ?? 'compte lié'}
+                      </span>
+                    )}
                     {e.warnings > 0 && (
                       <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400">
                         <AlertTriangle className="h-3 w-3" />

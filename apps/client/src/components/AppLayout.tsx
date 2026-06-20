@@ -14,6 +14,7 @@ import {
   PanelLeftClose,
   PanelLeft,
   LogOut,
+  Search,
 } from 'lucide-react';
 import { hasAppAccess, MODULES } from '@rp-compta/shared';
 import { useAuth } from '@/auth/AuthContext';
@@ -36,6 +37,7 @@ interface NavItem {
 interface NavGroup {
   title: string | null;
   items: NavItem[];
+  defaultClosed?: boolean;
 }
 
 function navClass(isActive: boolean, collapsed: boolean): string {
@@ -57,6 +59,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       return {};
     }
   });
+  const [search, setSearch] = useState('');
 
   const toggle = () =>
     setCollapsed((c) => {
@@ -64,9 +67,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
       localStorage.setItem(STORAGE_KEY, next ? '1' : '0');
       return next;
     });
-  const toggleGroup = (title: string) =>
+  const toggleGroup = (title: string, currentlyClosed: boolean) =>
     setClosedGroups((g) => {
-      const next = { ...g, [title]: !g[title] };
+      const next = { ...g, [title]: !currentlyClosed };
       localStorage.setItem(GROUPS_KEY, JSON.stringify(next));
       return next;
     });
@@ -113,7 +116,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           Icon: Settings,
         });
       }
-      return { title: c.company.name, items };
+      return { title: c.company.name, items, defaultClosed: isIrs };
     })
     .filter((g) => g.items.length > 0);
 
@@ -138,6 +141,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
       : []),
     ...companyGroups,
   ];
+
+  const term = search.trim().toLowerCase();
+  const visibleGroups: NavGroup[] = term
+    ? groups
+        .map((g) => {
+          const titleMatch = g.title?.toLowerCase().includes(term) ?? false;
+          const items = titleMatch
+            ? g.items
+            : g.items.filter((it) => it.label.toLowerCase().includes(term));
+          return { ...g, items };
+        })
+        .filter((g) => g.items.length > 0)
+    : groups;
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -165,8 +181,24 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 overflow-auto px-2 py-2">
-          {groups.map((g, gi) => {
-            const isClosed = g.title !== null && !collapsed && closedGroups[g.title];
+          {isIrs && !collapsed && (
+            <div className="relative mb-2 px-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Rechercher menu / entreprise…"
+                className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+          )}
+          {visibleGroups.length === 0 && term && !collapsed && (
+            <div className="px-3 py-4 text-sm text-muted-foreground">Aucun résultat.</div>
+          )}
+          {visibleGroups.map((g, gi) => {
+            const effectiveClosed =
+              g.title !== null && (closedGroups[g.title] ?? g.defaultClosed ?? false);
+            const isClosed = !collapsed && !term && effectiveClosed;
             return (
               <div key={g.title ?? `g${gi}`} className={gi > 0 ? 'pt-2' : ''}>
                 {g.title &&
@@ -175,7 +207,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => toggleGroup(g.title!)}
+                      onClick={() => toggleGroup(g.title!, effectiveClosed)}
                       className="flex w-full items-center justify-between px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
                     >
                       <span className="truncate">{g.title}</span>

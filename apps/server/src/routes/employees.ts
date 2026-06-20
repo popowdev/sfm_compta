@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { and, asc, eq } from 'drizzle-orm';
 import { EMPLOYEE_POSITION_KEYS, CONTRACT_TYPE_KEYS } from '@rp-compta/shared';
 import { db } from '../db';
-import { companyEmployees } from '../db/schema';
+import { companyEmployees, memberships, companyRoles, users } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess } from '../services/access';
@@ -18,6 +18,7 @@ function serialize(e: typeof companyEmployees.$inferSelect) {
   return {
     id: e.id,
     companyId: e.companyId,
+    userId: e.userId,
     name: e.name,
     phone: e.phone,
     dateOfBirth: e.dateOfBirth,
@@ -46,6 +47,7 @@ const optionalDate = z
   .or(z.literal(''));
 
 const bodySchema = z.object({
+  userId: z.number().int().positive().optional(),
   name: z.string().trim().min(1).max(120),
   phone: z.string().trim().max(50).nullish().or(z.literal('')),
   dateOfBirth: optionalDate,
@@ -95,6 +97,19 @@ async function gate(userId: number, companyId: number, write: boolean) {
   return { ok: true as const, canWrite: acc.canWrite };
 }
 
+async function companyMembers(companyId: number) {
+  return db
+    .select({
+      userId: memberships.userId,
+      name: users.displayName,
+      gradeName: companyRoles.name,
+    })
+    .from(memberships)
+    .innerJoin(users, eq(memberships.userId, users.id))
+    .leftJoin(companyRoles, eq(memberships.companyRoleId, companyRoles.id))
+    .where(and(eq(memberships.companyId, companyId), eq(memberships.active, true)));
+}
+
 meEmployeesRouter.get(
   '/',
   asyncHandler(async (req, res) => {
@@ -102,12 +117,28 @@ meEmployeesRouter.get(
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req.user!.id, companyId, false);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
-    const rows = await db
-      .select()
-      .from(companyEmployees)
-      .where(eq(companyEmployees.companyId, companyId))
-      .orderBy(asc(companyEmployees.name));
-    res.json({ canWrite: g.canWrite, employees: rows.map(serialize) });
+
+    const [rows, members] = await Promise.all([
+      db
+        .select()
+        .from(companyEmployees)
+        .where(eq(companyEmployees.companyId, companyId))
+        .orderBy(asc(companyEmployees.name)),
+      companyMembers(companyId),
+    ]);
+
+    const memberByUser = new Map(members.map((m) => [m.userId, m]));
+    const employees = rows.map((e) => {
+      const m = e.userId ? memberByUser.get(e.userId) : undefined;
+      return { ...serialize(e), gradeName: m?.gradeName ?? null, linkedName: m?.name ?? null };
+    });
+    const memberIds = new Set(members.map((m) => m.userId));
+    const linked = new Set(
+      rows.filter((e) => e.userId !== null && memberIds.has(e.userId)).map((e) => e.userId),
+    );
+    const unlinked = members.filter((m) => !linked.has(m.userId));
+
+    res.json({ canWrite: g.canWrite, employees, members: unlinked });
   }),
 );
 
@@ -120,7 +151,20 @@ meEmployeesRouter.post(
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const parsed = bodySchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
-    await db.insert(companyEmployees).values({ companyId, ...toRow(parsed.data) });
+    const linkUserId = parsed.data.userId ?? null;
+    if (linkUserId !== null) {
+      const members = await companyMembers(companyId);
+      if (!members.some((m) => m.userId === linkUserId)) {
+        return res.status(400).json({ error: 'not_a_member' });
+      }
+      const existing = await db
+        .select({ id: companyEmployees.id })
+        .from(companyEmployees)
+        .where(and(eq(companyEmployees.companyId, companyId), eq(companyEmployees.userId, linkUserId)))
+        .limit(1);
+      if (existing[0]) return res.status(409).json({ error: 'already_linked' });
+    }
+    await db.insert(companyEmployees).values({ companyId, userId: linkUserId, ...toRow(parsed.data) });
     emitInvalidate(['irs', `company:${companyId}`], [['employees', companyId]]);
     res.status(201).json({ ok: true });
   }),

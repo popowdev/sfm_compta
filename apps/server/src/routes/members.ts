@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '../db';
-import { memberships, users, companyRoles, companies } from '../db/schema';
+import { memberships, users, companyRoles, companies, companyEmployees } from '../db/schema';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { emitInvalidate } from '../realtime/socket';
@@ -143,10 +143,29 @@ membersRouter.delete(
     const companyId = parseId(req.params.companyId);
     const mid = parseId(req.params.mid);
     if (!companyId || !mid) return res.status(400).json({ error: 'bad_request' });
+    const existing = await db
+      .select({ userId: memberships.userId })
+      .from(memberships)
+      .where(and(eq(memberships.id, mid), eq(memberships.companyId, companyId)))
+      .limit(1);
     await db
       .delete(memberships)
       .where(and(eq(memberships.id, mid), eq(memberships.companyId, companyId)));
-    emitInvalidate(['irs', `company:${companyId}`], [['members', companyId]]);
+    if (existing[0]) {
+      await db
+        .update(companyEmployees)
+        .set({ userId: null })
+        .where(
+          and(
+            eq(companyEmployees.companyId, companyId),
+            eq(companyEmployees.userId, existing[0].userId),
+          ),
+        );
+    }
+    emitInvalidate(['irs', `company:${companyId}`], [
+      ['members', companyId],
+      ['employees', companyId],
+    ]);
     res.json({ ok: true });
   }),
 );

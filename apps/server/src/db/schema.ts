@@ -257,6 +257,7 @@ export const companyEmployees = mysqlTable('company_employees', {
   companyId: int('company_id')
     .notNull()
     .references(() => companies.id, { onDelete: 'cascade' }),
+  userId: int('user_id').references(() => users.id, { onDelete: 'set null' }),
   name: varchar('name', { length: 120 }).notNull(),
   phone: varchar('phone', { length: 50 }),
   dateOfBirth: date('date_of_birth', { mode: 'string' }),
