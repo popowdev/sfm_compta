@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useCompany } from '@/lib/useCompany';
 import { useQuery } from '@tanstack/react-query';
 import { EXPENSE_CATEGORIES, EMPLOYEE_POSITIONS } from '@rp-compta/shared';
 import { fmtMoney } from '@/lib/declarations';
@@ -31,8 +31,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default function Stats() {
-  const { id } = useParams();
-  const companyId = Number(id);
+  const { companyId } = useCompany();
   const { data, isLoading } = useQuery({
     queryKey: ['stats', companyId],
     queryFn: () => getCompanyStats(companyId),

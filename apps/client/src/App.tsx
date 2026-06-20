@@ -33,9 +33,9 @@ function ProtectedApp() {
     <AppLayout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/entreprise/:id" element={<EntrepriseIndex />} />
-        <Route path="/entreprise/:id/m/:moduleKey" element={<ModulePage />} />
-        <Route path="/entreprise/:id/parametres" element={<CompanySettings />} />
+        <Route path="/entreprise/:slug" element={<EntrepriseIndex />} />
+        <Route path="/entreprise/:slug/m/:moduleKey" element={<ModulePage />} />
+        <Route path="/entreprise/:slug/parametres" element={<CompanySettings />} />
         <Route
           path="/entreprises"
           element={

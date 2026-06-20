@@ -1,8 +1,8 @@
 import { type ComponentType } from 'react';
 import { useParams, Navigate, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import { MODULES } from '@rp-compta/shared';
-import { getMyCompanies, type MyModule } from '@/lib/me';
+import { type MyModule } from '@/lib/me';
+import { useCompany } from '@/lib/useCompany';
 import { moduleIcon } from '@/lib/moduleIcons';
 import Declarations from '@/pages/Declarations';
 import Depenses from '@/pages/Depenses';
@@ -37,13 +37,11 @@ function Placeholder({ mod }: { mod: MyModule }) {
 }
 
 export default function ModulePage() {
-  const { id, moduleKey } = useParams();
-  const companyId = Number(id);
-  const { data, isLoading } = useQuery({ queryKey: ['my-companies'], queryFn: getMyCompanies });
+  const { moduleKey } = useParams();
+  const { company: mine, slug, isLoading } = useCompany();
 
   if (isLoading) return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
 
-  const mine = data?.find((c) => c.company.id === companyId);
   const mod = mine?.modules.find((m) => m.key === moduleKey);
   if (!mine || !mod || !COMPANY_PAGE_KEYS.has(mod.key) || !mod.enabled || mod.blocked || !mod.canView) {
     return <Navigate to="/" replace />;
@@ -71,7 +69,7 @@ export default function ModulePage() {
             return (
               <Link
                 key={t.key}
-                to={`/entreprise/${companyId}/m/${t.key}`}
+                to={`/entreprise/${slug}/m/${t.key}`}
                 aria-current={isActive ? 'page' : undefined}
                 className={`-mb-px flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                   isActive

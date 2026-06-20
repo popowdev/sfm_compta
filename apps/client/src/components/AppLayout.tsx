@@ -82,13 +82,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const data = myCompanies.data ?? [];
 
   const location = useLocation();
-  const activeMatch = location.pathname.match(/^\/entreprise\/(\d+)\/m\/([^/]+)/);
-  const activeCompanyId = activeMatch ? Number(activeMatch[1]) : null;
+  const activeMatch = location.pathname.match(/^\/entreprise\/([^/]+)\/m\/([^/]+)/);
+  const activeSlug = activeMatch ? activeMatch[1] : null;
   const activeModuleKey = activeMatch ? activeMatch[2] : null;
   const activeGroup =
     activeModuleKey && COMPANY_PAGE_KEYS.has(activeModuleKey)
       ? (data
-          .find((c) => c.company.id === activeCompanyId)
+          .find((c) => c.company.slug === activeSlug)
           ?.modules.find((m) => m.key === activeModuleKey)?.group ?? null)
       : null;
 
@@ -103,15 +103,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
         if (seen.has(m.group)) continue;
         seen.add(m.group);
         items.push({
-          to: `/entreprise/${c.company.id}/m/${m.key}`,
+          to: `/entreprise/${c.company.slug}/m/${m.key}`,
           label: m.group,
           Icon: groupIcon(m.group),
-          active: activeCompanyId === c.company.id && activeGroup === m.group,
+          active: activeSlug === c.company.slug && activeGroup === m.group,
         });
       }
       if (c.canManage) {
         items.push({
-          to: `/entreprise/${c.company.id}/parametres`,
+          to: `/entreprise/${c.company.slug}/parametres`,
           label: 'Paramètres',
           Icon: Settings,
         });

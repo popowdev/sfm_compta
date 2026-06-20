@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useCompany } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { EXPENSE_CATEGORIES, type ExpenseCategory } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
@@ -34,8 +34,7 @@ const EMPTY = {
 };
 
 export default function Depenses() {
-  const { id } = useParams();
-  const companyId = Number(id);
+  const { companyId } = useCompany();
   const queryClient = useQueryClient();
 
   const q = useQuery({ queryKey: ['expenses', companyId], queryFn: () => getExpenses(companyId) });

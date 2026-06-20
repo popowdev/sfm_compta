@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useCompany } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
@@ -101,8 +101,7 @@ function seniority(hireDate: string | null): string {
 }
 
 export default function Employes() {
-  const { id } = useParams();
-  const companyId = Number(id);
+  const { companyId } = useCompany();
   const queryClient = useQueryClient();
 
   const q = useQuery({ queryKey: ['employees', companyId], queryFn: () => getEmployees(companyId) });

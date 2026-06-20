@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useParams, Navigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCompany } from '@/lib/useCompany';
 import { computeCorporateTax } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { getMyCompanies } from '@/lib/me';
@@ -33,8 +34,7 @@ const EMPTY = {
 };
 
 export default function Declarations() {
-  const { id } = useParams();
-  const companyId = Number(id);
+  const { companyId } = useCompany();
   const queryClient = useQueryClient();
 
   const my = useQuery({ queryKey: ['my-companies'], queryFn: getMyCompanies });

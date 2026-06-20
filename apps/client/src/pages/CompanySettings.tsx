@@ -1,7 +1,8 @@
-import { useParams, Navigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Navigate } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { MODULES } from '@rp-compta/shared';
-import { getMyCompanies, toggleMyModule, uploadMyCompanyLogo, type MyModule } from '@/lib/me';
+import { toggleMyModule, uploadMyCompanyLogo, type MyModule } from '@/lib/me';
+import { useCompany } from '@/lib/useCompany';
 import { moduleIcon } from '@/lib/moduleIcons';
 import { Switch } from '@/components/ui/switch';
 
@@ -19,10 +20,8 @@ function initials(name: string): string {
 }
 
 export default function CompanySettings() {
-  const { id } = useParams();
-  const companyId = Number(id);
+  const { company: mine, companyId, isLoading } = useCompany();
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ['my-companies'], queryFn: getMyCompanies });
 
   const upload = useMutation({
     mutationFn: (file: File) => uploadMyCompanyLogo(companyId, file),
@@ -35,7 +34,6 @@ export default function CompanySettings() {
   });
 
   if (isLoading) return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
-  const mine = data?.find((c) => c.company.id === companyId);
   if (!mine || !mine.canManage) return <Navigate to="/" replace />;
 
   const groups: { group: string; items: MyModule[] }[] = [];

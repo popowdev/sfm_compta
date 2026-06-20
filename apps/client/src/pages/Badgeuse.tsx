@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useCompany } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronDown,
@@ -482,8 +482,7 @@ function TeamView({ companyId }: { companyId: number }) {
 }
 
 export default function Badgeuse() {
-  const { id } = useParams();
-  const companyId = Number(id);
+  const { companyId } = useCompany();
   const [tab, setTab] = useState<'me' | 'team'>('me');
   const me = useQuery({ queryKey: ['timeclock-me', companyId], queryFn: () => getMyTimeclock(companyId) });
   const canManageTeam = me.data?.canManageTeam ?? false;

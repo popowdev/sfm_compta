@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, X, Phone, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fmtMoney } from '@/lib/declarations';
+import { useCompany } from '@/lib/useCompany';
 import {
   getRentals,
   createRental,
@@ -41,8 +41,7 @@ const EMPTY = {
 };
 
 export default function Locations() {
-  const { id } = useParams();
-  const companyId = Number(id);
+  const { companyId } = useCompany();
   const queryClient = useQueryClient();
 
   const q = useQuery({ queryKey: ['rentals', companyId], queryFn: () => getRentals(companyId) });
@@ -237,7 +236,7 @@ export default function Locations() {
           >
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h2 className="text-sm font-semibold">
-                {editing ? 'Modifier la location' : 'Nouvelle location'}
+                {editing !== null ? 'Modifier la location' : 'Nouvelle location'}
               </h2>
               <button
                 type="button"
@@ -282,15 +281,15 @@ export default function Locations() {
                 </label>
                 <label className="text-sm">
                   <span className={labelCls}>Durée (h)</span>
-                  <input type="number" className={inputCls} value={form.durationHours} onChange={(e) => set('durationHours', e.target.value)} />
+                  <input type="number" min="0" step="1" className={inputCls} value={form.durationHours} onChange={(e) => set('durationHours', e.target.value)} />
                 </label>
                 <label className="text-sm">
                   <span className={labelCls}>Prix ($)</span>
-                  <input type="number" step="0.01" className={inputCls} value={form.rentalPrice} onChange={(e) => set('rentalPrice', e.target.value)} />
+                  <input type="number" min="0" step="0.01" className={inputCls} value={form.rentalPrice} onChange={(e) => set('rentalPrice', e.target.value)} />
                 </label>
                 <label className="text-sm">
                   <span className={labelCls}>Caution ($)</span>
-                  <input type="number" step="0.01" className={inputCls} value={form.deposit} onChange={(e) => set('deposit', e.target.value)} />
+                  <input type="number" min="0" step="0.01" className={inputCls} value={form.deposit} onChange={(e) => set('deposit', e.target.value)} />
                 </label>
                 <label className="text-sm">
                   <span className={labelCls}>État caution</span>
@@ -319,7 +318,7 @@ export default function Locations() {
                   Annuler
                 </Button>
                 <Button type="submit" disabled={!valid || pending}>
-                  {pending ? 'Enregistrement…' : editing ? 'Enregistrer' : 'Ajouter'}
+                  {pending ? 'Enregistrement…' : editing !== null ? 'Enregistrer' : 'Ajouter'}
                 </Button>
               </div>
             </form>

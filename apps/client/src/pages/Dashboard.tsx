@@ -88,7 +88,7 @@ export default function Dashboard() {
             {list.map((c) => (
               <Link
                 key={c.company.id}
-                to={`/entreprise/${c.company.id}`}
+                to={`/entreprise/${c.company.slug}`}
                 className="group flex items-center gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-accent"
               >
                 <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-lg border bg-background text-sm font-semibold text-primary">

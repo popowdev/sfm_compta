@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useCompany } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { fmtMoney } from '@/lib/declarations';
@@ -23,8 +23,7 @@ export const SUB_STATUS: Record<SubventionStatus, { label: string; cls: string }
 const EMPTY = { motif: '', requesterName: '', amountRequested: '', notes: '' };
 
 export default function Subventions() {
-  const { id } = useParams();
-  const companyId = Number(id);
+  const { companyId } = useCompany();
   const queryClient = useQueryClient();
 
   const q = useQuery({

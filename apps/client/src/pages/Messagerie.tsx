@@ -1,11 +1,10 @@
-import { useParams } from 'react-router-dom';
+import { useCompany } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getMyMessages, sendMyMessage } from '@/lib/messages';
 import { MessageThread, MessageComposer } from '@/components/MessageThread';
 
 export default function Messagerie() {
-  const { id } = useParams();
-  const companyId = Number(id);
+  const { companyId } = useCompany();
   const queryClient = useQueryClient();
 
   const q = useQuery({
