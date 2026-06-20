@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { CATALOG_ITEM_TYPES } from '@rp-compta/shared';
 import { db } from '../db';
-import { catalogItems, catalogRecipe, stockItems } from '../db/schema';
+import { catalogItems, catalogRecipe, stockItems, stockCategories } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
@@ -38,7 +38,7 @@ const money = z.number().nonnegative().finite().max(9_999_999_999.99);
 
 const itemSchema = z.object({
   name: z.string().trim().min(1).max(150),
-  category: z.string().trim().max(80).nullish().or(z.literal('')),
+  categoryId: z.number().int().positive().nullish(),
   type: z.enum(TYPE_KEYS),
   price: money,
   active: z.boolean().optional(),
@@ -48,12 +48,21 @@ const itemSchema = z.object({
 function toItemRow(d: z.infer<typeof itemSchema>) {
   return {
     name: d.name,
-    category: blank(d.category),
+    categoryId: d.categoryId ?? null,
     type: d.type as (typeof catalogItems.$inferInsert)['type'],
     price: String(round2(d.price)),
     active: d.active ?? true,
     notes: blank(d.notes),
   };
+}
+
+async function categoryInCompany(categoryId: number, companyId: number): Promise<boolean> {
+  const rows = await db
+    .select({ id: stockCategories.id })
+    .from(stockCategories)
+    .where(and(eq(stockCategories.id, categoryId), eq(stockCategories.companyId, companyId)))
+    .limit(1);
+  return !!rows[0];
 }
 
 export const meCatalogRouter = Router({ mergeParams: true });
@@ -88,6 +97,11 @@ meCatalogRouter.get(
       .where(eq(stockItems.companyId, companyId))
       .orderBy(asc(stockItems.name));
     const stockById = new Map(stocks.map((s) => [s.id, s]));
+    const cats = await db
+      .select({ id: stockCategories.id, name: stockCategories.name })
+      .from(stockCategories)
+      .where(eq(stockCategories.companyId, companyId));
+    const catMap = new Map(cats.map((c) => [c.id, c.name]));
 
     const itemIds = items.map((i) => i.id);
     const recipes = itemIds.length
@@ -121,7 +135,8 @@ meCatalogRouter.get(
       return {
         id: it.id,
         name: it.name,
-        category: it.category,
+        categoryId: it.categoryId,
+        categoryName: it.categoryId ? (catMap.get(it.categoryId) ?? null) : null,
         type: it.type,
         price,
         active: it.active,
@@ -159,6 +174,9 @@ meCatalogRouter.post(
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const parsed = itemSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    if (parsed.data.categoryId && !(await categoryInCompany(parsed.data.categoryId, companyId))) {
+      return res.status(400).json({ error: 'invalid_category' });
+    }
     await db.insert(catalogItems).values({ companyId, createdByUserId: req.user!.id, ...toItemRow(parsed.data) });
     emitInvalidate(['irs', `company:${companyId}`], [['catalog', companyId]]);
     res.status(201).json({ ok: true });
@@ -175,6 +193,9 @@ meCatalogRouter.put(
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const parsed = itemSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    if (parsed.data.categoryId && !(await categoryInCompany(parsed.data.categoryId, companyId))) {
+      return res.status(400).json({ error: 'invalid_category' });
+    }
     const exists = await db
       .select({ id: catalogItems.id })
       .from(catalogItems)

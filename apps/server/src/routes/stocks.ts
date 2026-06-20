@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { STOCK_UNIT_KEYS } from '@rp-compta/shared';
 import { db } from '../db';
-import { stockItems, stockMovements, users } from '../db/schema';
+import { stockItems, stockMovements, stockCategories, users } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
@@ -39,12 +39,13 @@ async function gate(req: Request, companyId: number) {
   };
 }
 
-function serialize(r: typeof stockItems.$inferSelect) {
+function serialize(r: typeof stockItems.$inferSelect, categoryName: string | null) {
   return {
     id: r.id,
     companyId: r.companyId,
     name: r.name,
-    category: r.category,
+    categoryId: r.categoryId,
+    categoryName,
     unit: r.unit,
     quantity: Number(r.quantity),
     unitCost: Number(r.unitCost),
@@ -54,13 +55,22 @@ function serialize(r: typeof stockItems.$inferSelect) {
   };
 }
 
+async function categoryInCompany(categoryId: number, companyId: number): Promise<boolean> {
+  const rows = await db
+    .select({ id: stockCategories.id })
+    .from(stockCategories)
+    .where(and(eq(stockCategories.id, categoryId), eq(stockCategories.companyId, companyId)))
+    .limit(1);
+  return !!rows[0];
+}
+
 const money = z.number().nonnegative().finite().max(9_999_999_999.99);
 const qtyValue = z.number().finite().min(0).max(9_999_999.999);
 const QTY_MAX = 999_999_999.999;
 
 const metaSchema = z.object({
   name: z.string().trim().min(1).max(150),
-  category: z.string().trim().max(80).nullish().or(z.literal('')),
+  categoryId: z.number().int().positive().nullish(),
   unit: z.enum(STOCK_UNIT_KEYS as [string, ...string[]]),
   unitCost: money,
   lowStockThreshold: qtyValue,
@@ -71,7 +81,7 @@ const itemSchema = metaSchema.extend({ quantity: qtyValue });
 function toMetaRow(d: z.infer<typeof metaSchema>) {
   return {
     name: d.name,
-    category: blank(d.category),
+    categoryId: d.categoryId ?? null,
     unit: d.unit as (typeof stockItems.$inferInsert)['unit'],
     unitCost: String(round2(d.unitCost)),
     lowStockThreshold: String(round3(d.lowStockThreshold)),
@@ -94,11 +104,12 @@ meStocksRouter.get(
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const rows = await db
-      .select()
+      .select({ item: stockItems, categoryName: stockCategories.name })
       .from(stockItems)
+      .leftJoin(stockCategories, eq(stockItems.categoryId, stockCategories.id))
       .where(eq(stockItems.companyId, companyId))
       .orderBy(asc(stockItems.name));
-    res.json({ canWrite: g.canWrite, items: rows.map(serialize) });
+    res.json({ canWrite: g.canWrite, items: rows.map((r) => serialize(r.item, r.categoryName)) });
   }),
 );
 
@@ -111,6 +122,9 @@ meStocksRouter.post(
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const parsed = itemSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    if (parsed.data.categoryId && !(await categoryInCompany(parsed.data.categoryId, companyId))) {
+      return res.status(400).json({ error: 'invalid_category' });
+    }
     await db.insert(stockItems).values({ companyId, createdByUserId: req.user!.id, ...toItemRow(parsed.data) });
     emitInvalidate(['irs', `company:${companyId}`], [['stocks', companyId]]);
     res.status(201).json({ ok: true });
@@ -127,6 +141,9 @@ meStocksRouter.put(
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const parsed = metaSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    if (parsed.data.categoryId && !(await categoryInCompany(parsed.data.categoryId, companyId))) {
+      return res.status(400).json({ error: 'invalid_category' });
+    }
     const result = await db
       .update(stockItems)
       .set(toMetaRow(parsed.data))

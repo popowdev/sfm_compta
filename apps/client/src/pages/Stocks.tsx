@@ -10,6 +10,8 @@ import {
   ArrowUpFromLine,
   SlidersHorizontal,
   AlertTriangle,
+  Tag,
+  Check,
 } from 'lucide-react';
 import {
   moduleConfigBool,
@@ -32,6 +34,13 @@ import {
   type StockItemInput,
   type StockMovementInput,
 } from '@/lib/stocks';
+import {
+  getStockCategories,
+  createStockCategory,
+  updateStockCategory,
+  deleteStockCategory,
+} from '@/lib/stockCategories';
+import { CatalogManager } from '@/components/CatalogManager';
 
 const inputCls =
   'h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
@@ -48,7 +57,6 @@ const MOV_BADGE: Record<StockMovementType, { label: string; cls: string }> = {
 function fmtQty(n: number): string {
   return n.toLocaleString('fr-FR', { maximumFractionDigits: 3 });
 }
-
 function fmtDateTime(d: string): string {
   const dt = new Date(d);
   return Number.isNaN(dt.getTime()) ? d : dt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
@@ -56,7 +64,7 @@ function fmtDateTime(d: string): string {
 
 const EMPTY = {
   name: '',
-  category: '',
+  categoryId: '' as number | '',
   unit: 'piece' as StockUnit,
   quantity: '',
   unitCost: '',
@@ -65,8 +73,79 @@ const EMPTY = {
 };
 const EMPTY_MOV = { quantity: '', unitCost: '', supplier: '', reason: '' };
 
+const TABS = [
+  { key: 'items', label: 'Matières premières' },
+  { key: 'articles', label: 'Articles' },
+  { key: 'categories', label: 'Catégories' },
+] as const;
+type Tab = (typeof TABS)[number]['key'];
+
 export default function Stocks() {
-  const { company, companyId, canCreate, canEdit, canDelete } = useModulePerms('stocks');
+  const stocks = useModulePerms('stocks');
+  const caisse = useModulePerms('caisse');
+  const { companyId } = stocks;
+  const [tab, setTab] = useState<Tab>('items');
+
+  const tabs = TABS.filter((t) => t.key !== 'articles' || caisse.canView);
+  const activeTab: Tab = tab === 'articles' && !caisse.canView ? 'items' : tab;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex w-fit items-center gap-1 rounded-lg bg-muted p-0.5">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              activeTab === t.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'items' && (
+        <ItemsManager
+          companyId={companyId}
+          canCreate={stocks.canCreate}
+          canEdit={stocks.canEdit}
+          canDelete={stocks.canDelete}
+        />
+      )}
+      {activeTab === 'articles' && caisse.canView && (
+        <CatalogManager
+          companyId={companyId}
+          canCreate={caisse.canCreate}
+          canEdit={caisse.canEdit}
+          canDelete={caisse.canDelete}
+        />
+      )}
+      {activeTab === 'categories' && (
+        <CategoriesManager
+          companyId={companyId}
+          canCreate={stocks.canCreate}
+          canEdit={stocks.canEdit}
+          canDelete={stocks.canDelete}
+        />
+      )}
+    </div>
+  );
+}
+
+function ItemsManager({
+  companyId,
+  canCreate,
+  canEdit,
+  canDelete,
+}: {
+  companyId: number;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+}) {
+  const { company } = useModulePerms('stocks');
   const cfg = company?.modules.find((m) => m.key === 'stocks')?.config;
   const showValuation = moduleConfigBool(cfg, 'stocks', 'valuation');
   const showThreshold = moduleConfigBool(cfg, 'stocks', 'threshold');
@@ -74,6 +153,8 @@ export default function Stocks() {
   const queryClient = useQueryClient();
 
   const q = useQuery({ queryKey: ['stocks', companyId], queryFn: () => getStocks(companyId) });
+  const cats = useQuery({ queryKey: ['stock-categories', companyId], queryFn: () => getStockCategories(companyId) });
+  const categories = cats.data?.categories ?? [];
 
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const toggle = (id: number) =>
@@ -87,8 +168,7 @@ export default function Stocks() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [form, setForm] = useState({ ...EMPTY });
-  const set = <K extends keyof typeof EMPTY>(k: K, v: (typeof EMPTY)[K]) =>
-    setForm((f) => ({ ...f, [k]: v }));
+  const set = <K extends keyof typeof EMPTY>(k: K, v: (typeof EMPTY)[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   const [movItem, setMovItem] = useState<StockItem | null>(null);
   const [movType, setMovType] = useState<StockMovementType>('in');
@@ -144,7 +224,7 @@ export default function Stocks() {
     setEditing(it.id);
     setForm({
       name: it.name,
-      category: it.category ?? '',
+      categoryId: it.categoryId ?? '',
       unit: it.unit,
       quantity: String(it.quantity),
       unitCost: String(it.unitCost),
@@ -170,7 +250,7 @@ export default function Stocks() {
   const submit = () => {
     const body: StockItemInput = {
       name: form.name.trim(),
-      category: form.category.trim() || undefined,
+      categoryId: form.categoryId === '' ? null : Number(form.categoryId),
       unit: form.unit,
       quantity: editing !== null ? Number(form.quantity) || 0 : qtyNum,
       unitCost: showValuation ? Number(form.unitCost) || 0 : 0,
@@ -209,7 +289,7 @@ export default function Stocks() {
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap gap-3">
           <div className="rounded-lg border bg-card px-4 py-2">
-            <span className="text-sm text-muted-foreground">Articles </span>
+            <span className="text-sm text-muted-foreground">Matières </span>
             <span className="font-semibold">{items.length}</span>
           </div>
           {showValuation && (
@@ -230,7 +310,7 @@ export default function Stocks() {
         {canCreate && (
           <Button className="ml-auto" onClick={openNew}>
             <Plus className="h-4 w-4" />
-            Nouvel article
+            Nouvelle matière
           </Button>
         )}
       </div>
@@ -255,9 +335,9 @@ export default function Stocks() {
                       }`}
                     />
                     <span className="text-base font-semibold">{it.name}</span>
-                    {it.category && (
+                    {it.categoryName && (
                       <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                        {it.category}
+                        {it.categoryName}
                       </span>
                     )}
                     {isLow && (
@@ -278,47 +358,25 @@ export default function Stocks() {
                         <span>valeur {fmtMoney(it.quantity * it.unitCost)} $</span>
                       </>
                     )}
-                    {showThreshold && it.lowStockThreshold > 0 && (
-                      <span>seuil {fmtQty(it.lowStockThreshold)}</span>
-                    )}
+                    {showThreshold && it.lowStockThreshold > 0 && <span>seuil {fmtQty(it.lowStockThreshold)}</span>}
                   </div>
                 </button>
                 <div className="flex shrink-0 flex-wrap gap-1">
                   {canCreate && (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => openMov(it, 'in')}
-                        title="Entrée de stock"
-                        className="grid h-8 w-8 place-items-center rounded-md border text-emerald-400 transition-colors hover:bg-emerald-500/10"
-                      >
+                      <button type="button" onClick={() => openMov(it, 'in')} title="Entrée de stock" className="grid h-8 w-8 place-items-center rounded-md border text-emerald-400 transition-colors hover:bg-emerald-500/10">
                         <ArrowDownToLine className="h-4 w-4" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => openMov(it, 'out')}
-                        title="Sortie de stock"
-                        className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      >
+                      <button type="button" onClick={() => openMov(it, 'out')} title="Sortie de stock" className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
                         <ArrowUpFromLine className="h-4 w-4" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => openMov(it, 'adjust')}
-                        title="Ajuster / inventaire"
-                        className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      >
+                      <button type="button" onClick={() => openMov(it, 'adjust')} title="Ajuster / inventaire" className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
                         <SlidersHorizontal className="h-4 w-4" />
                       </button>
                     </>
                   )}
                   {canEdit && (
-                    <button
-                      type="button"
-                      onClick={() => openEdit(it)}
-                      title="Modifier l'article"
-                      className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    >
+                    <button type="button" onClick={() => openEdit(it)} title="Modifier" className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
                       <Pencil className="h-4 w-4" />
                     </button>
                   )}
@@ -326,7 +384,7 @@ export default function Stocks() {
                     <button
                       type="button"
                       onClick={() => {
-                        if (confirm(`Supprimer l'article « ${it.name} » et son historique ?`)) remove.mutate(it.id);
+                        if (confirm(`Supprimer « ${it.name} » et son historique ?`)) remove.mutate(it.id);
                       }}
                       title="Supprimer"
                       className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
@@ -336,7 +394,6 @@ export default function Stocks() {
                   )}
                 </div>
               </div>
-
               {isOpen && (
                 <div className="border-t px-4 pb-4 pt-3">
                   {it.notes && <div className="mb-3 text-sm text-muted-foreground">{it.notes}</div>}
@@ -348,11 +405,11 @@ export default function Stocks() {
         })}
         {items.length === 0 && (
           <div className="grid place-items-center gap-3 rounded-xl border border-dashed bg-card p-12 text-center">
-            <p className="text-sm text-muted-foreground">Aucun article en stock.</p>
+            <p className="text-sm text-muted-foreground">Aucune matière première en stock.</p>
             {canCreate && (
               <Button variant="outline" onClick={openNew}>
                 <Plus className="h-4 w-4" />
-                Ajouter le premier article
+                Ajouter la première
               </Button>
             )}
           </div>
@@ -361,50 +418,37 @@ export default function Stocks() {
 
       {open && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => setOpen(false)}>
-          <div
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b px-5 py-4">
-              <h2 className="text-sm font-semibold">
-                {editing !== null ? "Modifier l'article" : 'Nouvel article'}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-              >
+              <h2 className="text-sm font-semibold">{editing !== null ? 'Modifier la matière' : 'Nouvelle matière'}</h2>
+              <button type="button" onClick={() => setOpen(false)} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <form
-              className="p-5"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (valid) submit();
-              }}
-            >
+            <form className="p-5" onSubmit={(e) => { e.preventDefault(); if (valid) submit(); }}>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="text-sm sm:col-span-2">
-                  <span className={labelCls}>Nom de l'article</span>
+                  <span className={labelCls}>Nom</span>
                   <input className={inputCls} value={form.name} onChange={(e) => set('name', e.target.value)} />
                 </label>
                 <label className="text-sm">
                   <span className={labelCls}>Catégorie</span>
-                  <input
+                  <select
                     className={inputCls}
-                    value={form.category}
-                    onChange={(e) => set('category', e.target.value)}
-                    placeholder="Optionnel"
-                  />
+                    value={form.categoryId}
+                    onChange={(e) => set('categoryId', e.target.value === '' ? '' : Number(e.target.value))}
+                  >
+                    <option value="">— aucune —</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="text-sm">
                   <span className={labelCls}>Unité</span>
-                  <select
-                    className={inputCls}
-                    value={form.unit}
-                    onChange={(e) => set('unit', e.target.value as StockUnit)}
-                  >
+                  <select className={inputCls} value={form.unit} onChange={(e) => set('unit', e.target.value as StockUnit)}>
                     {STOCK_UNITS.map((u) => (
                       <option key={u.key} value={u.key}>
                         {u.label}
@@ -414,67 +458,32 @@ export default function Stocks() {
                 </label>
                 <label className="text-sm">
                   <span className={labelCls}>Quantité {editing !== null && '(via mouvements)'}</span>
-                  <input
-                    type="number"
-                    step="0.001"
-                    min="0"
-                    className={inputCls}
-                    value={form.quantity}
-                    onChange={(e) => set('quantity', e.target.value)}
-                    disabled={editing !== null}
-                  />
+                  <input type="number" step="0.001" min="0" className={inputCls} value={form.quantity} onChange={(e) => set('quantity', e.target.value)} disabled={editing !== null} />
                 </label>
                 {showValuation && (
                   <label className="text-sm">
                     <span className={labelCls}>Coût unitaire ($)</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      className={inputCls}
-                      value={form.unitCost}
-                      onChange={(e) => set('unitCost', e.target.value)}
-                    />
+                    <input type="number" step="0.01" min="0" className={inputCls} value={form.unitCost} onChange={(e) => set('unitCost', e.target.value)} />
                   </label>
                 )}
                 {showThreshold && (
                   <label className="text-sm">
                     <span className={labelCls}>Seuil d'alerte</span>
-                    <input
-                      type="number"
-                      step="0.001"
-                      min="0"
-                      className={inputCls}
-                      value={form.lowStockThreshold}
-                      onChange={(e) => set('lowStockThreshold', e.target.value)}
-                      placeholder="0 = pas d'alerte"
-                    />
+                    <input type="number" step="0.001" min="0" className={inputCls} value={form.lowStockThreshold} onChange={(e) => set('lowStockThreshold', e.target.value)} placeholder="0 = pas d'alerte" />
                   </label>
                 )}
                 <label className="text-sm sm:col-span-2">
                   <span className={labelCls}>Notes</span>
-                  <textarea
-                    className={`${inputCls} h-20 py-2`}
-                    value={form.notes}
-                    onChange={(e) => set('notes', e.target.value)}
-                  />
+                  <textarea className={`${inputCls} h-20 py-2`} value={form.notes} onChange={(e) => set('notes', e.target.value)} />
                 </label>
               </div>
               {editing !== null && (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  La quantité se modifie via les mouvements (entrée / sortie / ajustement).
-                </p>
+                <p className="mt-3 text-xs text-muted-foreground">La quantité se modifie via les mouvements (entrée / sortie / ajustement).</p>
               )}
               <div className="mt-5 flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                  Annuler
-                </Button>
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>Annuler</Button>
                 <Button type="submit" disabled={!valid || create.isPending || update.isPending}>
-                  {create.isPending || update.isPending
-                    ? 'Enregistrement…'
-                    : editing !== null
-                      ? 'Enregistrer'
-                      : 'Ajouter'}
+                  {create.isPending || update.isPending ? 'Enregistrement…' : editing !== null ? 'Enregistrer' : 'Ajouter'}
                 </Button>
               </div>
             </form>
@@ -484,96 +493,173 @@ export default function Stocks() {
 
       {movItem && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => setMovItem(null)}>
-          <div
-            className="w-full max-w-md rounded-xl border bg-card shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="w-full max-w-md rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b px-5 py-4">
-              <h2 className="text-sm font-semibold">
-                {MOV_BADGE[movType].label} · {movItem.name}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setMovItem(null)}
-                className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-              >
+              <h2 className="text-sm font-semibold">{MOV_BADGE[movType].label} · {movItem.name}</h2>
+              <button type="button" onClick={() => setMovItem(null)} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <form
-              className="p-5"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (movValid) submitMov();
-              }}
-            >
+            <form className="p-5" onSubmit={(e) => { e.preventDefault(); if (movValid) submitMov(); }}>
               <div className="mb-3 rounded-lg border bg-background/40 px-3 py-2 text-xs text-muted-foreground">
-                Stock actuel :{' '}
-                <span className="font-semibold text-foreground">
-                  {fmtQty(movItem.quantity)} {UNIT_SHORT[movItem.unit]}
-                </span>
+                Stock actuel : <span className="font-semibold text-foreground">{fmtQty(movItem.quantity)} {UNIT_SHORT[movItem.unit]}</span>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="text-sm">
-                  <span className={labelCls}>
-                    {movType === 'adjust' ? 'Correction (+/−)' : 'Quantité'} ({UNIT_SHORT[movItem.unit]})
-                  </span>
-                  <input
-                    type="number"
-                    step="0.001"
-                    className={inputCls}
-                    value={movForm.quantity}
-                    onChange={(e) => setMov('quantity', e.target.value)}
-                    autoFocus
-                  />
+                  <span className={labelCls}>{movType === 'adjust' ? 'Correction (+/−)' : 'Quantité'} ({UNIT_SHORT[movItem.unit]})</span>
+                  <input type="number" step="0.001" className={inputCls} value={movForm.quantity} onChange={(e) => setMov('quantity', e.target.value)} autoFocus />
                 </label>
                 {movType === 'in' && showValuation && (
                   <label className="text-sm">
                     <span className={labelCls}>Coût unitaire ($)</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      className={inputCls}
-                      value={movForm.unitCost}
-                      onChange={(e) => setMov('unitCost', e.target.value)}
-                      placeholder="Optionnel"
-                    />
+                    <input type="number" step="0.01" min="0" className={inputCls} value={movForm.unitCost} onChange={(e) => setMov('unitCost', e.target.value)} placeholder="Optionnel" />
                   </label>
                 )}
                 {movType === 'in' && showSupplier && (
                   <label className="text-sm sm:col-span-2">
                     <span className={labelCls}>Fournisseur</span>
-                    <input
-                      className={inputCls}
-                      value={movForm.supplier}
-                      onChange={(e) => setMov('supplier', e.target.value)}
-                      placeholder="Optionnel"
-                    />
+                    <input className={inputCls} value={movForm.supplier} onChange={(e) => setMov('supplier', e.target.value)} placeholder="Optionnel" />
                   </label>
                 )}
                 <label className="text-sm sm:col-span-2">
                   <span className={labelCls}>Motif</span>
-                  <input
-                    className={inputCls}
-                    value={movForm.reason}
-                    onChange={(e) => setMov('reason', e.target.value)}
-                    placeholder="Optionnel"
-                  />
+                  <input className={inputCls} value={movForm.reason} onChange={(e) => setMov('reason', e.target.value)} placeholder="Optionnel" />
                 </label>
               </div>
               <div className="mt-5 flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setMovItem(null)}>
-                  Annuler
-                </Button>
-                <Button type="submit" disabled={!movValid || move.isPending}>
-                  {move.isPending ? 'Enregistrement…' : 'Valider'}
-                </Button>
+                <Button type="button" variant="outline" onClick={() => setMovItem(null)}>Annuler</Button>
+                <Button type="submit" disabled={!movValid || move.isPending}>{move.isPending ? 'Enregistrement…' : 'Valider'}</Button>
               </div>
             </form>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function CategoriesManager({
+  companyId,
+  canCreate,
+  canEdit,
+  canDelete,
+}: {
+  companyId: number;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const q = useQuery({ queryKey: ['stock-categories', companyId], queryFn: () => getStockCategories(companyId) });
+  const [name, setName] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['stock-categories', companyId] });
+    queryClient.invalidateQueries({ queryKey: ['stocks', companyId] });
+    queryClient.invalidateQueries({ queryKey: ['catalog', companyId] });
+  };
+  const create = useMutation({
+    mutationFn: () => createStockCategory(companyId, name.trim()),
+    onSuccess: () => {
+      setName('');
+      invalidate();
+    },
+    onError: () => alert('Catégorie déjà existante ?'),
+  });
+  const rename = useMutation({
+    mutationFn: (v: { id: number; name: string }) => updateStockCategory(companyId, v.id, v.name),
+    onSuccess: () => {
+      setEditingId(null);
+      invalidate();
+    },
+    onError: () => alert('Catégorie déjà existante ?'),
+  });
+  const submitRename = (id: number) => {
+    if (editName.trim() && !rename.isPending) rename.mutate({ id, name: editName.trim() });
+  };
+  const remove = useMutation({
+    mutationFn: (id: number) => deleteStockCategory(companyId, id),
+    onSuccess: invalidate,
+  });
+
+  const categories = q.data?.categories ?? [];
+
+  return (
+    <div className="max-w-xl space-y-4">
+      {canCreate && (
+        <div className="flex gap-2">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Nouvelle catégorie (ex. Boissons)"
+            className={inputCls}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && name.trim() && !create.isPending) create.mutate();
+            }}
+          />
+          <Button onClick={() => name.trim() && create.mutate()} disabled={!name.trim() || create.isPending}>
+            <Plus className="h-4 w-4" />
+            Ajouter
+          </Button>
+        </div>
+      )}
+      <div className="overflow-hidden rounded-xl border bg-card">
+        {categories.length === 0 ? (
+          <div className="p-8 text-center text-sm text-muted-foreground">Aucune catégorie.</div>
+        ) : (
+          categories.map((c, i) => (
+            <div key={c.id} className={`flex items-center gap-2 px-4 py-2.5 ${i > 0 ? 'border-t' : ''}`}>
+              <Tag className="h-4 w-4 shrink-0 text-muted-foreground" />
+              {editingId === c.id ? (
+                <>
+                  <input
+                    className={`${inputCls} h-8`}
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') submitRename(c.id);
+                      else if (e.key === 'Escape') setEditingId(null);
+                    }}
+                    autoFocus
+                  />
+                  <button type="button" onClick={() => submitRename(c.id)} className="grid h-8 w-8 place-items-center rounded-md text-emerald-400 hover:bg-emerald-500/10">
+                    <Check className="h-4 w-4" />
+                  </button>
+                  <button type="button" onClick={() => setEditingId(null)} className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-accent">
+                    <X className="h-4 w-4" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="flex-1 text-sm font-medium">{c.name}</span>
+                  {canEdit && (
+                    <button type="button" onClick={() => { setEditingId(c.id); setEditName(c.name); }} className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm(`Supprimer la catégorie « ${c.name} » ? (les articles deviennent sans catégorie)`)) remove.mutate(c.id);
+                      }}
+                      className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Les catégories sont partagées entre les matières premières et les articles. Supprimer une
+        catégorie ne supprime pas les éléments (ils deviennent « sans catégorie »).
+      </p>
     </div>
   );
 }
@@ -593,8 +679,7 @@ function MovementHistory({
   });
   if (q.isLoading) return <div className="text-xs text-muted-foreground">Chargement…</div>;
   const moves = q.data ?? [];
-  if (moves.length === 0)
-    return <div className="text-xs text-muted-foreground">Aucun mouvement enregistré.</div>;
+  if (moves.length === 0) return <div className="text-xs text-muted-foreground">Aucun mouvement enregistré.</div>;
   return (
     <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-sm">
@@ -611,30 +696,18 @@ function MovementHistory({
         <tbody>
           {moves.map((m, i) => (
             <tr key={m.id} className={i > 0 ? 'border-t' : ''}>
-              <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">
-                {fmtDateTime(m.createdAt)}
-              </td>
+              <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">{fmtDateTime(m.createdAt)}</td>
               <td className="px-3 py-2">
-                <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${MOV_BADGE[m.type].cls}`}>
-                  {MOV_BADGE[m.type].label}
-                </span>
+                <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${MOV_BADGE[m.type].cls}`}>{MOV_BADGE[m.type].label}</span>
               </td>
-              <td
-                className={`px-3 py-2 text-right font-medium ${
-                  m.quantity > 0 ? 'text-emerald-400' : m.quantity < 0 ? 'text-destructive' : ''
-                }`}
-              >
+              <td className={`px-3 py-2 text-right font-medium ${m.quantity > 0 ? 'text-emerald-400' : m.quantity < 0 ? 'text-destructive' : ''}`}>
                 {m.quantity > 0 ? '+' : ''}
                 {fmtQty(m.quantity)}
               </td>
               {showValuation && (
-                <td className="px-3 py-2 text-right text-xs text-muted-foreground">
-                  {m.unitCost === null ? '—' : `${fmtMoney(m.unitCost)} $`}
-                </td>
+                <td className="px-3 py-2 text-right text-xs text-muted-foreground">{m.unitCost === null ? '—' : `${fmtMoney(m.unitCost)} $`}</td>
               )}
-              <td className="px-3 py-2 text-xs">
-                {m.reason || (m.supplier ? `Fournisseur : ${m.supplier}` : '—')}
-              </td>
+              <td className="px-3 py-2 text-xs">{m.reason || (m.supplier ? `Fournisseur : ${m.supplier}` : '—')}</td>
               <td className="px-3 py-2 text-xs text-muted-foreground">{m.createdByName ?? '—'}</td>
             </tr>
           ))}

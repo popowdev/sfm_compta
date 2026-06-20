@@ -190,7 +190,7 @@ export function SalesView({
           </div>
           {activeItems.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              Aucun article actif. Ajoute des articles dans l'onglet Catalogue, ou utilise une ligne libre.
+              Aucun article actif. Ajoute des articles dans Stock › Articles, ou utilise une ligne libre.
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">

@@ -5,7 +5,8 @@ export interface StockItem {
   id: number;
   companyId: number;
   name: string;
-  category: string | null;
+  categoryId: number | null;
+  categoryName: string | null;
   unit: StockUnit;
   quantity: number;
   unitCost: number;
@@ -16,7 +17,7 @@ export interface StockItem {
 
 export interface StockItemInput {
   name: string;
-  category?: string;
+  categoryId?: number | null;
   unit: StockUnit;
   quantity: number;
   unitCost: number;

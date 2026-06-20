@@ -13,7 +13,8 @@ export interface RecipeLine {
 export interface CatalogItem {
   id: number;
   name: string;
-  category: string | null;
+  categoryId: number | null;
+  categoryName: string | null;
   type: CatalogItemType;
   price: number;
   active: boolean;
@@ -34,7 +35,7 @@ export interface CatalogStock {
 
 export interface CatalogItemInput {
   name: string;
-  category?: string;
+  categoryId?: number | null;
   type: CatalogItemType;
   price: number;
   active?: boolean;

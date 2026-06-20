@@ -404,6 +404,21 @@ export const clientLoyaltyTiers = mysqlTable(
   (t) => ({ uq: unique('uq_loyalty_tier').on(t.companyId, t.tier) }),
 );
 
+export const stockCategories = mysqlTable(
+  'stock_categories',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    companyId: int('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 80 }).notNull(),
+    createdAt: timestamp('created_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => ({ uq: unique('uq_stock_category').on(t.companyId, t.name) }),
+);
+
 export const stockItems = mysqlTable('stock_items', {
   id: int('id').autoincrement().primaryKey(),
   companyId: int('company_id')
@@ -411,6 +426,7 @@ export const stockItems = mysqlTable('stock_items', {
     .references(() => companies.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 150 }).notNull(),
   category: varchar('category', { length: 80 }),
+  categoryId: int('category_id').references(() => stockCategories.id, { onDelete: 'set null' }),
   unit: mysqlEnum('unit', ['piece', 'kg', 'g', 'liter', 'cl', 'box', 'pack', 'other'])
     .notNull()
     .default('piece'),
@@ -537,6 +553,7 @@ export const catalogItems = mysqlTable('catalog_items', {
     .references(() => companies.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 150 }).notNull(),
   category: varchar('category', { length: 80 }),
+  categoryId: int('category_id').references(() => stockCategories.id, { onDelete: 'set null' }),
   type: mysqlEnum('type', ['product', 'service']).notNull().default('product'),
   price: decimal('price', { precision: 12, scale: 2 }).notNull().default('0'),
   active: boolean('active').notNull().default(true),
