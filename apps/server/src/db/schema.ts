@@ -276,7 +276,9 @@ export const companyEmployees = mysqlTable('company_employees', {
   createdAt: timestamp('created_at')
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
-});
+},
+  (t) => ({ uq: unique('uq_company_employee_user').on(t.companyId, t.userId) }),
+);
 
 export const timeEntries = mysqlTable('time_entries', {
   id: int('id').autoincrement().primaryKey(),

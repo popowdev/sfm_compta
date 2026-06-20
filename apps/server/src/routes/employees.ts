@@ -164,7 +164,14 @@ meEmployeesRouter.post(
         .limit(1);
       if (existing[0]) return res.status(409).json({ error: 'already_linked' });
     }
-    await db.insert(companyEmployees).values({ companyId, userId: linkUserId, ...toRow(parsed.data) });
+    try {
+      await db.insert(companyEmployees).values({ companyId, userId: linkUserId, ...toRow(parsed.data) });
+    } catch (err) {
+      if ((err as { code?: string }).code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({ error: 'already_linked' });
+      }
+      throw err;
+    }
     emitInvalidate(['irs', `company:${companyId}`], [['employees', companyId]]);
     res.status(201).json({ ok: true });
   }),

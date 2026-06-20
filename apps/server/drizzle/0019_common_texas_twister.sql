@@ -1,0 +1,1 @@
+ALTER TABLE `company_employees` ADD CONSTRAINT `uq_company_employee_user` UNIQUE(`company_id`,`user_id`);
