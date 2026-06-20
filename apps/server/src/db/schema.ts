@@ -490,6 +490,41 @@ export const exercicePayroll = mysqlTable(
   (t) => ({ uq: unique('uq_exercice_payroll').on(t.exerciceId, t.employeeId) }),
 );
 
+export const catalogItems = mysqlTable('catalog_items', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 150 }).notNull(),
+  category: varchar('category', { length: 80 }),
+  type: mysqlEnum('type', ['product', 'service']).notNull().default('product'),
+  price: decimal('price', { precision: 12, scale: 2 }).notNull().default('0'),
+  active: boolean('active').notNull().default(true),
+  notes: text('notes'),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const catalogRecipe = mysqlTable(
+  'catalog_recipe',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    companyId: int('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    catalogItemId: int('catalog_item_id')
+      .notNull()
+      .references(() => catalogItems.id, { onDelete: 'cascade' }),
+    stockItemId: int('stock_item_id')
+      .notNull()
+      .references(() => stockItems.id, { onDelete: 'cascade' }),
+    quantity: decimal('quantity', { precision: 12, scale: 3 }).notNull().default('0'),
+  },
+  (t) => ({ uq: unique('uq_catalog_recipe').on(t.catalogItemId, t.stockItemId) }),
+);
+
 export const sessions = mysqlTable('sessions', {
   id: varchar('id', { length: 64 }).primaryKey(),
   userId: int('user_id')

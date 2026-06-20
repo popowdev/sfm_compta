@@ -103,6 +103,28 @@ export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
       help: 'Distribution de dividendes + impôt sur dividendes dans le résultat.',
     },
   ],
+  caisse: [
+    {
+      key: 'stock',
+      label: 'Lier les ventes au stock',
+      type: 'boolean',
+      default: true,
+      help: 'Décrémente les composants des recettes à chaque vente.',
+    },
+    {
+      key: 'clients',
+      label: 'Lier les ventes aux comptes clients',
+      type: 'boolean',
+      default: true,
+      help: 'Fidélité + paiement sur compte crédit.',
+    },
+    {
+      key: 'discount',
+      label: 'Autoriser les remises',
+      type: 'boolean',
+      default: true,
+    },
+  ],
   stocks: [
     {
       key: 'valuation',
@@ -147,6 +169,12 @@ export const STOCK_MOVEMENT_TYPES = [
   { key: 'adjust', label: 'Ajustement' },
 ] as const;
 export type StockMovementType = (typeof STOCK_MOVEMENT_TYPES)[number]['key'];
+
+export const CATALOG_ITEM_TYPES = [
+  { key: 'product', label: 'Produit' },
+  { key: 'service', label: 'Service' },
+] as const;
+export type CatalogItemType = (typeof CATALOG_ITEM_TYPES)[number]['key'];
 
 export interface SpecialAction {
   key: string;
