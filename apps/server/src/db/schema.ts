@@ -445,6 +445,28 @@ export const stockMovements = mysqlTable('stock_movements', {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const exercices = mysqlTable(
+  'exercices',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    companyId: int('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    label: varchar('label', { length: 150 }).notNull(),
+    startDate: date('start_date', { mode: 'string' }).notNull(),
+    endDate: date('end_date', { mode: 'string' }).notNull(),
+    status: mysqlEnum('status', ['open', 'closed']).notNull().default('open'),
+    revenue: decimal('revenue', { precision: 14, scale: 2 }).notNull().default('0'),
+    dividends: decimal('dividends', { precision: 14, scale: 2 }).notNull().default('0'),
+    notes: text('notes'),
+    createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => ({ uq: unique('uq_exercice_period').on(t.companyId, t.startDate, t.endDate) }),
+);
+
 export const sessions = mysqlTable('sessions', {
   id: varchar('id', { length: 64 }).primaryKey(),
   userId: int('user_id')

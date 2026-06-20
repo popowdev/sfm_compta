@@ -190,6 +190,13 @@
       "when": 1781962246060,
       "tag": "0026_kind_gargoyle",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "5",
+      "when": 1781964058549,
+      "tag": "0027_broken_betty_ross",
+      "breakpoints": true
     }
   ]
 }

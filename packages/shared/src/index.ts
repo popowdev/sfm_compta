@@ -94,6 +94,15 @@ export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
     { key: 'loyalty', label: 'Gérer la fidélité (points & paliers)', type: 'boolean', default: true },
     { key: 'credit', label: 'Gérer le compte crédit (solde)', type: 'boolean', default: true },
   ],
+  exercices: [
+    {
+      key: 'dividends',
+      label: 'Gérer les dividendes',
+      type: 'boolean',
+      default: true,
+      help: 'Distribution de dividendes + impôt sur dividendes dans le résultat.',
+    },
+  ],
   stocks: [
     {
       key: 'valuation',
