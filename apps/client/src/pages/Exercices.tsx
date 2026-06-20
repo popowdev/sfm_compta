@@ -9,8 +9,33 @@ import {
   CalendarPlus,
   Lock,
   LockOpen,
+  ShoppingCart,
+  TrendingUp,
+  Package,
+  Boxes,
+  Percent,
+  Coins,
+  Copy,
+  FileDown,
 } from 'lucide-react';
-import { moduleConfigBool, EMPLOYEE_POSITIONS, EXPENSE_CATEGORIES } from '@rp-compta/shared';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+} from 'recharts';
+import {
+  moduleConfigBool,
+  EMPLOYEE_POSITIONS,
+  EXPENSE_CATEGORIES,
+  PAYMENT_METHODS,
+} from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { fmtMoney } from '@/lib/declarations';
 import { ApiError } from '@/lib/api';
@@ -27,6 +52,8 @@ import {
   type ExerciceInput,
   type PayrollLine,
 } from '@/lib/exercices';
+import { getSale, deleteSale } from '@/lib/sales';
+import { buildInvoiceSvg, downloadSvgAsPng } from '@/lib/pngDoc';
 
 const inputCls =
   'h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
@@ -38,10 +65,32 @@ const POSITION_LABEL: Record<string, string> = Object.fromEntries(
 const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
   EXPENSE_CATEGORIES.map((c) => [c.key, c.label]),
 );
+const PAY_LABEL: Record<string, string> = Object.fromEntries(
+  PAYMENT_METHODS.map((p) => [p.key, p.label]),
+);
+
+const PALETTE = ['#10b981', '#0ea5e9', '#f59e0b', '#8b5cf6', '#ef4444', '#14b8a6'];
+const AXIS = 'rgba(148,163,184,0.6)';
+const GRID = 'rgba(148,163,184,0.15)';
+const chartTooltip = {
+  background: 'var(--card)',
+  border: '1px solid var(--border)',
+  borderRadius: 10,
+  fontSize: 12,
+  color: 'var(--foreground)',
+};
 
 function fmtDate(d: string): string {
   const dt = new Date(`${d}T00:00:00`);
   return Number.isNaN(dt.getTime()) ? d : dt.toLocaleDateString('fr-FR');
+}
+function fmtDateTime(d: string): string {
+  const dt = new Date(d);
+  return Number.isNaN(dt.getTime()) ? d : dt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+}
+function dayShort(d: string): string {
+  const dt = new Date(`${d}T00:00:00`);
+  return Number.isNaN(dt.getTime()) ? d : dt.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit' });
 }
 
 const EMPTY = {
@@ -260,7 +309,12 @@ export default function Exercices() {
 
             {expanded === ex.id && (
               <div className="border-t px-4 pb-4 pt-3">
-                <ExerciceDetailView companyId={companyId} id={ex.id} showDividends={showDividends} />
+                <ExerciceDetailView
+                  companyId={companyId}
+                  companyName={company?.company.name ?? 'Entreprise'}
+                  id={ex.id}
+                  showDividends={showDividends}
+                />
               </div>
             )}
           </div>
@@ -418,15 +472,17 @@ function Row({
   value,
   accent,
   strong,
+  indent,
 }: {
   label: string;
   value: string;
   accent?: string;
   strong?: boolean;
+  indent?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 text-sm">
-      <span className={strong ? 'font-medium' : 'text-muted-foreground'}>{label}</span>
+      <span className={`${indent ? 'pl-3 ' : ''}${strong ? 'font-medium' : 'text-muted-foreground'}`}>{label}</span>
       <span className={`font-medium ${accent ?? ''}`}>{value}</span>
     </div>
   );
@@ -541,21 +597,132 @@ function PayrollRow({
   );
 }
 
-function SoonPanel({ title }: { title: string }) {
+function Kpi({
+  icon: Icon,
+  label,
+  value,
+  accent,
+}: {
+  icon: typeof ShoppingCart;
+  label: string;
+  value: string;
+  accent?: string;
+}) {
   return (
-    <div className="rounded-lg border border-dashed bg-background/40 p-3">
-      <div className="text-xs font-medium">{title}</div>
-      <div className="mt-1 text-[11px] text-muted-foreground">À venir avec le module Caisse.</div>
+    <div className="rounded-xl border bg-card p-4">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <Icon className={`h-4 w-4 ${accent ?? 'text-muted-foreground'}`} />
+      </div>
+      <div className={`mt-2 text-lg font-bold ${accent ?? ''}`}>{value}</div>
     </div>
+  );
+}
+
+function SaleRow({
+  companyId,
+  companyName,
+  sale,
+  canCancel,
+  onCancel,
+}: {
+  companyId: number;
+  companyName: string;
+  sale: import('@/lib/exercices').ExerciceSaleRow;
+  canCancel: boolean;
+  onCancel: (id: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const det = useQuery({
+    queryKey: ['sale-detail', companyId, sale.id],
+    queryFn: () => getSale(companyId, sale.id),
+    enabled: open,
+  });
+  const invoice = async () => {
+    const sdet = det.data ?? (await getSale(companyId, sale.id));
+    downloadSvgAsPng(
+      buildInvoiceSvg({
+        companyName,
+        saleId: sdet.id,
+        date: fmtDateTime(sdet.createdAt),
+        clientName: sdet.clientName ?? 'Comptant',
+        sellerName: sdet.employeeName ?? '—',
+        paymentLabel: PAY_LABEL[sdet.paymentMethod] ?? sdet.paymentMethod,
+        lines: sdet.lines.map((l) => ({ name: l.name, quantity: l.quantity, unitPrice: l.unitPrice, lineTotal: l.lineTotal })),
+        subtotal: sdet.subtotal,
+        discount: sdet.discount,
+        total: sdet.total,
+      }),
+      `facture-${sdet.id}.png`,
+    );
+  };
+  return (
+    <>
+      <tr className="border-t">
+        <td className="px-2 py-1.5">
+          <button type="button" onClick={() => setOpen((o) => !o)} className="text-muted-foreground hover:text-foreground">
+            <ChevronDown className={`h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`} />
+          </button>
+        </td>
+        <td className="px-2 py-1.5">#{sale.id}</td>
+        <td className="whitespace-nowrap px-2 py-1.5 text-xs text-muted-foreground">{fmtDateTime(sale.createdAt)}</td>
+        <td className="px-2 py-1.5">{sale.employeeName ?? '—'}</td>
+        <td className="px-2 py-1.5">{sale.clientName ?? '—'}</td>
+        <td className="px-2 py-1.5 text-right">{fmtMoney(sale.subtotal)} $</td>
+        <td className="px-2 py-1.5 text-right font-medium">{fmtMoney(sale.total)} $</td>
+        <td className="px-2 py-1.5">
+          <span className="rounded-md bg-muted px-2 py-0.5 text-xs">{PAY_LABEL[sale.paymentMethod] ?? sale.paymentMethod}</span>
+        </td>
+        <td className="px-2 py-1.5">
+          <div className="flex items-center justify-end gap-1">
+            <button type="button" onClick={invoice} title="Facture (PNG)" className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
+              <FileDown className="h-4 w-4" />
+            </button>
+            {canCancel && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm(`Annuler la vente #${sale.id} ? (stock et client recrédités)`)) onCancel(sale.id);
+                }}
+                title="Annuler"
+                className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+      {open && (
+        <tr className="border-t bg-background/30">
+          <td colSpan={9} className="px-6 py-2">
+            {det.isLoading ? (
+              <span className="text-xs text-muted-foreground">Chargement…</span>
+            ) : (
+              <div className="space-y-1">
+                {(det.data?.lines ?? []).map((l) => (
+                  <div key={l.id} className="flex justify-between text-xs">
+                    <span>{l.name} × {l.quantity.toLocaleString('fr-FR')}</span>
+                    <span className="text-muted-foreground">{fmtMoney(l.lineTotal)} $</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
 function ExerciceDetailView({
   companyId,
+  companyName,
   id,
   showDividends,
 }: {
   companyId: number;
+  companyName: string;
   id: number;
   showDividends: boolean;
 }) {
@@ -564,126 +731,266 @@ function ExerciceDetailView({
     queryKey: ['exercice', companyId, id],
     queryFn: () => getExercice(companyId, id),
   });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['exercice', companyId, id] });
   const savePay = useMutation({
     mutationFn: (v: { employeeId: number; body: { commission: number; bonus: number; deductions: number } }) =>
       setExercicePayroll(companyId, id, v.employeeId, v.body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['exercice', companyId, id] }),
+    onSuccess: refresh,
     onError: () => {
       alert("Échec de l'enregistrement de la paie.");
-      queryClient.invalidateQueries({ queryKey: ['exercice', companyId, id] });
+      refresh();
     },
   });
+  const saveDiv = useMutation({
+    mutationFn: (v: number) => updateExercice(companyId, id, { dividends: v }),
+    onSuccess: refresh,
+  });
+  const saveNotes = useMutation({
+    mutationFn: (v: string) => updateExercice(companyId, id, { notes: v }),
+    onSuccess: refresh,
+  });
+  const cancelSale = useMutation({
+    mutationFn: (sid: number) => deleteSale(companyId, sid),
+    onSuccess: () => {
+      refresh();
+      for (const k of ['sales', 'stocks', 'clients']) queryClient.invalidateQueries({ queryKey: [k, companyId] });
+    },
+    onError: () => alert("Échec de l'annulation."),
+  });
+
+  const [div, setDiv] = useState('');
+  const [notes, setNotes] = useState('');
+  const [saleSearch, setSaleSearch] = useState('');
+  const [payFilter, setPayFilter] = useState('');
+  useEffect(() => {
+    if (!q.data) return;
+    setDiv(q.data.dividends ? String(q.data.dividends) : '');
+    setNotes(q.data.notes ?? '');
+  }, [q.data?.id]);
 
   if (q.isLoading) return <div className="text-xs text-muted-foreground">Chargement…</div>;
   if (!q.data) return <div className="text-xs text-muted-foreground">Indisponible.</div>;
-  const { summary: s, payroll, payrollVisible, expensesByCategory, canEdit } = q.data;
+  const { summary: s, payroll, payrollVisible, canEdit, salesByDay, salesByPayment, perfByEmployee, topProducts, salesList } = q.data;
+
+  const totalCa = perfByEmployee.reduce((a, p) => a + p.ca, 0);
+  const payData = salesByPayment.map((p) => ({ name: PAY_LABEL[p.method] ?? p.method, value: p.total }));
+  const filteredSales = salesList.filter(
+    (sl) =>
+      (!payFilter || sl.paymentMethod === payFilter) &&
+      (!saleSearch.trim() ||
+        `${sl.id} ${sl.employeeName ?? ''} ${sl.clientName ?? ''}`.toLowerCase().includes(saleSearch.trim().toLowerCase())),
+  );
+
+  const copyDeclaration = () => {
+    const t = [
+      `Déclaration — ${q.data!.label}`,
+      `CA brut: ${fmtMoney(s.caGross)} $`,
+      `Remises: ${fmtMoney(s.salesDiscount)} $`,
+      `CA net: ${fmtMoney(s.caNet)} $`,
+      `Charges: ${fmtMoney(s.charges)} $ (salaires ${fmtMoney(s.payrollTotal)} + dépenses ${fmtMoney(s.expensesTotal)})`,
+      `Bénéfice: ${fmtMoney(s.benefit)} $`,
+      `Base imposable: ${fmtMoney(s.taxableBenefit)} $`,
+      `Impôt société: ${fmtMoney(s.corporateTax)} $`,
+      `Dividendes: ${fmtMoney(s.dividends)} $ · impôt ${fmtMoney(s.dividendTax)} $`,
+      `Résultat net après impôts: ${fmtMoney(s.netAfterTax)} $`,
+    ].join('\n');
+    navigator.clipboard?.writeText(t).then(() => alert('Déclaration copiée.'));
+  };
+  const copyPayroll = () => {
+    const t = [`Paies — ${q.data!.label}`, ...payroll.map((p) => `${p.name}: ${fmtMoney(p.paid)} $`), `Total: ${fmtMoney(s.payrollTotal)} $`].join('\n');
+    navigator.clipboard?.writeText(t).then(() => alert('Paies copiées.'));
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-lg border bg-background/40 p-4">
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Compte de résultat
-          </div>
-          <Row label="Chiffre d'affaires" value={`${fmtMoney(s.totalRevenue)} $`} accent="text-primary" strong />
-          {s.salesRevenue > 0 && (
-            <div className="pl-3 text-[11px] text-muted-foreground">
-              dont Caisse {fmtMoney(s.salesRevenue)} $
-              {s.revenue > 0 && ` · saisi ${fmtMoney(s.revenue)} $`}
-            </div>
-          )}
-          <div className="my-1 border-t" />
-          <Row label="Dépenses" value={`− ${fmtMoney(s.expensesTotal)} $`} />
-          <Row label="Salaires (badgeuse)" value={`− ${fmtMoney(s.payrollTotal)} $`} />
-          {s.excessToCompany > 0 && (
-            <div className="pl-3 text-[11px] text-muted-foreground">
-              plafonné : {fmtMoney(s.excessToCompany)} $ non versés (gardés par l'entreprise)
-            </div>
-          )}
-          <Row label="Total des charges" value={`− ${fmtMoney(s.charges)} $`} strong />
-          <div className="my-1 border-t" />
-          <Row
-            label="Bénéfice avant impôt"
-            value={`${fmtMoney(s.benefit)} $`}
-            strong
-            accent={s.benefit >= 0 ? 'text-emerald-400' : 'text-destructive'}
-          />
-          <Row label="Base imposable" value={`${fmtMoney(s.taxableBenefit)} $`} />
-          <Row
-            label={`Impôt société${s.effectiveRate > 0 ? ` (~${s.effectiveRate}%)` : ''}`}
-            value={`− ${fmtMoney(s.corporateTax)} $`}
-          />
-          {showDividends && (
-            <>
-              <Row label="Dividendes distribués" value={`− ${fmtMoney(s.dividends)} $`} />
-              <Row label={`Impôt dividendes (${s.dividendTaxRate}%)`} value={`− ${fmtMoney(s.dividendTax)} $`} />
-            </>
-          )}
-          <div className="my-1 border-t" />
-          <Row
-            label="Résultat net"
-            value={`${fmtMoney(s.netAfterTax)} $`}
-            strong
-            accent={s.netAfterTax >= 0 ? 'text-emerald-400' : 'text-destructive'}
-          />
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            Le CA s'alimente automatiquement des ventes Caisse de la période (+ CA saisi éventuel). Les
-            salaires viennent de la badgeuse ; les dépenses « Salaires » sont exclues (anti double
-            comptage).
-          </p>
-        </div>
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Kpi icon={ShoppingCart} label="Chiffre d'affaires" value={`${fmtMoney(s.caNet)} $`} accent="text-primary" />
+        <Kpi icon={ShoppingCart} label="Nombre de ventes" value={`${s.salesCount}`} />
+        <Kpi icon={TrendingUp} label="Marge brute" value={`${fmtMoney(s.grossMargin)} $`} accent="text-sky-400" />
+        <Kpi icon={Package} label="Coût production" value={`${fmtMoney(s.productionCost)} $`} accent="text-amber-400" />
+        <Kpi icon={Boxes} label="Achats composants" value={`${fmtMoney(s.componentPurchases)} $`} accent="text-destructive" />
+        <Kpi icon={Percent} label="Remises accordées" value={`${fmtMoney(s.salesDiscount)} $`} accent="text-violet-400" />
+        <Kpi icon={Coins} label="Bénéfice net" value={`${fmtMoney(s.benefit)} $`} accent="text-emerald-400" />
+        <Kpi icon={Coins} label="Résultat après impôts" value={`${fmtMoney(s.netAfterTax)} $`} accent={s.netAfterTax >= 0 ? 'text-emerald-400' : 'text-destructive'} />
+      </div>
 
-        <div className="rounded-lg border bg-background/40 p-4">
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Dépenses par catégorie ({fmtMoney(s.expensesTotal)} $)
+      <div className="rounded-xl border bg-card p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold">Déclaration fiscale</h3>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={copyPayroll}><Copy className="h-3.5 w-3.5" />Copier paies</Button>
+            <Button variant="outline" onClick={copyDeclaration}><Copy className="h-3.5 w-3.5" />Copier déclaration</Button>
           </div>
-          {expensesByCategory.length === 0 ? (
-            <div className="text-xs text-muted-foreground">Aucune dépense sur la période.</div>
+        </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">État comptable</div>
+            <Row label="CA Brut (avant remises)" value={`${fmtMoney(s.caGross)} $`} />
+            <Row label="Remises accordées" value={`− ${fmtMoney(s.salesDiscount)} $`} accent="text-violet-400" indent />
+            <Row label="CA Net" value={`${fmtMoney(s.caNet)} $`} strong accent="text-emerald-400" />
+            <Row label="Salaires versés" value={`− ${fmtMoney(s.payrollTotal)} $`} accent="text-destructive" indent />
+            <Row label="Dépenses autres" value={`− ${fmtMoney(s.expensesTotal)} $`} accent="text-destructive" indent />
+            <Row label="Total charges" value={`− ${fmtMoney(s.charges)} $`} strong accent="text-destructive" />
+            <Row label="Réduction fiscale (dépenses déductibles)" value={`${fmtMoney(s.expensesDeductible)} $`} accent="text-sky-400" />
+            <div className="my-1 border-t" />
+            <Row label="Bénéfice (CA Net − Charges)" value={`${fmtMoney(s.benefit)} $`} strong accent={s.benefit >= 0 ? 'text-emerald-400' : 'text-destructive'} />
+          </div>
+          <div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Fiscalité</div>
+            <Row label="Base imposable" value={`${fmtMoney(s.taxableBenefit)} $`} />
+            <Row label={`Impôt sur les bénéfices${s.effectiveRate > 0 ? ` (~${s.effectiveRate}%)` : ''}`} value={`− ${fmtMoney(s.corporateTax)} $`} accent="text-destructive" />
+            {showDividends && (
+              <div className="flex items-center justify-between gap-3 py-1.5 text-sm">
+                <span className="text-muted-foreground">Dividendes versés</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    disabled={!canEdit}
+                    className="h-8 w-28 rounded-md border border-input bg-background px-2 text-right text-sm outline-none focus:ring-1 focus:ring-ring"
+                    value={div}
+                    onChange={(e) => setDiv(e.target.value)}
+                  />
+                  {canEdit && (
+                    <Button variant="outline" onClick={() => saveDiv.mutate(Number(div) || 0)} disabled={saveDiv.isPending}>
+                      OK
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+            {showDividends && (
+              <Row label={`Impôt sur les dividendes (${s.dividendTaxRate}%)`} value={`− ${fmtMoney(s.dividendTax)} $`} accent="text-destructive" />
+            )}
+            <div className="my-1 border-t" />
+            <Row label="Résultat net après impôts" value={`${fmtMoney(s.netAfterTax)} $`} strong accent={s.netAfterTax >= 0 ? 'text-emerald-400' : 'text-destructive'} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <div className="rounded-xl border bg-card p-5">
+          <h3 className="mb-3 text-sm font-semibold">Ventes par jour</h3>
+          {s.caNet === 0 ? (
+            <div className="grid h-48 place-items-center text-sm text-muted-foreground">Aucune vente.</div>
           ) : (
-            <div className="space-y-1.5">
-              {expensesByCategory.map((c) => {
-                const pct = s.expensesTotal > 0 ? (c.total / s.expensesTotal) * 100 : 0;
-                return (
-                  <div key={c.category}>
-                    <div className="flex items-center justify-between text-sm">
-                      <span>{CATEGORY_LABEL[c.category] ?? c.category}</span>
-                      <span className="font-medium">{fmtMoney(c.total)} $</span>
-                    </div>
-                    <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full rounded-full bg-primary/60" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={salesByDay} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+                <XAxis dataKey="date" tickFormatter={dayShort} tick={{ fontSize: 10, fill: AXIS }} />
+                <YAxis tick={{ fontSize: 11, fill: AXIS }} width={48} />
+                <Tooltip contentStyle={chartTooltip} labelFormatter={dayShort} formatter={(v) => [`${fmtMoney(v as number)} $`, 'CA']} cursor={{ fill: GRID }} />
+                <Bar dataKey="total" fill="#10b981" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           )}
-          {s.expensesDeductible > 0 && (
-            <p className="mt-3 text-[11px] text-muted-foreground">
-              Dont fiscalement déductible : {fmtMoney(s.expensesDeductible)} $.
-            </p>
+        </div>
+        <div className="rounded-xl border bg-card p-5">
+          <h3 className="mb-3 text-sm font-semibold">Par moyen de paiement</h3>
+          {payData.length === 0 ? (
+            <div className="grid h-48 place-items-center text-sm text-muted-foreground">Aucune vente.</div>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={payData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={2}>
+                    {payData.map((_, i) => (
+                      <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={chartTooltip} formatter={(v, n) => [`${fmtMoney(v as number)} $`, n as string]} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                {payData.map((d, i) => (
+                  <div key={d.name} className="flex items-center gap-1.5 text-xs">
+                    <span className="h-2.5 w-2.5 rounded-sm" style={{ background: PALETTE[i % PALETTE.length] }} />
+                    <span className="text-muted-foreground">{d.name}</span>
+                    <span className="font-medium">{fmtMoney(d.value)} $</span>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
 
-      <div className="rounded-lg border bg-background/40 p-4">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Paie de la période — versée {fmtMoney(s.payrollTotal)} $
-          </div>
-          {canEdit && payrollVisible && payroll.length > 0 && (
-            <span className="text-[11px] text-muted-foreground">
-              Commission / prime / retenue éditables (sauvegarde auto)
+      <div className="rounded-xl border bg-card p-5">
+        <h3 className="mb-3 text-sm font-semibold">Performance employés</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="px-2 py-1.5 text-left font-semibold">Employé</th>
+                <th className="px-2 py-1.5 text-right font-semibold">Ventes</th>
+                <th className="px-2 py-1.5 text-right font-semibold">CA généré</th>
+                <th className="px-2 py-1.5 text-right font-semibold">Remises données</th>
+                <th className="px-2 py-1.5 text-right font-semibold">% du CA</th>
+              </tr>
+            </thead>
+            <tbody>
+              {perfByEmployee.map((p, i) => (
+                <tr key={p.employeeId} className={i > 0 ? 'border-t' : ''}>
+                  <td className="px-2 py-1.5">{p.name}</td>
+                  <td className="px-2 py-1.5 text-right">{p.salesCount}</td>
+                  <td className="px-2 py-1.5 text-right font-medium text-emerald-400">{fmtMoney(p.ca)} $</td>
+                  <td className="px-2 py-1.5 text-right text-muted-foreground">{fmtMoney(p.discounts)} $</td>
+                  <td className="px-2 py-1.5 text-right">{totalCa > 0 ? Math.round((p.ca / totalCa) * 1000) / 10 : 0}%</td>
+                </tr>
+              ))}
+              {perfByEmployee.length === 0 && (
+                <tr><td colSpan={5} className="px-2 py-3 text-center text-xs text-muted-foreground">Aucun employé.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-card p-5">
+        <h3 className="mb-3 text-sm font-semibold">Top produits de la semaine</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="px-2 py-1.5 text-left font-semibold">Produit</th>
+                <th className="px-2 py-1.5 text-right font-semibold">Qté vendue</th>
+                <th className="px-2 py-1.5 text-right font-semibold">CA</th>
+                <th className="px-2 py-1.5 text-right font-semibold">Coût</th>
+                <th className="px-2 py-1.5 text-right font-semibold">Marge</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topProducts.map((p, i) => (
+                <tr key={p.name + i} className={i > 0 ? 'border-t' : ''}>
+                  <td className="px-2 py-1.5">{p.name}</td>
+                  <td className="px-2 py-1.5 text-right">{p.qty.toLocaleString('fr-FR')}</td>
+                  <td className="px-2 py-1.5 text-right text-emerald-400">{fmtMoney(p.ca)} $</td>
+                  <td className="px-2 py-1.5 text-right text-muted-foreground">{fmtMoney(p.cost)} $</td>
+                  <td className="px-2 py-1.5 text-right font-medium">{fmtMoney(p.margin)} $</td>
+                </tr>
+              ))}
+              {topProducts.length === 0 && (
+                <tr><td colSpan={5} className="px-2 py-3 text-center text-xs text-muted-foreground">Aucune vente.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-card p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold">Paies employés — {fmtMoney(s.payrollTotal)} $ versés</h3>
+          {q.data.hoursCap > 0 || q.data.salaryCap > 0 ? (
+            <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+              Plafonds {q.data.salaryCap > 0 ? `${fmtMoney(q.data.salaryCap)} $` : '∞'} / {q.data.hoursCap > 0 ? `${q.data.hoursCap}h` : '∞'}
             </span>
-          )}
+          ) : null}
         </div>
         {!payrollVisible ? (
-          <div className="text-xs text-muted-foreground">
-            Le détail par employé nécessite l'accès « Badgeuse ». Total inclus dans les charges.
-          </div>
+          <div className="text-xs text-muted-foreground">Le détail par employé nécessite l'accès « Badgeuse ». Total inclus dans les charges.</div>
         ) : payroll.length === 0 ? (
-          <div className="text-xs text-muted-foreground">
-            Aucune heure pointée sur la période (badgeuse).
-          </div>
+          <div className="text-xs text-muted-foreground">Aucune heure pointée sur la période.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -695,16 +1002,73 @@ function ExerciceDetailView({
                   <th className="px-2 py-1.5 text-right font-semibold">Commission</th>
                   <th className="px-2 py-1.5 text-right font-semibold">Prime</th>
                   <th className="px-2 py-1.5 text-right font-semibold">Retenue</th>
-                  <th className="px-2 py-1.5 text-right font-semibold">Versé</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">Total paie</th>
                 </tr>
               </thead>
               <tbody>
                 {payroll.map((p) => (
-                  <PayrollRow
-                    key={p.employeeId}
-                    p={p}
-                    editable={canEdit}
-                    onSave={(employeeId, body) => savePay.mutate({ employeeId, body })}
+                  <PayrollRow key={p.employeeId} p={p} editable={canEdit} onSave={(employeeId, body) => savePay.mutate({ employeeId, body })} />
+                ))}
+                <tr className="border-t-2 font-semibold">
+                  <td className="px-2 py-2">TOTAL</td>
+                  <td className="px-2 py-2 text-right text-sky-400">{Math.round(payroll.reduce((a, p) => a + p.hours, 0) * 60)}min</td>
+                  <td className="px-2 py-2 text-right">{fmtMoney(payroll.reduce((a, p) => a + p.base, 0))} $</td>
+                  <td className="px-2 py-2 text-right">{fmtMoney(payroll.reduce((a, p) => a + p.commission, 0))} $</td>
+                  <td className="px-2 py-2 text-right">{fmtMoney(payroll.reduce((a, p) => a + p.bonus, 0))} $</td>
+                  <td className="px-2 py-2 text-right text-destructive">{fmtMoney(payroll.reduce((a, p) => a + p.deductions, 0))} $</td>
+                  <td className="px-2 py-2 text-right">{fmtMoney(s.payrollTotal)} $</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border bg-card p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold">Détail des ventes ({salesList.length})</h3>
+          <div className="flex gap-2">
+            <input
+              value={saleSearch}
+              onChange={(e) => setSaleSearch(e.target.value)}
+              placeholder="Rechercher #, employé, client"
+              className="h-8 w-56 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+            />
+            <select value={payFilter} onChange={(e) => setPayFilter(e.target.value)} className="h-8 rounded-md border border-input bg-background px-2 text-sm outline-none">
+              <option value="">Tous paiements</option>
+              {PAYMENT_METHODS.map((p) => (
+                <option key={p.key} value={p.key}>{p.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {filteredSales.length === 0 ? (
+          <div className="text-xs text-muted-foreground">Aucune vente.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="w-8" />
+                  <th className="px-2 py-1.5 text-left font-semibold">#</th>
+                  <th className="px-2 py-1.5 text-left font-semibold">Date</th>
+                  <th className="px-2 py-1.5 text-left font-semibold">Employé</th>
+                  <th className="px-2 py-1.5 text-left font-semibold">Client</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">Sous-total</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">Total</th>
+                  <th className="px-2 py-1.5 text-left font-semibold">Paiement</th>
+                  <th className="px-2 py-1.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSales.map((sl) => (
+                  <SaleRow
+                    key={sl.id}
+                    companyId={companyId}
+                    companyName={companyName}
+                    sale={sl}
+                    canCancel={canEdit}
+                    onCancel={(sid) => cancelSale.mutate(sid)}
                   />
                 ))}
               </tbody>
@@ -713,16 +1077,22 @@ function ExerciceDetailView({
         )}
       </div>
 
-      <div className="rounded-lg border bg-background/40 p-4">
-        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Ventes
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <SoonPanel title="Ventes par jour" />
-          <SoonPanel title="Ventes par employé" />
-          <SoonPanel title="Top produits" />
-          <SoonPanel title="Marge & coût de production" />
-        </div>
+      <div className="rounded-xl border bg-card p-5">
+        <h3 className="mb-3 text-sm font-semibold">Notes de l'exercice</h3>
+        <textarea
+          className="h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          disabled={!canEdit}
+          placeholder="Notes internes, observations, points à déclarer…"
+        />
+        {canEdit && (
+          <div className="mt-2">
+            <Button onClick={() => saveNotes.mutate(notes)} disabled={saveNotes.isPending}>
+              {saveNotes.isPending ? 'Sauvegarde…' : 'Sauvegarder les notes'}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

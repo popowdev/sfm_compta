@@ -65,7 +65,14 @@ export interface PayrollInput {
 export interface ExerciceSummary {
   revenue: number;
   salesRevenue: number;
+  caGross: number;
+  salesDiscount: number;
+  caNet: number;
   totalRevenue: number;
+  productionCost: number;
+  grossMargin: number;
+  componentPurchases: number;
+  salesCount: number;
   expensesTotal: number;
   expensesDeductible: number;
   payrollTotal: number;
@@ -86,6 +93,39 @@ export interface ExpenseCategoryLine {
   category: string;
   total: number;
 }
+export interface SalesDayPoint {
+  date: string;
+  total: number;
+}
+export interface PaymentSlice {
+  method: string;
+  total: number;
+  count: number;
+}
+export interface EmployeePerf {
+  employeeId: number;
+  name: string;
+  salesCount: number;
+  ca: number;
+  discounts: number;
+}
+export interface TopProduct {
+  name: string;
+  qty: number;
+  ca: number;
+  cost: number;
+  margin: number;
+}
+export interface ExerciceSaleRow {
+  id: number;
+  createdAt: string;
+  subtotal: number;
+  discount: number;
+  total: number;
+  paymentMethod: string;
+  employeeName: string | null;
+  clientName: string | null;
+}
 
 export interface ExerciceDetail extends Exercice {
   canWrite: boolean;
@@ -94,6 +134,11 @@ export interface ExerciceDetail extends Exercice {
   summary: ExerciceSummary;
   expensesByCategory: ExpenseCategoryLine[];
   payroll: PayrollLine[];
+  salesByDay: SalesDayPoint[];
+  salesByPayment: PaymentSlice[];
+  perfByEmployee: EmployeePerf[];
+  topProducts: TopProduct[];
+  salesList: ExerciceSaleRow[];
 }
 
 export const getExercices = (companyId: number) =>

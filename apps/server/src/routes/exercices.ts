@@ -11,6 +11,9 @@ import {
   timeEntries,
   companyModules,
   sales,
+  saleItems,
+  stockMovements,
+  companyClients,
 } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
@@ -369,27 +372,124 @@ meExercicesRouter.get(
     const payrollVisible =
       !!badgeuseAcc && badgeuseAcc.enabled && !badgeuseAcc.blocked && badgeuseAcc.canView;
 
-    const srRows = await db
-      .select({ total: sql<string>`COALESCE(SUM(${sales.total}), 0)` })
-      .from(sales)
-      .where(
-        and(
-          eq(sales.companyId, companyId),
-          gte(sql`DATE(${sales.createdAt})`, ex.startDate),
-          lte(sql`DATE(${sales.createdAt})`, ex.endDate),
+    const salesWhere = and(
+      eq(sales.companyId, companyId),
+      gte(sql`DATE(${sales.createdAt})`, ex.startDate),
+      lte(sql`DATE(${sales.createdAt})`, ex.endDate),
+    );
+    const itemsWhere = and(
+      eq(saleItems.companyId, companyId),
+      gte(sql`DATE(${sales.createdAt})`, ex.startDate),
+      lte(sql`DATE(${sales.createdAt})`, ex.endDate),
+    );
+    const dayExpr = sql<string>`DATE_FORMAT(${sales.createdAt}, '%Y-%m-%d')`;
+
+    const [aggRows, dayRows, payRowsAgg, perfRows, topRows, listRows, purchRows] = await Promise.all([
+      db
+        .select({
+          gross: sql<string>`COALESCE(SUM(${sales.subtotal}), 0)`,
+          discount: sql<string>`COALESCE(SUM(${sales.discount}), 0)`,
+          net: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
+          cost: sql<string>`COALESCE(SUM(${sales.productionCost}), 0)`,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(sales)
+        .where(salesWhere),
+      db
+        .select({ date: dayExpr, total: sql<string>`COALESCE(SUM(${sales.total}), 0)` })
+        .from(sales)
+        .where(salesWhere)
+        .groupBy(dayExpr),
+      db
+        .select({ method: sales.paymentMethod, total: sql<string>`COALESCE(SUM(${sales.total}), 0)`, count: sql<number>`COUNT(*)` })
+        .from(sales)
+        .where(salesWhere)
+        .groupBy(sales.paymentMethod),
+      db
+        .select({
+          employeeId: companyEmployees.id,
+          name: companyEmployees.name,
+          count: sql<number>`COUNT(${sales.id})`,
+          ca: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
+          discounts: sql<string>`COALESCE(SUM(${sales.discount}), 0)`,
+        })
+        .from(companyEmployees)
+        .leftJoin(sales, and(eq(sales.employeeId, companyEmployees.id), salesWhere))
+        .where(eq(companyEmployees.companyId, companyId))
+        .groupBy(companyEmployees.id, companyEmployees.name)
+        .orderBy(desc(sql`COALESCE(SUM(${sales.total}), 0)`)),
+      db
+        .select({
+          name: saleItems.name,
+          qty: sql<string>`COALESCE(SUM(${saleItems.quantity}), 0)`,
+          ca: sql<string>`COALESCE(SUM(${saleItems.lineTotal}), 0)`,
+          cost: sql<string>`COALESCE(SUM(${saleItems.productionCost}), 0)`,
+        })
+        .from(saleItems)
+        .innerJoin(sales, eq(saleItems.saleId, sales.id))
+        .where(itemsWhere)
+        .groupBy(saleItems.name)
+        .orderBy(desc(sql`SUM(${saleItems.lineTotal})`))
+        .limit(20),
+      db
+        .select({
+          id: sales.id,
+          createdAt: sales.createdAt,
+          subtotal: sales.subtotal,
+          discount: sales.discount,
+          total: sales.total,
+          paymentMethod: sales.paymentMethod,
+          employeeName: companyEmployees.name,
+          clientName: companyClients.name,
+        })
+        .from(sales)
+        .leftJoin(companyEmployees, eq(sales.employeeId, companyEmployees.id))
+        .leftJoin(companyClients, eq(sales.clientId, companyClients.id))
+        .where(salesWhere)
+        .orderBy(desc(sales.createdAt))
+        .limit(200),
+      db
+        .select({
+          purchases: sql<string>`COALESCE(SUM(ABS(${stockMovements.quantity}) * ${stockMovements.unitCost}), 0)`,
+        })
+        .from(stockMovements)
+        .where(
+          and(
+            eq(stockMovements.companyId, companyId),
+            eq(stockMovements.type, 'in'),
+            isNotNull(stockMovements.unitCost),
+            gte(sql`DATE(${stockMovements.createdAt})`, ex.startDate),
+            lte(sql`DATE(${stockMovements.createdAt})`, ex.endDate),
+          ),
         ),
-      );
-    const salesRevenue = Number(srRows[0]?.total ?? 0);
-    const totalRevenue = round2(ex.revenue + salesRevenue);
+    ]);
+
+    const salesGross = round2(Number(aggRows[0]?.gross ?? 0));
+    const salesDiscount = round2(Number(aggRows[0]?.discount ?? 0));
+    const salesNet = round2(Number(aggRows[0]?.net ?? 0));
+    const productionCost = round2(Number(aggRows[0]?.cost ?? 0));
+    const salesCount = Number(aggRows[0]?.count ?? 0);
+    const componentPurchases = round2(Number(purchRows[0]?.purchases ?? 0));
+
+    const caGross = round2(salesGross + ex.revenue);
+    const caNet = round2(caGross - salesDiscount);
+    const grossMargin = round2(caNet - productionCost);
 
     const charges = round2(expensesTotal + payrollTotal);
-    const benefit = round2(totalRevenue - charges);
-    const taxableBenefit = Math.max(0, benefit);
-    const taxes = await computeTaxes(benefit, effectiveDividends);
+    const benefit = round2(caNet - charges);
+    const taxableBenefit = round2(Math.max(0, benefit - expensesDeductible));
+    const taxes = await computeTaxes(taxableBenefit, effectiveDividends);
     const effectiveRate = taxableBenefit > 0 ? round2((taxes.corporateTax / taxableBenefit) * 100) : 0;
-    const netAfterTax = round2(
-      benefit - taxes.corporateTax - effectiveDividends - taxes.dividendTax,
-    );
+    const netAfterTax = round2(benefit - taxes.corporateTax - effectiveDividends - taxes.dividendTax);
+
+    const dayMap = new Map(dayRows.map((r) => [r.date, Number(r.total)]));
+    const startMs = Date.parse(`${ex.startDate}T00:00:00Z`);
+    const endMs = Date.parse(`${ex.endDate}T00:00:00Z`);
+    const byDay: { date: string; total: number }[] = [];
+    for (let t = startMs; t <= endMs; t += 86_400_000) {
+      const d = new Date(t).toISOString().slice(0, 10);
+      byDay.push({ date: d, total: round2(dayMap.get(d) ?? 0) });
+    }
 
     res.json({
       ...ex,
@@ -398,8 +498,15 @@ meExercicesRouter.get(
       payrollVisible,
       summary: {
         revenue: ex.revenue,
-        salesRevenue,
-        totalRevenue,
+        salesRevenue: salesNet,
+        caGross,
+        salesDiscount,
+        caNet,
+        totalRevenue: caNet,
+        productionCost,
+        grossMargin,
+        componentPurchases,
+        salesCount,
         expensesTotal,
         expensesDeductible,
         payrollTotal,
@@ -417,6 +524,30 @@ meExercicesRouter.get(
       },
       expensesByCategory,
       payroll: payrollVisible ? payroll : [],
+      salesByDay: byDay,
+      salesByPayment: payRowsAgg.map((r) => ({ method: r.method, total: round2(Number(r.total)), count: Number(r.count) })),
+      perfByEmployee: perfRows.map((r) => ({
+        employeeId: r.employeeId,
+        name: r.name,
+        salesCount: Number(r.count),
+        ca: round2(Number(r.ca)),
+        discounts: round2(Number(r.discounts)),
+      })),
+      topProducts: topRows.map((r) => {
+        const ca = round2(Number(r.ca));
+        const cost = round2(Number(r.cost));
+        return { name: r.name, qty: round2(Number(r.qty)), ca, cost, margin: round2(ca - cost) };
+      }),
+      salesList: listRows.map((r) => ({
+        id: r.id,
+        createdAt: r.createdAt,
+        subtotal: Number(r.subtotal),
+        discount: Number(r.discount),
+        total: Number(r.total),
+        paymentMethod: r.paymentMethod,
+        employeeName: r.employeeName,
+        clientName: r.clientName,
+      })),
     });
   }),
 );
