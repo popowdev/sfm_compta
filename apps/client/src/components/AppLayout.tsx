@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   Building2,
+  UsersRound,
   Scale,
   FileText,
   HandCoins,
@@ -140,6 +141,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               title: 'IRS',
               items: [
                 { to: '/entreprises', label: 'Entreprises', Icon: Building2 },
+                { to: '/comptes', label: 'Comptes', Icon: UsersRound },
                 { to: '/declarations', label: 'Déclarations', Icon: FileText },
                 { to: '/subventions', label: 'Subventions', Icon: HandCoins },
                 { to: '/dividendes', label: 'Dividendes', Icon: Coins },
