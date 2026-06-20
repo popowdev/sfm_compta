@@ -77,6 +77,25 @@ export const EXPENSE_CATEGORIES = [
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number]['key'];
 export const EXPENSE_CATEGORY_KEYS = EXPENSE_CATEGORIES.map((c) => c.key) as ExpenseCategory[];
 
+export const EMPLOYEE_POSITIONS = [
+  { key: 'pdg', label: 'PDG' },
+  { key: 'patron', label: 'Patron' },
+  { key: 'co_patron', label: 'Co-patron' },
+  { key: 'gerant', label: 'Gérant' },
+  { key: 'employe', label: 'Employé' },
+  { key: 'apprenti', label: 'Apprenti' },
+] as const;
+export type EmployeePosition = (typeof EMPLOYEE_POSITIONS)[number]['key'];
+export const EMPLOYEE_POSITION_KEYS = EMPLOYEE_POSITIONS.map((p) => p.key) as EmployeePosition[];
+
+export const CONTRACT_TYPES = [
+  { key: 'cdi', label: 'CDI' },
+  { key: 'cdd', label: 'CDD' },
+  { key: 'interim', label: 'Intérim' },
+] as const;
+export type ContractType = (typeof CONTRACT_TYPES)[number]['key'];
+export const CONTRACT_TYPE_KEYS = CONTRACT_TYPES.map((c) => c.key) as ContractType[];
+
 export interface TaxBracket {
   min: number;
   max: number | null;

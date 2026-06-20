@@ -8,6 +8,8 @@ import Declarations from '@/pages/Declarations';
 import Depenses from '@/pages/Depenses';
 import Subventions from '@/pages/Subventions';
 import Messagerie from '@/pages/Messagerie';
+import Employes from '@/pages/Employes';
+import Stats from '@/pages/Stats';
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
@@ -16,6 +18,8 @@ const CONTENT: Partial<Record<string, ComponentType>> = {
   depenses: Depenses,
   subventions: Subventions,
   messagerie: Messagerie,
+  rh: Employes,
+  stats: Stats,
 };
 
 function Placeholder({ mod }: { mod: MyModule }) {

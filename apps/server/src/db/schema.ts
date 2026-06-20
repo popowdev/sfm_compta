@@ -251,6 +251,31 @@ export const subventions = mysqlTable('subventions', {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const companyEmployees = mysqlTable('company_employees', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 120 }).notNull(),
+  phone: varchar('phone', { length: 50 }),
+  dateOfBirth: date('date_of_birth', { mode: 'string' }),
+  hireDate: date('hire_date', { mode: 'string' }),
+  position: mysqlEnum('position', ['pdg', 'patron', 'co_patron', 'gerant', 'employe', 'apprenti'])
+    .notNull()
+    .default('employe'),
+  contractType: mysqlEnum('contract_type', ['cdi', 'cdd', 'interim']).notNull().default('cdi'),
+  contractSigned: boolean('contract_signed').notNull().default(false),
+  hourlyRate: decimal('hourly_rate', { precision: 10, scale: 2 }).notNull().default('0'),
+  commissionRate: decimal('commission_rate', { precision: 5, scale: 2 }).notNull().default('0'),
+  warnings: int('warnings').notNull().default(0),
+  terminationReason: varchar('termination_reason', { length: 255 }),
+  active: boolean('active').notNull().default(true),
+  notes: text('notes'),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const messages = mysqlTable('messages', {
   id: int('id').autoincrement().primaryKey(),
   companyId: int('company_id')
@@ -298,10 +323,15 @@ export const companiesRelations = relations(companies, ({ many }) => ({
   expenses: many(companyExpenses),
   subventions: many(subventions),
   messages: many(messages),
+  employees: many(companyEmployees),
 }));
 
 export const messagesRelations = relations(messages, ({ one }) => ({
   company: one(companies, { fields: [messages.companyId], references: [companies.id] }),
+}));
+
+export const companyEmployeesRelations = relations(companyEmployees, ({ one }) => ({
+  company: one(companies, { fields: [companyEmployees.companyId], references: [companies.id] }),
 }));
 
 export const companyExpensesRelations = relations(companyExpenses, ({ one }) => ({
@@ -355,6 +385,7 @@ export type Declaration = typeof declarations.$inferSelect;
 export type CompanyExpense = typeof companyExpenses.$inferSelect;
 export type Subvention = typeof subventions.$inferSelect;
 export type Message = typeof messages.$inferSelect;
+export type CompanyEmployee = typeof companyEmployees.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type TaxBracketRow = typeof taxBrackets.$inferSelect;
 export type FiscalConfigRow = typeof fiscalConfig.$inferSelect;
