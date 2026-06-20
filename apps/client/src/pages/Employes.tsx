@@ -13,6 +13,7 @@ import {
   Link2,
   UserPlus,
   Coins,
+  FileDown,
 } from 'lucide-react';
 import {
   EMPLOYEE_POSITIONS,
@@ -33,6 +34,7 @@ import {
 } from '@/lib/employees';
 import { getSalaryGrid } from '@/lib/salary';
 import { SalaryGridModal } from '@/components/SalaryGridModal';
+import { buildContractSvg, downloadSvgAsPng } from '@/lib/pngDoc';
 
 const inputCls =
   'h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
@@ -112,6 +114,22 @@ export default function Employes() {
   const grid = useQuery({ queryKey: ['salary-grid', companyId], queryFn: () => getSalaryGrid(companyId) });
   const gridRate = (pos: string) =>
     grid.data?.grid.find((g) => g.position === pos)?.hourlyRate ?? 0;
+
+  const downloadContract = (e: Employee) => {
+    const svg = buildContractSvg({
+      companyName: company?.company.name ?? 'Entreprise',
+      employeeName: e.name,
+      positionLabel: POS_LABEL[e.position] ?? e.position,
+      contractLabel: CONTRACT_LABEL[e.contractType] ?? e.contractType,
+      hireDate: fmtDate(e.hireDate),
+      dateOfBirth: fmtDate(e.dateOfBirth),
+      hourlyRate: e.hourlyRate,
+      commissionRate: e.commissionRate,
+      today: new Date().toLocaleDateString('fr-FR'),
+    });
+    const slug = e.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    downloadSvgAsPng(svg, `contrat-${slug || e.id}.png`);
+  };
 
   const [form, setForm] = useState({ ...EMPTY });
   const [editing, setEditing] = useState<number | null>(null);
@@ -409,6 +427,12 @@ export default function Employes() {
                     </div>
                   )}
                   {e.notes && <div className="mt-3 text-sm text-muted-foreground">{e.notes}</div>}
+                  <div className="mt-3 flex justify-end">
+                    <Button variant="outline" onClick={() => downloadContract(e)}>
+                      <FileDown className="h-4 w-4" />
+                      Contrat (PNG)
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>

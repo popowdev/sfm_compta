@@ -1,16 +1,18 @@
 import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, ShoppingCart, X } from 'lucide-react';
+import { Plus, Trash2, ShoppingCart, X, FileDown } from 'lucide-react';
 import { PAYMENT_METHODS, type PaymentMethod } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { fmtMoney } from '@/lib/declarations';
 import { getClients } from '@/lib/clients';
 import {
   getSales,
+  getSale,
   createSale,
   deleteSale,
   type SaleInput,
 } from '@/lib/sales';
+import { buildInvoiceSvg, downloadSvgAsPng } from '@/lib/pngDoc';
 import type { CatalogItem } from '@/lib/catalog';
 
 const inputCls =
@@ -29,6 +31,7 @@ interface CartLine {
 
 export function SalesView({
   companyId,
+  companyName,
   catalogItems,
   canCreate,
   canDelete,
@@ -36,6 +39,7 @@ export function SalesView({
   discountAllowed,
 }: {
   companyId: number;
+  companyName: string;
   catalogItems: CatalogItem[];
   canCreate: boolean;
   canDelete: boolean;
@@ -85,6 +89,32 @@ export function SalesView({
     onSuccess: invalidateAll,
     onError: () => alert("Échec de l'annulation."),
   });
+
+  const downloadInvoice = async (id: number) => {
+    try {
+      const s = await getSale(companyId, id);
+      const svg = buildInvoiceSvg({
+        companyName,
+        saleId: s.id,
+        date: new Date(s.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }),
+        clientName: s.clientName ?? 'Comptant',
+        sellerName: s.employeeName ?? '—',
+        paymentLabel: PAY_LABEL[s.paymentMethod] ?? s.paymentMethod,
+        lines: s.lines.map((l) => ({
+          name: l.name,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          lineTotal: l.lineTotal,
+        })),
+        subtotal: s.subtotal,
+        discount: s.discount,
+        total: s.total,
+      });
+      downloadSvgAsPng(svg, `facture-${s.id}.png`);
+    } catch {
+      alert('Échec du chargement de la facture.');
+    }
+  };
 
   const addCatalog = (it: CatalogItem) => {
     setCart((c) => {
@@ -361,20 +391,30 @@ export function SalesView({
                     >
                       {fmtMoney(s.margin)} $
                     </td>
-                    <td className="px-3 py-2 text-right">
-                      {canDelete && (
+                    <td className="px-3 py-2">
+                      <div className="flex items-center justify-end gap-1">
                         <button
                           type="button"
-                          onClick={() => {
-                            if (confirm(`Annuler la vente #${s.id} ? (stock et client seront recrédités)`))
-                              cancel.mutate(s.id);
-                          }}
-                          title="Annuler"
-                          className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => downloadInvoice(s.id)}
+                          title="Facture (PNG)"
+                          className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <FileDown className="h-4 w-4" />
                         </button>
-                      )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`Annuler la vente #${s.id} ? (stock et client seront recrédités)`))
+                                cancel.mutate(s.id);
+                            }}
+                            title="Annuler"
+                            className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

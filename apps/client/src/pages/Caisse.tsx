@@ -135,6 +135,7 @@ export default function Caisse() {
       {tab === 'sales' ? (
         <SalesView
           companyId={companyId}
+          companyName={company?.company.name ?? 'Entreprise'}
           catalogItems={items}
           canCreate={canCreate}
           canDelete={canDelete}
