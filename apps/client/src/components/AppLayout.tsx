@@ -11,6 +11,8 @@ import {
   Coins,
   MessagesSquare,
   FolderArchive,
+  Landmark,
+  Wallet,
   SlidersHorizontal,
   Settings,
   ChevronDown,
@@ -23,6 +25,7 @@ import {
 import { hasAppAccess, MODULES, moduleConfigBool } from '@rp-compta/shared';
 import { useAuth } from '@/auth/AuthContext';
 import { getMyCompanies, type MyCompany } from '@/lib/me';
+import { getMyAssociations, type AssociationListItem } from '@/lib/associations';
 import { moduleIcon } from '@/lib/moduleIcons';
 import { QuickClock } from '@/components/QuickClock';
 
@@ -85,6 +88,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const myCompanies = useQuery({ queryKey: ['my-companies'], queryFn: getMyCompanies });
   const data = myCompanies.data ?? [];
+  const myAssociations = useQuery({ queryKey: ['my-associations'], queryFn: getMyAssociations });
+  const assocData = myAssociations.data ?? [];
 
   const location = useLocation();
   const slugMatch = location.pathname.match(/^\/entreprise\/([^/]+)/);
@@ -92,6 +97,22 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const currentCompany: MyCompany | null = activeSlug
     ? (data.find((c) => c.company.slug === activeSlug) ?? null)
     : null;
+
+  const assocSlugMatch = location.pathname.match(/^\/association\/([^/]+)/);
+  const activeAssocSlug = assocSlugMatch ? assocSlugMatch[1] : null;
+  const currentAssociation: AssociationListItem | null = activeAssocSlug
+    ? (assocData.find((a) => a.slug === activeAssocSlug) ?? null)
+    : null;
+
+  function associationNavItems(slug: string): NavItem[] {
+    return [
+      { to: `/association/${slug}`, label: 'Tableau de bord', Icon: LayoutDashboard, end: true },
+      { to: `/association/${slug}/membres`, label: 'Membres', Icon: UsersRound },
+      { to: `/association/${slug}/tresorerie`, label: 'Trésorerie', Icon: Wallet },
+      { to: `/association/${slug}/documents`, label: 'Documents', Icon: FolderArchive },
+      { to: `/association/${slug}/parametres`, label: 'Paramètres', Icon: Settings },
+    ];
+  }
 
   function companyNavItems(c: MyCompany): NavItem[] {
     const accessible = c.modules.filter(
@@ -113,11 +134,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
     return items;
   }
 
-  // Immersive per-company shell when inside a company, else the global shell.
-  const immersive = currentCompany !== null;
+  // Immersive per-company / per-association shell when inside one, else the global shell.
+  const immersiveCompany = currentCompany !== null;
+  const immersiveAssoc = activeAssocSlug !== null;
+  const immersive = immersiveCompany || immersiveAssoc;
   let groups: NavGroup[];
-  if (immersive) {
+  if (immersiveCompany) {
     groups = [{ title: null, items: companyNavItems(currentCompany!) }];
+  } else if (immersiveAssoc) {
+    groups = [{ title: null, items: associationNavItems(activeAssocSlug!) }];
   } else {
     const companyGroups: NavGroup[] = data
       .map((c) => {
@@ -126,7 +151,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
       })
       .filter((g) => g.items.length > 0);
     groups = [
-      { title: null, items: [{ to: '/', label: 'Tableau de bord', Icon: LayoutDashboard, end: true }] },
+      {
+        title: null,
+        items: [
+          { to: '/', label: 'Tableau de bord', Icon: LayoutDashboard, end: true },
+          { to: '/associations', label: 'Associations', Icon: Landmark },
+        ],
+      },
       ...(isIrs
         ? [
             {
@@ -162,7 +193,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
         .filter((g) => g.items.length > 0)
     : groups;
 
-  const logoUrl = currentCompany?.company.logoUrl;
+  const brandName = immersiveAssoc
+    ? (currentAssociation?.name ?? activeAssocSlug ?? 'Association')
+    : (currentCompany?.company.name ?? '');
+  const brandLogo = immersiveAssoc ? (currentAssociation?.logoUrl ?? null) : (currentCompany?.company.logoUrl ?? null);
+  const backTo = immersiveAssoc ? '/associations' : '/';
+  const backLabel = immersiveAssoc ? 'Mes associations' : 'Mes entreprises';
   const badgeuseMod = currentCompany?.modules.find((m) => m.key === 'badgeuse');
   const showClock =
     immersive && !!badgeuseMod && badgeuseMod.enabled && !badgeuseMod.blocked && badgeuseMod.canView;
@@ -179,26 +215,26 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {immersive ? (
             collapsed ? (
               <Link
-                to="/"
-                title="Mes entreprises"
+                to={backTo}
+                title={backLabel}
                 className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
               >
                 <ChevronLeft className="h-[18px] w-[18px]" />
               </Link>
             ) : (
               <div className="flex min-w-0 items-center gap-2.5">
-                {logoUrl ? (
-                  <img src={logoUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />
+                {brandLogo ? (
+                  <img src={brandLogo} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />
                 ) : (
                   <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/15 text-sm font-bold text-primary">
-                    {currentCompany!.company.name.slice(0, 1).toUpperCase()}
+                    {brandName.slice(0, 1).toUpperCase()}
                   </div>
                 )}
                 <div className="min-w-0">
-                  <Link to="/" className="flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground">
-                    <ChevronLeft className="h-3 w-3" /> Mes entreprises
+                  <Link to={backTo} className="flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground">
+                    <ChevronLeft className="h-3 w-3" /> {backLabel}
                   </Link>
-                  <div className="truncate text-sm font-semibold leading-tight">{currentCompany!.company.name}</div>
+                  <div className="truncate text-sm font-semibold leading-tight">{brandName}</div>
                 </div>
               </div>
             )

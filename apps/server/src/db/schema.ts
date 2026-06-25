@@ -312,6 +312,66 @@ export const irsDocuments = mysqlTable('irs_documents', {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const associations = mysqlTable('associations', {
+  id: int('id').autoincrement().primaryKey(),
+  name: varchar('name', { length: 120 }).notNull(),
+  slug: varchar('slug', { length: 140 }).notNull().unique(),
+  objet: varchar('objet', { length: 250 }),
+  logoUrl: varchar('logo_url', { length: 255 }),
+  status: mysqlEnum('status', ['active', 'dissolved']).notNull().default('active'),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const associationMembers = mysqlTable(
+  'association_members',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    associationId: int('association_id')
+      .notNull()
+      .references(() => associations.id, { onDelete: 'cascade' }),
+    userId: int('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: mysqlEnum('role', ['president', 'tresorier', 'secretaire', 'membre']).notNull().default('membre'),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => ({ uqAssociationMember: unique('uq_association_member').on(t.associationId, t.userId) }),
+);
+
+export const associationTransactions = mysqlTable('association_transactions', {
+  id: int('id').autoincrement().primaryKey(),
+  associationId: int('association_id')
+    .notNull()
+    .references(() => associations.id, { onDelete: 'cascade' }),
+  type: mysqlEnum('type', ['cotisation', 'don', 'subvention', 'depense', 'autre']).notNull(),
+  label: varchar('label', { length: 200 }).notNull(),
+  amount: decimal('amount', { precision: 14, scale: 2 }).notNull(),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const associationDocuments = mysqlTable('association_documents', {
+  id: int('id').autoincrement().primaryKey(),
+  associationId: int('association_id')
+    .notNull()
+    .references(() => associations.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 200 }).notNull(),
+  url: varchar('url', { length: 255 }).notNull(),
+  mimeType: varchar('mime_type', { length: 120 }).notNull(),
+  size: int('size').notNull().default(0),
+  uploadedByUserId: int('uploaded_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const companyEmployees = mysqlTable('company_employees', {
   id: int('id').autoincrement().primaryKey(),
   companyId: int('company_id')

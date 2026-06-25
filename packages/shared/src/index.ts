@@ -234,6 +234,25 @@ export const EXPENSE_CATEGORIES = [
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number]['key'];
 export const EXPENSE_CATEGORY_KEYS = EXPENSE_CATEGORIES.map((c) => c.key) as ExpenseCategory[];
 
+export const ASSOCIATION_MEMBER_ROLES = [
+  { key: 'president', label: 'Président' },
+  { key: 'tresorier', label: 'Trésorier' },
+  { key: 'secretaire', label: 'Secrétaire' },
+  { key: 'membre', label: 'Membre' },
+] as const;
+export type AssociationMemberRole = (typeof ASSOCIATION_MEMBER_ROLES)[number]['key'];
+export const ASSOCIATION_MEMBER_ROLE_KEYS = ASSOCIATION_MEMBER_ROLES.map((r) => r.key) as AssociationMemberRole[];
+
+export const ASSOCIATION_TX_TYPES = [
+  { key: 'cotisation', label: 'Cotisation', dir: 'in' },
+  { key: 'don', label: 'Don', dir: 'in' },
+  { key: 'subvention', label: 'Subvention', dir: 'in' },
+  { key: 'depense', label: 'Dépense', dir: 'out' },
+  { key: 'autre', label: 'Autre', dir: 'in' },
+] as const;
+export type AssociationTxType = (typeof ASSOCIATION_TX_TYPES)[number]['key'];
+export const ASSOCIATION_TX_TYPE_KEYS = ASSOCIATION_TX_TYPES.map((t) => t.key) as AssociationTxType[];
+
 export const SUBVENTION_TYPES = [
   { key: 'evenement', label: 'Événement' },
   { key: 'contrat', label: 'Contrat' },

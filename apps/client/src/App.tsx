@@ -15,6 +15,12 @@ import IrsDocuments from '@/pages/IrsDocuments';
 import EntrepriseIndex from '@/pages/EntrepriseIndex';
 import ModulePage from '@/pages/ModulePage';
 import CompanySettings from '@/pages/CompanySettings';
+import Associations from '@/pages/Associations';
+import AssociationIndex from '@/pages/AssociationIndex';
+import AssociationMembers from '@/pages/AssociationMembers';
+import AssociationTresorerie from '@/pages/AssociationTresorerie';
+import AssociationDocuments from '@/pages/AssociationDocuments';
+import AssociationSettings from '@/pages/AssociationSettings';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppLayout } from '@/components/AppLayout';
 import { useAuth } from '@/auth/AuthContext';
@@ -39,6 +45,12 @@ function ProtectedApp() {
         <Route path="/entreprise/:slug" element={<EntrepriseIndex />} />
         <Route path="/entreprise/:slug/m/:moduleKey" element={<ModulePage />} />
         <Route path="/entreprise/:slug/parametres" element={<CompanySettings />} />
+        <Route path="/associations" element={<Associations />} />
+        <Route path="/association/:slug" element={<AssociationIndex />} />
+        <Route path="/association/:slug/membres" element={<AssociationMembers />} />
+        <Route path="/association/:slug/tresorerie" element={<AssociationTresorerie />} />
+        <Route path="/association/:slug/documents" element={<AssociationDocuments />} />
+        <Route path="/association/:slug/parametres" element={<AssociationSettings />} />
         <Route
           path="/entreprises"
           element={
