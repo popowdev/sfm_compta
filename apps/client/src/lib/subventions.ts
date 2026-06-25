@@ -1,15 +1,25 @@
-import { apiFetch } from './api';
+import { apiFetch, ApiError } from './api';
+import type { SubventionType } from '@rp-compta/shared';
 
 export type SubventionStatus = 'pending' | 'approved' | 'rejected' | 'paid';
+
+export interface SubventionDoc {
+  id: number;
+  url: string;
+  name: string;
+}
 
 export interface Subvention {
   id: number;
   companyId: number;
   motif: string;
+  type: SubventionType;
   requesterName: string;
   amountRequested: number;
   amountGranted: number | null;
   status: SubventionStatus;
+  photoUrl: string | null;
+  documents: SubventionDoc[];
   notes: string | null;
   decidedAt: string | null;
   createdAt: string;
@@ -18,9 +28,12 @@ export interface Subvention {
 
 export interface SubventionRequestInput {
   motif: string;
+  type: SubventionType;
   requesterName: string;
   amountRequested: number;
   notes?: string;
+  photo: File;
+  documents: File[];
 }
 
 export const getMySubventions = (companyId: number) =>
@@ -28,11 +41,25 @@ export const getMySubventions = (companyId: number) =>
     `/api/me/companies/${companyId}/subventions`,
   );
 
-export const requestSubvention = (companyId: number, body: SubventionRequestInput) =>
-  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/subventions`, {
+export async function requestSubvention(companyId: number, body: SubventionRequestInput): Promise<void> {
+  const fd = new FormData();
+  fd.append('motif', body.motif);
+  fd.append('type', body.type);
+  fd.append('requesterName', body.requesterName);
+  fd.append('amountRequested', String(body.amountRequested));
+  if (body.notes) fd.append('notes', body.notes);
+  fd.append('photo', body.photo);
+  for (const doc of body.documents) fd.append('documents', doc);
+  const res = await fetch(`/api/me/companies/${companyId}/subventions`, {
     method: 'POST',
-    body: JSON.stringify(body),
+    credentials: 'include',
+    body: fd,
   });
+  if (!res.ok) {
+    const b = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new ApiError(res.status, b?.error ?? null);
+  }
+}
 
 export const getAllSubventions = () => apiFetch<Subvention[]>('/api/subventions');
 

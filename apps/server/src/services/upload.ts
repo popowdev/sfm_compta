@@ -22,3 +22,22 @@ export const companyLogoUpload = multer({
 });
 
 export const companyLogoUrl = (filename: string) => `/uploads/companies/${filename}`;
+
+const SUBVENTION_UPLOAD_DIR = path.join(env.UPLOAD_DIR, 'subventions');
+mkdirSync(SUBVENTION_UPLOAD_DIR, { recursive: true });
+
+const SUBVENTION_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'application/pdf'];
+
+export const subventionUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, SUBVENTION_UPLOAD_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase().slice(0, 6);
+      cb(null, `${randomBytes(12).toString('hex')}${ext}`);
+    },
+  }),
+  limits: { fileSize: 8 * 1024 * 1024, files: 11 },
+  fileFilter: (_req, file, cb) => cb(null, SUBVENTION_MIMES.includes(file.mimetype)),
+});
+
+export const subventionFileUrl = (filename: string) => `/uploads/subventions/${filename}`;

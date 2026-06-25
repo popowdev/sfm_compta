@@ -5,6 +5,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import pinoHttp from 'pino-http';
 import rateLimit from 'express-rate-limit';
+import multer from 'multer';
 import { env } from './env';
 import { logger } from './logger';
 import { healthRouter } from './routes/health';
@@ -91,6 +92,17 @@ app.use('/api/fiscal', fiscalRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'not_found' });
+});
+
+app.use((err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'file_too_large' });
+    if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({ error: 'too_many_files' });
+    }
+    return res.status(400).json({ error: 'invalid_upload' });
+  }
+  next(err);
 });
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

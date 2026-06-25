@@ -232,6 +232,15 @@ export const EXPENSE_CATEGORIES = [
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number]['key'];
 export const EXPENSE_CATEGORY_KEYS = EXPENSE_CATEGORIES.map((c) => c.key) as ExpenseCategory[];
 
+export const SUBVENTION_TYPES = [
+  { key: 'evenement', label: 'Événement' },
+  { key: 'contrat', label: 'Contrat' },
+  { key: 'badgeuse', label: 'Badgeuse' },
+  { key: 'autre', label: 'Autre' },
+] as const;
+export type SubventionType = (typeof SUBVENTION_TYPES)[number]['key'];
+export const SUBVENTION_TYPE_KEYS = SUBVENTION_TYPES.map((t) => t.key) as SubventionType[];
+
 export const EMPLOYEE_POSITIONS = [
   { key: 'pdg', label: 'PDG' },
   { key: 'patron', label: 'Patron' },

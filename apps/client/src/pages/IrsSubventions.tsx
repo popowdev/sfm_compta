@@ -10,7 +10,7 @@ import {
   type Subvention,
   type SubventionStatus,
 } from '@/lib/subventions';
-import { SUB_STATUS } from '@/pages/Subventions';
+import { SUB_STATUS, SUB_TYPE_LABEL, Attachments } from '@/pages/Subventions';
 
 const actionBtn =
   'rounded-md border border-input px-2 py-1 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50';
@@ -84,6 +84,7 @@ export default function IrsSubventions() {
                 <th className="px-4 py-3 text-left font-semibold">Demandeur</th>
                 <th className="px-4 py-3 text-right font-semibold">Demandé</th>
                 <th className="px-4 py-3 text-right font-semibold">Accordé</th>
+                <th className="px-4 py-3 text-left font-semibold">Pièces</th>
                 <th className="px-4 py-3 text-left font-semibold">Statut</th>
                 <th className="px-4 py-3 text-right font-semibold">Action</th>
               </tr>
@@ -92,7 +93,14 @@ export default function IrsSubventions() {
               {list.map((s) => (
                 <tr key={s.id} className="border-b last:border-b-0">
                   <td className="px-4 py-3 font-medium">{s.companyName}</td>
-                  <td className="px-4 py-3">{s.motif}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span>{s.motif}</span>
+                      <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        {SUB_TYPE_LABEL[s.type] ?? s.type}
+                      </span>
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">{s.requesterName}</td>
                   <td className="px-4 py-3 text-right">{fmtMoney(s.amountRequested)} $</td>
                   <td className="px-4 py-3 text-right">
@@ -103,6 +111,9 @@ export default function IrsSubventions() {
                       onChange={(e) => setGrants((g) => ({ ...g, [s.id]: e.target.value }))}
                       className="h-8 w-28 rounded-md border border-input bg-background px-2 text-right text-sm outline-none focus:ring-1 focus:ring-ring"
                     />
+                  </td>
+                  <td className="px-4 py-3">
+                    <Attachments photoUrl={s.photoUrl} documents={s.documents} />
                   </td>
                   <td className="px-4 py-3">
                     <span
@@ -183,7 +194,7 @@ export default function IrsSubventions() {
               ))}
               {list.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-4 text-muted-foreground">
+                  <td colSpan={8} className="px-4 py-4 text-muted-foreground">
                     Aucune demande de subvention.
                   </td>
                 </tr>

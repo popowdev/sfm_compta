@@ -257,15 +257,29 @@ export const subventions = mysqlTable('subventions', {
     .notNull()
     .references(() => companies.id, { onDelete: 'cascade' }),
   motif: varchar('motif', { length: 200 }).notNull(),
+  type: mysqlEnum('type', ['evenement', 'contrat', 'badgeuse', 'autre']).notNull().default('evenement'),
   requesterName: varchar('requester_name', { length: 120 }).notNull(),
   amountRequested: decimal('amount_requested', { precision: 14, scale: 2 }).notNull(),
   amountGranted: decimal('amount_granted', { precision: 14, scale: 2 }),
   status: mysqlEnum('status', ['pending', 'approved', 'rejected', 'paid'])
     .notNull()
     .default('pending'),
+  photoUrl: varchar('photo_url', { length: 255 }),
   requestedByUserId: int('requested_by_user_id').references(() => users.id, { onDelete: 'set null' }),
   notes: text('notes'),
   decidedAt: timestamp('decided_at'),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const subventionDocuments = mysqlTable('subvention_documents', {
+  id: int('id').autoincrement().primaryKey(),
+  subventionId: int('subvention_id')
+    .notNull()
+    .references(() => subventions.id, { onDelete: 'cascade' }),
+  url: varchar('url', { length: 255 }).notNull(),
+  name: varchar('name', { length: 200 }).notNull(),
   createdAt: timestamp('created_at')
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
