@@ -285,6 +285,33 @@ export const subventionDocuments = mysqlTable('subvention_documents', {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const companyDocuments = mysqlTable('company_documents', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 200 }).notNull(),
+  url: varchar('url', { length: 255 }).notNull(),
+  mimeType: varchar('mime_type', { length: 120 }).notNull(),
+  size: int('size').notNull().default(0),
+  uploadedByUserId: int('uploaded_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const irsDocuments = mysqlTable('irs_documents', {
+  id: int('id').autoincrement().primaryKey(),
+  name: varchar('name', { length: 200 }).notNull(),
+  url: varchar('url', { length: 255 }).notNull(),
+  mimeType: varchar('mime_type', { length: 120 }).notNull(),
+  size: int('size').notNull().default(0),
+  uploadedByUserId: int('uploaded_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const companyEmployees = mysqlTable('company_employees', {
   id: int('id').autoincrement().primaryKey(),
   companyId: int('company_id')

@@ -11,6 +11,7 @@ import IrsSubventions from '@/pages/IrsSubventions';
 import IrsDividends from '@/pages/IrsDividends';
 import IrsUsers from '@/pages/IrsUsers';
 import IrsMessages from '@/pages/IrsMessages';
+import IrsDocuments from '@/pages/IrsDocuments';
 import EntrepriseIndex from '@/pages/EntrepriseIndex';
 import ModulePage from '@/pages/ModulePage';
 import CompanySettings from '@/pages/CompanySettings';
@@ -91,6 +92,14 @@ function ProtectedApp() {
           element={
             <IrsRoute>
               <IrsMessages />
+            </IrsRoute>
+          }
+        />
+        <Route
+          path="/irs-documents"
+          element={
+            <IrsRoute>
+              <IrsDocuments />
             </IrsRoute>
           }
         />

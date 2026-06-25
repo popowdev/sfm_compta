@@ -21,6 +21,7 @@ import {
   Store,
   MessageCircle,
   LineChart,
+  FolderArchive,
   type LucideIcon,
 } from 'lucide-react';
 import type { ModuleKey } from '@rp-compta/shared';
@@ -42,6 +43,7 @@ const ICONS: Record<ModuleKey, LucideIcon> = {
   bareme: Scale,
   dividendes: Coins,
   actionnaires: PieChart,
+  documents: FolderArchive,
 };
 
 export function moduleIcon(key: string): LucideIcon {
