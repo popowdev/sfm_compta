@@ -44,3 +44,6 @@ export const decideSubvention = (
     method: 'PATCH',
     body: JSON.stringify(body),
   });
+
+export const deleteSubvention = (id: number) =>
+  apiFetch<{ ok: boolean }>(`/api/subventions/${id}`, { method: 'DELETE' });

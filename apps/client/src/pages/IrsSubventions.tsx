@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fmtMoney } from '@/lib/declarations';
+import { useConfirm } from '@/components/ui/confirm';
+import { useToast } from '@/components/ui/toast';
 import {
   getAllSubventions,
   decideSubvention,
+  deleteSubvention,
   type Subvention,
   type SubventionStatus,
 } from '@/lib/subventions';
@@ -11,9 +14,13 @@ import { SUB_STATUS } from '@/pages/Subventions';
 
 const actionBtn =
   'rounded-md border border-input px-2 py-1 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50';
+const actionBtnDanger =
+  'rounded-md border border-input px-2 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50';
 
 export default function IrsSubventions() {
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
+  const toast = useToast();
   const { data } = useQuery({ queryKey: ['irs-subventions'], queryFn: getAllSubventions });
   const [grants, setGrants] = useState<Record<number, string>>({});
 
@@ -28,6 +35,12 @@ export default function IrsSubventions() {
         return next;
       });
     },
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: number) => deleteSubvention(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['irs-subventions'] }),
+    onError: () => toast('Échec de la suppression de la demande.', 'error'),
   });
 
   const list = data ?? [];
@@ -148,6 +161,22 @@ export default function IrsSubventions() {
                           Rouvrir
                         </button>
                       )}
+                      <button
+                        className={actionBtnDanger}
+                        disabled={remove.isPending}
+                        onClick={async () => {
+                          if (
+                            await confirm({
+                              title: 'Supprimer cette demande ?',
+                              message: `« ${s.motif} » — ${s.companyName}. Cette action est définitive.`,
+                              destructive: true,
+                            })
+                          )
+                            remove.mutate(s.id);
+                        }}
+                      >
+                        Supprimer
+                      </button>
                     </div>
                   </td>
                 </tr>

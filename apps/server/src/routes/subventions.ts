@@ -141,3 +141,23 @@ irsSubventionsRouter.patch(
     res.json({ ok: true });
   }),
 );
+
+irsSubventionsRouter.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'bad_request' });
+    const existing = await db
+      .select({ companyId: subventions.companyId })
+      .from(subventions)
+      .where(eq(subventions.id, id))
+      .limit(1);
+    if (!existing[0]) return res.status(404).json({ error: 'not_found' });
+    await db.delete(subventions).where(eq(subventions.id, id));
+    emitInvalidate(['irs', `company:${existing[0].companyId}`], [
+      ['irs-subventions'],
+      ['subventions', existing[0].companyId],
+    ]);
+    res.json({ ok: true });
+  }),
+);
