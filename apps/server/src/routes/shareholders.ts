@@ -5,6 +5,7 @@ import { db } from '../db';
 import { shareholders, companies } from '../db/schema';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
+import { getModuleAccess } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
 
 export const shareholdersRouter = Router({ mergeParams: true });
@@ -15,6 +16,37 @@ function parseId(value: string | undefined): number | null {
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : null;
 }
+
+// Member-facing read-only cap table (anonymised names), gated by the actionnaires module.
+export const meShareholdersRouter = Router({ mergeParams: true });
+meShareholdersRouter.use(requireAuth);
+meShareholdersRouter.get(
+  '/',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const acc = await getModuleAccess(req.user!.id, companyId, 'actionnaires');
+    if (!acc) return res.status(404).json({ error: 'not_member' });
+    if (!acc.enabled || acc.blocked) return res.status(403).json({ error: 'module_unavailable' });
+    if (!acc.canView) return res.status(403).json({ error: 'forbidden' });
+    const comp = await db
+      .select({ valuation: companies.valuation })
+      .from(companies)
+      .where(and(eq(companies.id, companyId), isNull(companies.deletedAt)))
+      .limit(1);
+    if (!comp[0]) return res.status(404).json({ error: 'not_found' });
+    const rows = await db.select().from(shareholders).where(eq(shareholders.companyId, companyId));
+    res.json({
+      valuation: Number(comp[0].valuation),
+      shareholders: rows.map((r) => ({
+        id: r.id,
+        name: r.anonymous ? r.publicName || 'Actionnaire anonyme' : r.name,
+        percentage: Number(r.percentage),
+        shareType: r.shareType,
+      })),
+    });
+  }),
+);
 
 async function companyExists(id: number): Promise<boolean> {
   const rows = await db

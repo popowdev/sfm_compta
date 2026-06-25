@@ -65,7 +65,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'documents', label: 'Documents', group: 'Communication', defaultEnabled: false, companyPage: true },
   { key: 'bareme', label: 'Barème fiscal', group: 'Fiscalité', defaultEnabled: true, companyPage: false },
   { key: 'dividendes', label: 'Dividendes', group: 'Fiscalité', defaultEnabled: false, companyPage: true },
-  { key: 'actionnaires', label: 'Actionnaires', group: 'Actionnariat', defaultEnabled: false, companyPage: false },
+  { key: 'actionnaires', label: 'Actionnaires', group: 'Actionnariat', defaultEnabled: true, companyPage: true },
 ];
 
 export interface ModuleConfigField {
