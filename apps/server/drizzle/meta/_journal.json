@@ -267,6 +267,13 @@
       "when": 1782474334083,
       "tag": "0037_remarkable_lifeguard",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "5",
+      "when": 1782475743866,
+      "tag": "0038_free_electro",
+      "breakpoints": true
     }
   ]
 }

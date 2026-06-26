@@ -225,7 +225,10 @@ meExercicesRouter.put(
     const d = parsed.data;
     const set: Record<string, unknown> = {};
     if (d.label !== undefined) set.label = d.label;
-    if (d.status !== undefined) set.status = d.status;
+    if (d.status !== undefined) {
+      set.status = d.status;
+      if (d.status === 'open') set.snapshot = null; // reopening unfreezes → recompute live
+    }
     if (d.revenue !== undefined) set.revenue = String(round2(d.revenue));
     if (d.dividends !== undefined) set.dividends = String(round2(d.dividends));
     if (d.hoursCap !== undefined) set.hoursCap = String(round2(d.hoursCap));
@@ -491,11 +494,8 @@ meExercicesRouter.get(
       byDay.push({ date: d, total: round2(dayMap.get(d) ?? 0) });
     }
 
-    res.json({
+    const detailBase = {
       ...ex,
-      canWrite: g.canWrite,
-      canEdit: g.canEdit,
-      payrollVisible,
       summary: {
         revenue: ex.revenue,
         salesRevenue: salesNet,
@@ -523,7 +523,7 @@ meExercicesRouter.get(
         netAfterTax,
       },
       expensesByCategory,
-      payroll: payrollVisible ? payroll : [],
+      payroll,
       salesByDay: byDay,
       salesByPayment: payRowsAgg.map((r) => ({ method: r.method, total: round2(Number(r.total)), count: Number(r.count) })),
       perfByEmployee: perfRows.map((r) => ({
@@ -548,6 +548,31 @@ meExercicesRouter.get(
         employeeName: r.employeeName,
         clientName: r.clientName,
       })),
+    };
+
+    // A closed exercice is FROZEN: snapshot the figures on first read, then always serve that snapshot.
+    let base: typeof detailBase = detailBase;
+    let frozen = false;
+    if (ex.status === 'closed') {
+      frozen = true;
+      const snap = exRows[0].snapshot as typeof detailBase | null;
+      if (snap) {
+        base = snap;
+      } else {
+        await db
+          .update(exercices)
+          .set({ snapshot: detailBase })
+          .where(and(eq(exercices.id, id), eq(exercices.companyId, companyId)));
+      }
+    }
+
+    res.json({
+      ...base,
+      canWrite: g.canWrite,
+      canEdit: g.canEdit,
+      payrollVisible,
+      payroll: payrollVisible ? (base.payroll ?? []) : [],
+      frozen,
     });
   }),
 );

@@ -671,6 +671,7 @@ export const exercices = mysqlTable(
     hoursCap: decimal('hours_cap', { precision: 10, scale: 2 }).notNull().default('0'),
     salaryCap: decimal('salary_cap', { precision: 14, scale: 2 }).notNull().default('0'),
     notes: text('notes'),
+    snapshot: json('snapshot'),
     createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at')
       .notNull()

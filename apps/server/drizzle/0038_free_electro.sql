@@ -1,0 +1,1 @@
+ALTER TABLE `exercices` ADD `snapshot` json;
