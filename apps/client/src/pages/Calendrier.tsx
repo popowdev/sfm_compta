@@ -114,8 +114,8 @@ export default function Calendrier() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-4 p-8">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => shift(-1)} aria-label="Précédent" className="grid h-9 w-9 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
             <ChevronLeft className="h-4 w-4" />
