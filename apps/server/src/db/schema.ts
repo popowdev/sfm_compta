@@ -372,6 +372,22 @@ export const associationDocuments = mysqlTable('association_documents', {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const events = mysqlTable('events', {
+  id: int('id').autoincrement().primaryKey(),
+  title: varchar('title', { length: 150 }).notNull(),
+  category: varchar('category', { length: 80 }),
+  ownerType: mysqlEnum('owner_type', ['company', 'association']).notNull(),
+  companyId: int('company_id').references(() => companies.id, { onDelete: 'set null' }),
+  associationId: int('association_id').references(() => associations.id, { onDelete: 'set null' }),
+  ownerName: varchar('owner_name', { length: 140 }).notNull(),
+  startAt: datetime('start_at', { mode: 'string' }).notNull(),
+  endAt: datetime('end_at', { mode: 'string' }).notNull(),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const companyEmployees = mysqlTable('company_employees', {
   id: int('id').autoincrement().primaryKey(),
   companyId: int('company_id')

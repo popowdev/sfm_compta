@@ -12,6 +12,7 @@ import {
   MessagesSquare,
   FolderArchive,
   Landmark,
+  CalendarDays,
   Wallet,
   SlidersHorizontal,
   Settings,
@@ -155,6 +156,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         title: null,
         items: [
           { to: '/', label: 'Tableau de bord', Icon: LayoutDashboard, end: true },
+          { to: '/calendrier', label: 'Calendrier', Icon: CalendarDays },
           { to: '/associations', label: 'Associations', Icon: Landmark },
         ],
       },
