@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Building2, ArrowRight } from 'lucide-react';
+import { hasAppAccess } from '@rp-compta/shared';
 import { useAuth } from '@/auth/AuthContext';
+import { IrsCockpit } from '@/components/IrsCockpit';
 import { getMyCompanies, type MyCompany } from '@/lib/me';
 import { getCompanyStats } from '@/lib/stats';
 import { fmtMoney } from '@/lib/declarations';
@@ -52,6 +54,7 @@ function CompanyOverview({ company }: { company: MyCompany }) {
 export default function Dashboard() {
   const { user } = useAuth();
   const isStaff = (user?.appRoles ?? []).includes('staff');
+  const isIrs = hasAppAccess(user?.appRoles ?? [], 'irs');
   const { data: companies, isLoading } = useQuery({
     queryKey: ['my-companies'],
     queryFn: getMyCompanies,
@@ -69,6 +72,8 @@ export default function Dashboard() {
           {isStaff ? ' · vue Staff (toutes les entreprises)' : ''}
         </p>
       </div>
+
+      {isIrs && <IrsCockpit />}
 
       {single && hasStats(single) && <CompanyOverview company={single} />}
 

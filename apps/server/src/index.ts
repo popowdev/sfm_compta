@@ -38,6 +38,7 @@ import { meAssociationsRouter, irsAssociationsRouter } from './routes/associatio
 import { calendarRouter } from './routes/calendar';
 import { meNotificationsRouter } from './routes/notifications';
 import { irsAuditRouter } from './routes/audit';
+import { irsOverviewRouter } from './routes/irsOverview';
 import { adminModulesRouter } from './routes/adminModules';
 import { adminUsersRouter } from './routes/admin';
 import { fiscalRouter } from './routes/fiscal';
@@ -99,6 +100,7 @@ app.use('/api/admin/users', adminUsersRouter);
 app.use('/api/irs/documents', irsDocumentsRouter);
 app.use('/api/associations', irsAssociationsRouter);
 app.use('/api/irs/audit', irsAuditRouter);
+app.use('/api/irs/overview', irsOverviewRouter);
 app.use('/api/messages', irsMessagesRouter);
 app.use('/api/admin/modules', adminModulesRouter);
 app.use('/api/fiscal', fiscalRouter);
