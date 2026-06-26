@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ScrollText } from 'lucide-react';
+import { ScrollText, Download } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SearchInput, FilterSelect, distinctOptions } from '@/components/ui/filters';
+import { downloadCsv } from '@/lib/csv';
 import { getAudit } from '@/lib/audit';
 
 const ACTION_LABEL: Record<string, string> = {
@@ -65,9 +67,31 @@ export default function IrsAudit() {
           allLabel="Toutes les actions"
           ariaLabel="Filtrer par action"
         />
-        <span className="ml-auto text-sm text-muted-foreground">
-          {filtered.length} résultat{filtered.length > 1 ? 's' : ''}
-        </span>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">
+            {filtered.length} résultat{filtered.length > 1 ? 's' : ''}
+          </span>
+          <Button
+            variant="outline"
+            disabled={filtered.length === 0}
+            onClick={() =>
+              downloadCsv(
+                'journal-audit.csv',
+                ['Date', 'Acteur', 'Action', 'Cible', 'Détail'],
+                filtered.map((e) => [
+                  fmtDateTime(e.createdAt),
+                  e.actorName,
+                  actionLabel(e.action),
+                  e.targetLabel ?? '',
+                  e.detail ?? '',
+                ]),
+              )
+            }
+          >
+            <Download className="h-4 w-4" />
+            CSV
+          </Button>
+        </div>
       </div>
 
       <div className="mt-4">

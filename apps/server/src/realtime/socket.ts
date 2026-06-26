@@ -5,7 +5,7 @@ import { SOCKET_EVENTS } from '@rp-compta/shared';
 import { env } from '../env';
 import { logger } from '../logger';
 import { db } from '../db';
-import { userAppRoles, memberships } from '../db/schema';
+import { userAppRoles, memberships, associationMembers } from '../db/schema';
 import { getSessionUser, SESSION_COOKIE } from '../auth/session';
 
 let io: IOServer | null = null;
@@ -41,6 +41,11 @@ export function createSocketServer(httpServer: HttpServer): IOServer {
           .from(memberships)
           .where(and(eq(memberships.userId, user.id), eq(memberships.active, true)));
         socket.data.companyIds = memRows.map((r) => r.companyId);
+        const assocRows = await db
+          .select({ associationId: associationMembers.associationId })
+          .from(associationMembers)
+          .where(and(eq(associationMembers.userId, user.id), eq(associationMembers.active, true)));
+        socket.data.associationIds = assocRows.map((r) => r.associationId);
       }
     }
     next();
@@ -54,6 +59,9 @@ export function createSocketServer(httpServer: HttpServer): IOServer {
       if (appRoles.includes('irs') || appRoles.includes('staff')) socket.join('irs');
       for (const cid of (socket.data.companyIds as number[] | undefined) ?? []) {
         socket.join(`company:${cid}`);
+      }
+      for (const aid of (socket.data.associationIds as number[] | undefined) ?? []) {
+        socket.join(`assoc:${aid}`);
       }
     }
     socket.on('disconnect', (reason) => logger.debug({ id: socket.id, reason }, 'socket déconnecté'));

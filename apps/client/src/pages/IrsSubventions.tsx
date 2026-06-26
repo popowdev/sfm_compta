@@ -12,6 +12,9 @@ import {
 } from '@/lib/subventions';
 import { SUB_STATUS, SUB_TYPE_LABEL, Attachments } from '@/pages/Subventions';
 import { SearchInput, FilterSelect, distinctOptions } from '@/components/ui/filters';
+import { Button } from '@/components/ui/button';
+import { Download } from 'lucide-react';
+import { downloadCsv } from '@/lib/csv';
 
 const actionBtn =
   'rounded-md border border-input px-2 py-1 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50';
@@ -126,9 +129,33 @@ export default function IrsSubventions() {
           allLabel="Tous les types"
           ariaLabel="Filtrer par type"
         />
-        <span className="ml-auto text-sm text-muted-foreground">
-          {filtered.length} résultat{filtered.length > 1 ? 's' : ''}
-        </span>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">
+            {filtered.length} résultat{filtered.length > 1 ? 's' : ''}
+          </span>
+          <Button
+            variant="outline"
+            disabled={filtered.length === 0}
+            onClick={() =>
+              downloadCsv(
+                'subventions.csv',
+                ['Entreprise', 'Type', 'Motif', 'Demandeur', 'Demandé', 'Accordé', 'Statut'],
+                filtered.map((s) => [
+                  s.companyName ?? '',
+                  SUB_TYPE_LABEL[s.type] ?? s.type,
+                  s.motif,
+                  s.requesterName,
+                  s.amountRequested,
+                  s.amountGranted ?? '',
+                  SUB_STATUS[s.status].label,
+                ]),
+              )
+            }
+          >
+            <Download className="h-4 w-4" />
+            CSV
+          </Button>
+        </div>
       </div>
 
       <div className="mt-4 overflow-hidden rounded-xl border bg-card">

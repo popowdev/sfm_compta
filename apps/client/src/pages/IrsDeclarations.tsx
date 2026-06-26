@@ -7,6 +7,9 @@ import {
   type Declaration,
 } from '@/lib/declarations';
 import { SearchInput, FilterSelect, distinctOptions } from '@/components/ui/filters';
+import { Button } from '@/components/ui/button';
+import { Download } from 'lucide-react';
+import { downloadCsv } from '@/lib/csv';
 
 const STATUS: Record<Declaration['status'], { label: string; cls: string }> = {
   submitted: { label: 'soumise', cls: 'bg-amber-500/10 text-amber-400' },
@@ -96,9 +99,35 @@ export default function IrsDeclarations() {
           allLabel="Tous les statuts"
           ariaLabel="Filtrer par statut"
         />
-        <span className="ml-auto text-sm text-muted-foreground">
-          {filtered.length} résultat{filtered.length > 1 ? 's' : ''}
-        </span>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">
+            {filtered.length} résultat{filtered.length > 1 ? 's' : ''}
+          </span>
+          <Button
+            variant="outline"
+            disabled={filtered.length === 0}
+            onClick={() =>
+              downloadCsv(
+                'declarations.csv',
+                ['Entreprise', 'Semaine', 'Déclarant', 'CA net', 'Bénéfice', 'Impôt société', 'Impôt dividendes', 'Impôt total', 'Statut'],
+                filtered.map((d) => [
+                  d.companyName ?? '',
+                  d.weekLabel,
+                  d.declarantName,
+                  d.caNet,
+                  d.benefit,
+                  d.corporateTax,
+                  d.dividendTax,
+                  d.totalTax,
+                  STATUS[d.status].label,
+                ]),
+              )
+            }
+          >
+            <Download className="h-4 w-4" />
+            CSV
+          </Button>
+        </div>
       </div>
 
       <div className="mt-4 overflow-hidden rounded-xl border bg-card">

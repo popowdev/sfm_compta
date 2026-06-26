@@ -153,6 +153,8 @@ export default function Calendrier() {
         <ListView events={events} loading={q.isLoading} onCancel={cancel} />
       ) : (
         <div className="overflow-hidden rounded-xl border bg-card">
+          <div className="overflow-x-auto">
+            <div className={view === 'semaine' ? 'min-w-[720px]' : ''}>
           <div className="flex border-b">
             <div className="w-14 shrink-0" />
             {days.map((d) => {
@@ -221,6 +223,8 @@ export default function Calendrier() {
                   </div>
                 );
               })}
+            </div>
+          </div>
             </div>
           </div>
         </div>
