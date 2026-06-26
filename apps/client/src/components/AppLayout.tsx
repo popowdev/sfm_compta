@@ -157,7 +157,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
         items: [
           { to: '/', label: 'Tableau de bord', Icon: LayoutDashboard, end: true },
           { to: '/calendrier', label: 'Calendrier', Icon: CalendarDays },
-          { to: '/associations', label: 'Associations', Icon: Landmark },
+          // Members who belong to an association keep a personal entry point
+          // (the IRS registry lives in the IRS group below).
+          ...(!isIrs && assocData.length > 0
+            ? [{ to: '/associations', label: 'Associations', Icon: Landmark }]
+            : []),
         ],
       },
       ...(isIrs
@@ -166,6 +170,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               title: 'IRS',
               items: [
                 { to: '/entreprises', label: 'Entreprises', Icon: Building2 },
+                { to: '/associations', label: 'Associations', Icon: Landmark },
                 { to: '/comptes', label: 'Comptes', Icon: UsersRound },
                 { to: '/declarations', label: 'Déclarations', Icon: FileText },
                 { to: '/subventions', label: 'Subventions', Icon: HandCoins },
