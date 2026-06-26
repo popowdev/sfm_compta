@@ -6,6 +6,7 @@ import { messages, companies } from '../db/schema';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess } from '../services/access';
+import { notify, companyManagerUserIds, irsUserIds } from '../services/notifications';
 import { emitInvalidate } from '../realtime/socket';
 
 function parseId(value: string | undefined): number | null {
@@ -70,6 +71,12 @@ meMessagesRouter.post(
       senderName: req.user!.displayName,
     });
     emitInvalidate(['irs', `company:${companyId}`], [['messages', companyId], ['irs-messages']]);
+    await notify(await irsUserIds(), {
+      type: 'message',
+      title: 'Nouveau message entreprise',
+      body: `De ${req.user!.displayName}`,
+      link: '/messages',
+    });
     res.status(201).json({ ok: true });
   }),
 );
@@ -110,6 +117,12 @@ irsMessagesRouter.post(
       senderName: req.user!.displayName,
     });
     emitInvalidate(['irs', `company:${companyId}`], [['messages', companyId], ['irs-messages']]);
+    await notify(await companyManagerUserIds(companyId), {
+      type: 'message',
+      title: 'Nouveau message de l’IRS',
+      body: parsed.data.body.slice(0, 120),
+      link: '/entreprise',
+    });
     res.status(201).json({ ok: true });
   }),
 );

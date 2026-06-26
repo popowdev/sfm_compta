@@ -12,6 +12,7 @@ import {
   decimal,
   text,
   unique,
+  index,
 } from 'drizzle-orm/mysql-core';
 import { APP_ROLES, MODULE_KEYS } from '@rp-compta/shared';
 
@@ -371,6 +372,42 @@ export const associationDocuments = mysqlTable('association_documents', {
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const notifications = mysqlTable(
+  'notifications',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    userId: int('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    type: varchar('type', { length: 40 }).notNull(),
+    title: varchar('title', { length: 160 }).notNull(),
+    body: varchar('body', { length: 300 }),
+    link: varchar('link', { length: 200 }),
+    readAt: timestamp('read_at'),
+    createdAt: timestamp('created_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => ({ idxUser: index('idx_notif_user').on(t.userId) }),
+);
+
+export const auditLog = mysqlTable(
+  'audit_log',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    actorUserId: int('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    actorName: varchar('actor_name', { length: 120 }).notNull(),
+    action: varchar('action', { length: 60 }).notNull(),
+    targetType: varchar('target_type', { length: 40 }).notNull(),
+    targetLabel: varchar('target_label', { length: 200 }),
+    detail: varchar('detail', { length: 300 }),
+    createdAt: timestamp('created_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => ({ idxCreated: index('idx_audit_created').on(t.createdAt) }),
+);
 
 export const events = mysqlTable('events', {
   id: int('id').autoincrement().primaryKey(),

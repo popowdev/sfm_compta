@@ -7,6 +7,7 @@ import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { applyWhitelistChange } from '../services/revocation';
 import { isStaff } from '../services/access';
+import { recordAudit } from '../services/audit';
 import { emitInvalidateAll } from '../realtime/socket';
 
 async function roleHolders(role: 'irs' | 'staff' | 'gouvernement'): Promise<number[]> {
@@ -75,7 +76,11 @@ adminUsersRouter.put(
     if (!id) return res.status(400).json({ error: 'bad_request' });
     const parsed = irsSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
-    const exists = await db.select({ id: users.id }).from(users).where(eq(users.id, id)).limit(1);
+    const exists = await db
+      .select({ id: users.id, displayName: users.displayName })
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
     if (!exists[0]) return res.status(404).json({ error: 'not_found' });
     if (parsed.data.grant) {
       await db
@@ -90,6 +95,13 @@ adminUsersRouter.put(
       await db.delete(userAppRoles).where(and(eq(userAppRoles.userId, id), eq(userAppRoles.role, 'irs')));
     }
     emitInvalidateAll([['admin-users']]);
+    await recordAudit({
+      actorUserId: req.user!.id,
+      actorName: req.user!.displayName,
+      action: parsed.data.grant ? 'irs_grant' : 'irs_revoke',
+      targetType: 'user',
+      targetLabel: exists[0].displayName,
+    });
     res.json({ ok: true });
   }),
 );
@@ -106,7 +118,11 @@ adminUsersRouter.patch(
     if (id === req.user!.id && !parsed.data.whitelisted) {
       return res.status(400).json({ error: 'cannot_disable_self' });
     }
-    const u = await db.select({ discordId: users.discordId }).from(users).where(eq(users.id, id)).limit(1);
+    const u = await db
+      .select({ discordId: users.discordId, displayName: users.displayName })
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
     if (!u[0]) return res.status(404).json({ error: 'not_found' });
     const targetRoles = await rolesOf(id);
     const targetPrivileged = targetRoles.includes('staff') || targetRoles.includes('gouvernement');
@@ -115,6 +131,13 @@ adminUsersRouter.patch(
     }
     await applyWhitelistChange(u[0].discordId, parsed.data.whitelisted);
     emitInvalidateAll([['admin-users']]);
+    await recordAudit({
+      actorUserId: req.user!.id,
+      actorName: req.user!.displayName,
+      action: parsed.data.whitelisted ? 'whitelist_on' : 'whitelist_off',
+      targetType: 'user',
+      targetLabel: u[0].displayName,
+    });
     res.json({ ok: true });
   }),
 );
@@ -135,9 +158,21 @@ adminUsersRouter.delete(
       const holders = await roleHolders('irs');
       if (holders.length <= 1 && holders.includes(id)) return res.status(400).json({ error: 'last_irs' });
     }
+    const target = await db
+      .select({ displayName: users.displayName })
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
     const result = await db.delete(users).where(eq(users.id, id));
     if (!result[0].affectedRows) return res.status(404).json({ error: 'not_found' });
     emitInvalidateAll([['admin-users']]);
+    await recordAudit({
+      actorUserId: req.user!.id,
+      actorName: req.user!.displayName,
+      action: 'user_delete',
+      targetType: 'user',
+      targetLabel: target[0]?.displayName ?? `#${id}`,
+    });
     res.json({ ok: true });
   }),
 );

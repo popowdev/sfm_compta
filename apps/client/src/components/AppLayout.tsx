@@ -13,6 +13,7 @@ import {
   FolderArchive,
   Landmark,
   CalendarDays,
+  ScrollText,
   Wallet,
   SlidersHorizontal,
   Settings,
@@ -29,6 +30,7 @@ import { getMyCompanies, type MyCompany } from '@/lib/me';
 import { getMyAssociations, type AssociationListItem } from '@/lib/associations';
 import { moduleIcon } from '@/lib/moduleIcons';
 import { QuickClock } from '@/components/QuickClock';
+import { NotificationBell } from '@/components/NotificationBell';
 
 const COMPANY_PAGE_KEYS = new Set<string>(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
@@ -177,6 +179,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 { to: '/dividendes', label: 'Dividendes', Icon: Coins },
                 { to: '/messages', label: 'Messagerie', Icon: MessagesSquare },
                 { to: '/irs-documents', label: 'Documents', Icon: FolderArchive },
+                { to: '/audit', label: 'Journal', Icon: ScrollText },
                 { to: '/bareme', label: 'Barème fiscal', Icon: Scale },
               ],
             },
@@ -339,6 +342,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           )}
           {collapsed ? (
             <div className="flex flex-col items-center gap-2">
+              <NotificationBell collapsed />
               {user?.avatarUrl && <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full" />}
               <button
                 type="button"
@@ -353,10 +357,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <>
               <div className="mb-2 flex items-center gap-2 px-2">
                 {user?.avatarUrl && <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full" />}
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{user?.displayName}</div>
                   {roleLabel && <div className="text-xs text-primary">{roleLabel}</div>}
                 </div>
+                <NotificationBell collapsed={false} />
               </div>
               <button
                 type="button"

@@ -8,6 +8,8 @@ import { subventions, subventionDocuments, companies } from '../db/schema';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess } from '../services/access';
+import { notify, companyManagerUserIds } from '../services/notifications';
+import { recordAudit } from '../services/audit';
 import { emitInvalidate } from '../realtime/socket';
 import { subventionUpload, subventionFileUrl } from '../services/upload';
 
@@ -185,7 +187,11 @@ irsSubventionsRouter.patch(
     const parsed = decisionSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     const existing = await db
-      .select({ companyId: subventions.companyId })
+      .select({
+        companyId: subventions.companyId,
+        motif: subventions.motif,
+        requestedByUserId: subventions.requestedByUserId,
+      })
       .from(subventions)
       .where(eq(subventions.id, id))
       .limit(1);
@@ -205,10 +211,31 @@ irsSubventionsRouter.patch(
       updates.amountGranted = null;
     }
     await db.update(subventions).set(updates).where(eq(subventions.id, id));
-    emitInvalidate(['irs', `company:${existing[0].companyId}`], [
-      ['irs-subventions'],
-      ['subventions', existing[0].companyId],
-    ]);
+    const companyId = existing[0].companyId;
+    emitInvalidate(['irs', `company:${companyId}`], [['irs-subventions'], ['subventions', companyId]]);
+
+    const statusLabel: Record<string, string> = {
+      approved: 'accordée',
+      paid: 'versée',
+      rejected: 'refusée',
+      pending: 'rouverte',
+    };
+    const recipients = new Set(await companyManagerUserIds(companyId));
+    if (existing[0].requestedByUserId) recipients.add(existing[0].requestedByUserId);
+    await notify([...recipients], {
+      type: 'subvention',
+      title: `Subvention ${statusLabel[status] ?? status}`,
+      body: `« ${existing[0].motif} »${updates.amountGranted ? ` — ${updates.amountGranted} $` : ''}`,
+      link: `/entreprise`,
+    });
+    await recordAudit({
+      actorUserId: req.user!.id,
+      actorName: req.user!.displayName,
+      action: `subvention_${status}`,
+      targetType: 'subvention',
+      targetLabel: existing[0].motif,
+      detail: updates.amountGranted ? `${updates.amountGranted} $` : null,
+    });
     res.json({ ok: true });
   }),
 );
@@ -219,7 +246,7 @@ irsSubventionsRouter.delete(
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: 'bad_request' });
     const existing = await db
-      .select({ companyId: subventions.companyId })
+      .select({ companyId: subventions.companyId, motif: subventions.motif })
       .from(subventions)
       .where(eq(subventions.id, id))
       .limit(1);
@@ -229,6 +256,13 @@ irsSubventionsRouter.delete(
       ['irs-subventions'],
       ['subventions', existing[0].companyId],
     ]);
+    await recordAudit({
+      actorUserId: req.user!.id,
+      actorName: req.user!.displayName,
+      action: 'subvention_delete',
+      targetType: 'subvention',
+      targetLabel: existing[0].motif,
+    });
     res.json({ ok: true });
   }),
 );
