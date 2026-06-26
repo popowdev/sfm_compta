@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fmtMoney } from '@/lib/declarations';
 import { getIrsDividends } from '@/lib/dividends';
+import { SearchInput, FilterSelect } from '@/components/ui/filters';
 
 function fmtDateTime(d: string): string {
   const dt = new Date(d);
@@ -18,18 +19,34 @@ function Kpi({ label, value, accent }: { label: string; value: string; accent?: 
 }
 
 export default function IrsDividends() {
-  const [companyId, setCompanyId] = useState<number | ''>('');
+  const [search, setSearch] = useState('');
+  const [company, setCompany] = useState('');
   const q = useQuery({ queryKey: ['irs-dividends'], queryFn: () => getIrsDividends() });
 
   const all = q.data?.payouts ?? [];
-  const companies = Array.from(new Map(all.map((p) => [p.companyId, p.companyName ?? `#${p.companyId}`])).entries())
-    .map(([id, name]) => ({ id, name }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-  const rows = companyId ? all.filter((p) => p.companyId === companyId) : all;
 
-  const totalGross = rows.reduce((s, p) => s + p.gross, 0);
-  const totalTax = rows.reduce((s, p) => s + p.tax, 0);
-  const totalNet = rows.reduce((s, p) => s + p.net, 0);
+  const totalGross = all.reduce((s, p) => s + p.gross, 0);
+  const totalTax = all.reduce((s, p) => s + p.tax, 0);
+  const totalNet = all.reduce((s, p) => s + p.net, 0);
+
+  const companyOptions = (() => {
+    const map = new Map<number, string>();
+    for (const p of all) if (p.companyId != null) map.set(p.companyId, p.companyName ?? `#${p.companyId}`);
+    return [...map.entries()]
+      .map(([id, label]) => ({ value: String(id), label }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'fr'));
+  })();
+
+  const term = search.trim().toLowerCase();
+  const filtered = all.filter((p) => {
+    if (company && String(p.companyId) !== company) return false;
+    if (term) {
+      const label = p.companyName ?? `#${p.companyId}`;
+      const hay = `${label} ${p.shareholderName} ${p.reference}`.toLowerCase();
+      if (!hay.includes(term)) return false;
+    }
+    return true;
+  });
 
   return (
     <div className="space-y-6 p-8">
@@ -38,27 +55,10 @@ export default function IrsDividends() {
         <p className="text-sm text-muted-foreground">
           Suivi administratif des versements, des RIB bénéficiaires et de l'impôt IRS.
         </p>
-        <div className="mt-4 flex items-end gap-2">
-          <label className="text-sm">
-            <span className="mb-1 block text-muted-foreground">Entreprise</span>
-            <select
-              value={companyId}
-              onChange={(e) => setCompanyId(e.target.value ? Number(e.target.value) : '')}
-              className="h-9 w-56 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-            >
-              <option value="">Toutes les entreprises</option>
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label="Déclarations" value={`${rows.length}`} />
+        <Kpi label="Déclarations" value={`${all.length}`} />
         <Kpi label="Brut distribué" value={`${fmtMoney(totalGross)} $`} accent="text-primary" />
         <Kpi label="Impôt IRS" value={`${fmtMoney(totalTax)} $`} accent="text-amber-400" />
         <Kpi label="Net actionnaires" value={`${fmtMoney(totalNet)} $`} accent="text-emerald-400" />
@@ -66,10 +66,28 @@ export default function IrsDividends() {
 
       <div className="rounded-xl border bg-card">
         <div className="border-b px-5 py-4 text-sm font-semibold">Historique des dividendes</div>
+        <div className="flex flex-wrap items-center gap-2 border-b px-5 py-3">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Entreprise, actionnaire, référence…"
+            className="flex-1 min-w-[12rem] sm:max-w-xs"
+          />
+          <FilterSelect
+            value={company}
+            onChange={setCompany}
+            options={companyOptions}
+            allLabel="Toutes les entreprises"
+            ariaLabel="Filtrer par entreprise"
+          />
+          <span className="ml-auto text-sm text-muted-foreground">{filtered.length} résultat(s)</span>
+        </div>
         {q.isLoading ? (
           <div className="p-6 text-sm text-muted-foreground">Chargement…</div>
-        ) : rows.length === 0 ? (
+        ) : all.length === 0 ? (
           <div className="p-6 text-sm text-muted-foreground">Aucun dividende déclaré.</div>
+        ) : filtered.length === 0 ? (
+          <div className="p-6 text-sm text-muted-foreground">Aucun résultat pour ces filtres.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -86,7 +104,7 @@ export default function IrsDividends() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((p, i) => (
+                {filtered.map((p, i) => (
                   <tr key={p.id} className={i > 0 ? 'border-t' : ''}>
                     <td className="whitespace-nowrap px-4 py-2 text-xs text-muted-foreground">{fmtDateTime(p.createdAt)}</td>
                     <td className="px-4 py-2 font-medium">{p.companyName ?? `#${p.companyId}`}</td>

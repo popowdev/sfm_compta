@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Shield, ShieldOff, UserX, Power } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SearchInput, FilterSelect, distinctOptions } from '@/components/ui/filters';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/auth/AuthContext';
 import {
@@ -34,6 +35,8 @@ export default function IrsUsers() {
   const queryClient = useQueryClient();
   const q = useQuery({ queryKey: ['admin-users'], queryFn: getAdminUsers });
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [whitelistFilter, setWhitelistFilter] = useState('');
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-users'] });
   const irs = useMutation({
@@ -68,10 +71,27 @@ export default function IrsUsers() {
     },
   });
 
+  const allUsers = q.data?.users ?? [];
+  const roleOptions = distinctOptions(allUsers.flatMap((u) => u.roles)).map((o) => ({
+    value: o.value,
+    label: ROLE_LABEL[o.value] ?? o.label,
+  }));
+  roleOptions.push({ value: '__none__', label: 'Sans rôle' });
+
   const term = search.trim().toLowerCase();
-  const users = (q.data?.users ?? []).filter(
-    (u) => !term || `${u.displayName} ${u.discordId} ${u.companies.join(' ')}`.toLowerCase().includes(term),
-  );
+  const filtered = allUsers.filter((u) => {
+    if (term && !`${u.displayName} ${u.discordId} ${u.companies.join(' ')}`.toLowerCase().includes(term)) return false;
+    if (roleFilter) {
+      if (roleFilter === '__none__') {
+        if (u.roles.length > 0) return false;
+      } else if (!u.roles.includes(roleFilter)) {
+        return false;
+      }
+    }
+    if (whitelistFilter === 'actif' && !u.whitelisted) return false;
+    if (whitelistFilter === 'inactif' && u.whitelisted) return false;
+    return true;
+  });
 
   return (
     <div className="space-y-6 p-8">
@@ -81,12 +101,33 @@ export default function IrsUsers() {
           Joueurs reliés par Discord. Activation / désactivation de l'accès, attribution du rôle IRS
           (Staff). La synchro automatique FiveM/Discord viendra alimenter cette liste.
         </p>
-        <input
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchInput
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={setSearch}
           placeholder="Rechercher (nom, Discord, entreprise)…"
-          className="mt-4 h-9 w-80 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
+          className="flex-1 min-w-[12rem] sm:w-64 sm:flex-none"
         />
+        <FilterSelect
+          value={roleFilter}
+          onChange={setRoleFilter}
+          options={roleOptions}
+          allLabel="Tous les rôles"
+          ariaLabel="Filtrer par rôle"
+        />
+        <FilterSelect
+          value={whitelistFilter}
+          onChange={setWhitelistFilter}
+          options={[
+            { value: 'actif', label: 'Actif' },
+            { value: 'inactif', label: 'Inactif' },
+          ]}
+          allLabel="Tous les accès"
+          ariaLabel="Filtrer par accès"
+        />
+        <span className="ml-auto text-sm text-muted-foreground">{filtered.length} résultat(s)</span>
       </div>
 
       <div className="overflow-x-auto rounded-xl border bg-card">
@@ -104,10 +145,12 @@ export default function IrsUsers() {
           <tbody>
             {q.isLoading ? (
               <tr><td colSpan={6} className="px-4 py-6 text-sm text-muted-foreground">Chargement…</td></tr>
-            ) : users.length === 0 ? (
+            ) : allUsers.length === 0 ? (
               <tr><td colSpan={6} className="px-4 py-6 text-sm text-muted-foreground">Aucun utilisateur.</td></tr>
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={6} className="px-4 py-6 text-sm text-muted-foreground">Aucun résultat pour ces filtres.</td></tr>
             ) : (
-              users.map((u: AdminUser) => {
+              filtered.map((u: AdminUser) => {
                 const hasIrs = u.roles.includes('irs');
                 const isSelf = u.discordId === user?.discordId;
                 return (

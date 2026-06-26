@@ -11,6 +11,7 @@ import {
   type SubventionStatus,
 } from '@/lib/subventions';
 import { SUB_STATUS, SUB_TYPE_LABEL, Attachments } from '@/pages/Subventions';
+import { SearchInput, FilterSelect, distinctOptions } from '@/components/ui/filters';
 
 const actionBtn =
   'rounded-md border border-input px-2 py-1 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50';
@@ -23,6 +24,10 @@ export default function IrsSubventions() {
   const toast = useToast();
   const { data } = useQuery({ queryKey: ['irs-subventions'], queryFn: getAllSubventions });
   const [grants, setGrants] = useState<Record<number, string>>({});
+  const [search, setSearch] = useState('');
+  const [companyFilter, setCompanyFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
 
   const decide = useMutation({
     mutationFn: (v: { id: number; status: SubventionStatus; amountGranted?: number | null }) =>
@@ -52,6 +57,25 @@ export default function IrsSubventions() {
   const grantValue = (s: Subvention) =>
     grants[s.id] ?? String(s.amountGranted ?? s.amountRequested);
 
+  const companyOptions = distinctOptions(list.map((s) => s.companyName));
+  const statusOptions = (Object.keys(SUB_STATUS) as SubventionStatus[]).map((k) => ({
+    value: k,
+    label: SUB_STATUS[k].label,
+  }));
+  const typeOptions = Object.entries(SUB_TYPE_LABEL).map(([value, label]) => ({ value, label }));
+
+  const q = search.trim().toLowerCase();
+  const filtered = list.filter((s) => {
+    if (q) {
+      const hay = `${s.companyName} ${s.motif} ${s.requesterName}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (companyFilter && s.companyName !== companyFilter) return false;
+    if (statusFilter && s.status !== statusFilter) return false;
+    if (typeFilter && s.type !== typeFilter) return false;
+    return true;
+  });
+
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold tracking-tight">Subventions</h1>
@@ -74,7 +98,40 @@ export default function IrsSubventions() {
         </div>
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-xl border bg-card">
+      <div className="mt-6 flex flex-wrap items-center gap-2">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Rechercher (entreprise, motif, demandeur)…"
+          className="flex-1 min-w-[12rem]"
+        />
+        <FilterSelect
+          value={companyFilter}
+          onChange={setCompanyFilter}
+          options={companyOptions}
+          allLabel="Toutes les entreprises"
+          ariaLabel="Filtrer par entreprise"
+        />
+        <FilterSelect
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={statusOptions}
+          allLabel="Tous les statuts"
+          ariaLabel="Filtrer par statut"
+        />
+        <FilterSelect
+          value={typeFilter}
+          onChange={setTypeFilter}
+          options={typeOptions}
+          allLabel="Tous les types"
+          ariaLabel="Filtrer par type"
+        />
+        <span className="ml-auto text-sm text-muted-foreground">
+          {filtered.length} résultat{filtered.length > 1 ? 's' : ''}
+        </span>
+      </div>
+
+      <div className="mt-4 overflow-hidden rounded-xl border bg-card">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse whitespace-nowrap text-sm">
             <thead>
@@ -90,7 +147,7 @@ export default function IrsSubventions() {
               </tr>
             </thead>
             <tbody>
-              {list.map((s) => (
+              {filtered.map((s) => (
                 <tr key={s.id} className="border-b last:border-b-0">
                   <td className="px-4 py-3 font-medium">{s.companyName}</td>
                   <td className="px-4 py-3">
@@ -196,6 +253,13 @@ export default function IrsSubventions() {
                 <tr>
                   <td colSpan={8} className="px-4 py-4 text-muted-foreground">
                     Aucune demande de subvention.
+                  </td>
+                </tr>
+              )}
+              {list.length > 0 && filtered.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-4 text-muted-foreground">
+                    Aucun résultat pour ces filtres.
                   </td>
                 </tr>
               )}

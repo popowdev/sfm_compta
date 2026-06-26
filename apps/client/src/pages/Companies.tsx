@@ -4,6 +4,7 @@ import { Plus, ChevronRight, Trash2 } from 'lucide-react';
 import type { ModuleKey } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { SearchInput, FilterSelect } from '@/components/ui/filters';
 import {
   getCompanies,
   createCompany,
@@ -680,9 +681,21 @@ export default function Companies() {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [search, setSearch] = useState('');
+  const [activeFilter, setActiveFilter] = useState('');
 
   const companies = useQuery({ queryKey: ['companies'], queryFn: getCompanies });
   const selected = companies.data?.find((c) => c.id === selectedId) ?? null;
+
+  const all = companies.data ?? [];
+  const q = search.trim().toLowerCase();
+  const filtered = all.filter((c) => {
+    if (activeFilter && String(c.active) !== activeFilter) return false;
+    if (!q) return true;
+    return (
+      c.name.toLowerCase().includes(q) || (c.slug ?? '').toLowerCase().includes(q)
+    );
+  });
 
   const create = useMutation({
     mutationFn: () => createCompany({ name: name.trim() }),
@@ -721,14 +734,39 @@ export default function Companies() {
             </Button>
           </form>
 
+          <div className="flex flex-wrap items-center gap-2 border-b p-4">
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Rechercher une entreprise…"
+              className="flex-1 min-w-[12rem]"
+            />
+            <FilterSelect
+              value={activeFilter}
+              onChange={setActiveFilter}
+              options={[
+                { value: 'true', label: 'Actives' },
+                { value: 'false', label: 'Inactives' },
+              ]}
+              allLabel="Tous statuts"
+              ariaLabel="Filtrer par statut"
+            />
+            <span className="ml-auto text-sm text-muted-foreground">
+              {filtered.length} résultat{filtered.length > 1 ? 's' : ''}
+            </span>
+          </div>
+
           <div>
             {companies.isLoading && (
               <div className="p-4 text-sm text-muted-foreground">Chargement…</div>
             )}
-            {companies.data?.length === 0 && (
+            {all.length === 0 && !companies.isLoading && (
               <div className="p-4 text-sm text-muted-foreground">Aucune entreprise pour l'instant.</div>
             )}
-            {companies.data?.map((c) => (
+            {all.length > 0 && filtered.length === 0 && (
+              <div className="p-4 text-sm text-muted-foreground">Aucun résultat pour ces filtres.</div>
+            )}
+            {filtered.map((c) => (
               <button
                 key={c.id}
                 onClick={() => setSelectedId(c.id)}

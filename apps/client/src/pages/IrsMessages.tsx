@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAllMessages, sendIrsMessage, fmtDateTime, type Message } from '@/lib/messages';
 import { MessageThread, MessageComposer } from '@/components/MessageThread';
+import { SearchInput } from '@/components/ui/filters';
 
 interface Thread {
   companyId: number;
@@ -14,6 +15,7 @@ export default function IrsMessages() {
   const queryClient = useQueryClient();
   const { data } = useQuery({ queryKey: ['irs-messages'], queryFn: getAllMessages });
   const [selected, setSelected] = useState<number | null>(null);
+  const [search, setSearch] = useState('');
 
   const threads = useMemo<Thread[]>(() => {
     const byCompany = new Map<number, Thread>();
@@ -30,6 +32,15 @@ export default function IrsMessages() {
       (a, b) => new Date(b.last.createdAt).getTime() - new Date(a.last.createdAt).getTime(),
     );
   }, [data]);
+
+  const filtered = useMemo<Thread[]>(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return threads;
+    return threads.filter(
+      (t) =>
+        t.companyName.toLowerCase().includes(q) || (t.last.body ?? '').toLowerCase().includes(q),
+    );
+  }, [threads, search]);
 
   const active = threads.find((t) => t.companyId === selected) ?? null;
 
@@ -48,8 +59,19 @@ export default function IrsMessages() {
       <div className="mt-6 grid gap-4 md:grid-cols-[300px_1fr]">
         <div className="overflow-hidden rounded-xl border bg-card">
           <div className="border-b px-4 py-3 text-sm font-semibold">Entreprises</div>
+          <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Rechercher…"
+              className="flex-1 min-w-[12rem]"
+            />
+            <span className="ml-auto text-xs text-muted-foreground">
+              {filtered.length} resultat(s)
+            </span>
+          </div>
           <div className="max-h-[60vh] divide-y overflow-y-auto">
-            {threads.map((t) => (
+            {filtered.map((t) => (
               <button
                 key={t.companyId}
                 type="button"
@@ -72,6 +94,11 @@ export default function IrsMessages() {
             ))}
             {threads.length === 0 && (
               <div className="px-4 py-6 text-sm text-muted-foreground">Aucune conversation.</div>
+            )}
+            {threads.length > 0 && filtered.length === 0 && (
+              <div className="px-4 py-6 text-sm text-muted-foreground">
+                Aucun resultat pour ces filtres.
+              </div>
             )}
           </div>
         </div>

@@ -54,6 +54,8 @@ export function DocumentVault({
   canDelete,
   onUpload,
   onDelete,
+  emptyTitle = 'Aucun document',
+  emptyHint = 'Les fichiers déposés apparaîtront ici.',
 }: {
   documents: DocItem[];
   isLoading: boolean;
@@ -61,6 +63,8 @@ export function DocumentVault({
   canDelete: boolean;
   onUpload: (file: File, name: string) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
+  emptyTitle?: string;
+  emptyHint?: string;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -137,7 +141,7 @@ export function DocumentVault({
           <Skeleton className="h-14 rounded-xl" />
         </div>
       ) : documents.length === 0 ? (
-        <EmptyState icon={FolderOpen} title="Aucun document" hint="Les fichiers déposés apparaîtront ici." />
+        <EmptyState icon={FolderOpen} title={emptyTitle} hint={emptyHint} />
       ) : (
         <div className="overflow-hidden rounded-xl border bg-card">
           {documents.map((d, i) => {

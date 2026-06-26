@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getAllDeclarations,
@@ -5,6 +6,7 @@ import {
   fmtMoney,
   type Declaration,
 } from '@/lib/declarations';
+import { SearchInput, FilterSelect, distinctOptions } from '@/components/ui/filters';
 
 const STATUS: Record<Declaration['status'], { label: string; cls: string }> = {
   submitted: { label: 'soumise', cls: 'bg-amber-500/10 text-amber-400' },
@@ -30,6 +32,27 @@ export default function IrsDeclarations() {
     .reduce((s, d) => s + d.totalTax, 0);
   const pending = list.filter((d) => d.status === 'submitted').length;
 
+  const [search, setSearch] = useState('');
+  const [company, setCompany] = useState('');
+  const [status, setStatusFilter] = useState('');
+
+  const companyOptions = distinctOptions(list.map((d) => d.companyName));
+  const statusOptions = (Object.keys(STATUS) as Declaration['status'][]).map((s) => ({
+    value: s,
+    label: STATUS[s].label,
+  }));
+
+  const q = search.trim().toLowerCase();
+  const filtered = list.filter((d) => {
+    if (company && d.companyName !== company) return false;
+    if (status && d.status !== status) return false;
+    if (q) {
+      const hay = `${d.companyName} ${d.weekLabel} ${d.declarantName}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold tracking-tight">Déclarations</h1>
@@ -52,7 +75,33 @@ export default function IrsDeclarations() {
         </div>
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-xl border bg-card">
+      <div className="mt-6 flex flex-wrap items-center gap-2">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Rechercher (entreprise, semaine, déclarant)…"
+          className="flex-1 min-w-[12rem] sm:w-64 sm:flex-none"
+        />
+        <FilterSelect
+          value={company}
+          onChange={setCompany}
+          options={companyOptions}
+          allLabel="Toutes les entreprises"
+          ariaLabel="Filtrer par entreprise"
+        />
+        <FilterSelect
+          value={status}
+          onChange={setStatusFilter}
+          options={statusOptions}
+          allLabel="Tous les statuts"
+          ariaLabel="Filtrer par statut"
+        />
+        <span className="ml-auto text-sm text-muted-foreground">
+          {filtered.length} résultat{filtered.length > 1 ? 's' : ''}
+        </span>
+      </div>
+
+      <div className="mt-4 overflow-hidden rounded-xl border bg-card">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse whitespace-nowrap text-sm">
             <thead>
@@ -70,7 +119,7 @@ export default function IrsDeclarations() {
               </tr>
             </thead>
             <tbody>
-              {list.map((d) => (
+              {filtered.map((d) => (
                 <tr key={d.id} className="border-b last:border-b-0">
                   <td className="px-4 py-3 font-medium">{d.companyName}</td>
                   <td className="px-4 py-3">{d.weekLabel}</td>
@@ -122,6 +171,13 @@ export default function IrsDeclarations() {
                 <tr>
                   <td colSpan={10} className="px-4 py-4 text-muted-foreground">
                     Aucune déclaration.
+                  </td>
+                </tr>
+              )}
+              {list.length > 0 && filtered.length === 0 && (
+                <tr>
+                  <td colSpan={10} className="px-4 py-4 text-muted-foreground">
+                    Aucun résultat pour ces filtres.
                   </td>
                 </tr>
               )}
