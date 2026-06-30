@@ -748,6 +748,8 @@ export const dividendPayouts = mysqlTable('dividend_payouts', {
   taxRate: decimal('tax_rate', { precision: 5, scale: 2 }).notNull().default('33'),
   tax: decimal('tax', { precision: 14, scale: 2 }).notNull().default('0'),
   net: decimal('net', { precision: 14, scale: 2 }).notNull().default('0'),
+  status: mysqlEnum('div_status', ['pending', 'paid', 'cancelled']).notNull().default('pending'),
+  transferValidated: boolean('transfer_validated').notNull().default(false),
   notes: varchar('notes', { length: 300 }),
   declaredByUserId: int('declared_by_user_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at')

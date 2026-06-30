@@ -7,6 +7,7 @@ import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
 import { getFiscalConfig } from '../services/fiscal';
+import { recordAudit } from '../services/audit';
 import { emitInvalidate } from '../realtime/socket';
 
 function methodAction(method: string): PermAction {
@@ -32,6 +33,8 @@ function serialize(r: typeof dividendPayouts.$inferSelect & { companyName?: stri
     taxRate: Number(r.taxRate),
     tax: Number(r.tax),
     net: Number(r.net),
+    status: r.status,
+    transferValidated: r.transferValidated,
     notes: r.notes,
     declaredBy: r.declaredBy ?? null,
     createdAt: r.createdAt,
@@ -51,7 +54,7 @@ async function gate(req: Request, companyId: number) {
 
 const createSchema = z.object({
   shareholderName: z.string().trim().min(1).max(150),
-  rib: z.string().trim().max(40).nullish().or(z.literal('')),
+  rib: z.string().trim().min(1).max(40),
   gross: z.number().nonnegative().finite().max(999_999_999.99),
   notes: z.string().trim().max(300).nullish().or(z.literal('')),
 });
@@ -147,5 +150,48 @@ irsDividendsRouter.get(
     res.json({
       payouts: rows.map((r) => serialize({ ...r.p, companyName: r.companyName, declaredBy: r.declaredBy })),
     });
+  }),
+);
+
+const decisionSchema = z.object({
+  status: z.enum(['pending', 'paid', 'cancelled']).optional(),
+  transferValidated: z.boolean().optional(),
+});
+
+irsDividendsRouter.patch(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'bad_request' });
+    const parsed = decisionSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    const existing = await db
+      .select({ companyId: dividendPayouts.companyId, shareholderName: dividendPayouts.shareholderName })
+      .from(dividendPayouts)
+      .where(eq(dividendPayouts.id, id))
+      .limit(1);
+    if (!existing[0]) return res.status(404).json({ error: 'not_found' });
+    const updates: Partial<typeof dividendPayouts.$inferInsert> = {};
+    if (parsed.data.status !== undefined) updates.status = parsed.data.status;
+    if (parsed.data.transferValidated !== undefined) updates.transferValidated = parsed.data.transferValidated;
+    if (Object.keys(updates).length === 0) return res.json({ ok: true });
+    await db.update(dividendPayouts).set(updates).where(eq(dividendPayouts.id, id));
+    emitInvalidate(['irs', `company:${existing[0].companyId}`], [
+      ['irs-dividends'],
+      ['dividends', existing[0].companyId],
+    ]);
+    await recordAudit({
+      actorUserId: req.user!.id,
+      actorName: req.user!.displayName,
+      action:
+        parsed.data.status !== undefined
+          ? `dividend_${parsed.data.status}`
+          : parsed.data.transferValidated
+            ? 'dividend_transfer_ok'
+            : 'dividend_transfer_off',
+      targetType: 'dividende',
+      targetLabel: `${ref(id)} · ${existing[0].shareholderName}`,
+    });
+    res.json({ ok: true });
   }),
 );

@@ -1,8 +1,13 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fmtMoney } from '@/lib/declarations';
-import { getIrsDividends } from '@/lib/dividends';
+import { getIrsDividends, decideDividend, type DividendStatus } from '@/lib/dividends';
 import { SearchInput, FilterSelect } from '@/components/ui/filters';
+import { useToast } from '@/components/ui/toast';
+import { DIV_STATUS } from '@/pages/Dividendes';
+
+const actionBtn =
+  'rounded-md border border-input px-2 py-1 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50';
 
 function fmtDateTime(d: string): string {
   const dt = new Date(d);
@@ -19,9 +24,18 @@ function Kpi({ label, value, accent }: { label: string; value: string; accent?: 
 }
 
 export default function IrsDividends() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
   const [search, setSearch] = useState('');
   const [company, setCompany] = useState('');
   const q = useQuery({ queryKey: ['irs-dividends'], queryFn: () => getIrsDividends() });
+
+  const decide = useMutation({
+    mutationFn: (v: { id: number; status?: DividendStatus; transferValidated?: boolean }) =>
+      decideDividend(v.id, { status: v.status, transferValidated: v.transferValidated }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['irs-dividends'] }),
+    onError: () => toast('Échec de la mise à jour.', 'error'),
+  });
 
   const all = q.data?.payouts ?? [];
 
@@ -101,6 +115,9 @@ export default function IrsDividends() {
                   <th className="px-4 py-2 text-right font-semibold">Impôt</th>
                   <th className="px-4 py-2 text-right font-semibold">Net</th>
                   <th className="px-4 py-2 text-left font-semibold">Référence</th>
+                  <th className="px-4 py-2 text-left font-semibold">Statut</th>
+                  <th className="px-4 py-2 text-center font-semibold">Transfert</th>
+                  <th className="px-4 py-2 text-right font-semibold">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -113,7 +130,43 @@ export default function IrsDividends() {
                     <td className="px-4 py-2 text-right">{fmtMoney(p.gross)} $</td>
                     <td className="px-4 py-2 text-right text-amber-400">{fmtMoney(p.tax)} $</td>
                     <td className="px-4 py-2 text-right font-medium text-emerald-400">{fmtMoney(p.net)} $</td>
-                    <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{p.reference}</td>
+                    <td className="px-4 py-2 text-xs text-muted-foreground">{p.reference}</td>
+                    <td className="px-4 py-2">
+                      <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${DIV_STATUS[p.status]?.cls ?? ''}`}>
+                        {DIV_STATUS[p.status]?.label ?? p.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      <label className="inline-flex cursor-pointer items-center gap-1 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-input accent-primary"
+                          checked={p.transferValidated}
+                          disabled={decide.isPending}
+                          onChange={() => decide.mutate({ id: p.id, transferValidated: !p.transferValidated })}
+                        />
+                        validé
+                      </label>
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <div className="flex justify-end gap-1">
+                        {p.status !== 'paid' && (
+                          <button className={actionBtn} disabled={decide.isPending} onClick={() => decide.mutate({ id: p.id, status: 'paid' })}>
+                            Payé
+                          </button>
+                        )}
+                        {p.status !== 'cancelled' && (
+                          <button className={actionBtn} disabled={decide.isPending} onClick={() => decide.mutate({ id: p.id, status: 'cancelled' })}>
+                            Annulé
+                          </button>
+                        )}
+                        {p.status !== 'pending' && (
+                          <button className={actionBtn} disabled={decide.isPending} onClick={() => decide.mutate({ id: p.id, status: 'pending' })}>
+                            Rouvrir
+                          </button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -27,6 +27,12 @@ function fmtDateTime(d: string): string {
 
 const EMPTY = { shareholderName: '', rib: '', gross: '', notes: '' };
 
+export const DIV_STATUS: Record<string, { label: string; cls: string }> = {
+  pending: { label: 'en attente', cls: 'bg-amber-500/10 text-amber-400' },
+  paid: { label: 'payé', cls: 'bg-emerald-500/10 text-emerald-400' },
+  cancelled: { label: 'annulé', cls: 'bg-destructive/10 text-destructive' },
+};
+
 export default function Dividendes() {
   const { companyId, canCreate, canDelete } = useModulePerms('dividendes');
   const queryClient = useQueryClient();
@@ -62,6 +68,7 @@ export default function Dividendes() {
   const grossNum = Number(form.gross);
   const valid =
     form.shareholderName.trim().length > 0 &&
+    form.rib.trim().length > 0 &&
     form.gross !== '' &&
     Number.isFinite(grossNum) &&
     grossNum >= 0 &&
@@ -71,7 +78,7 @@ export default function Dividendes() {
   const submit = () =>
     create.mutate({
       shareholderName: form.shareholderName.trim(),
-      rib: form.rib.trim() || undefined,
+      rib: form.rib.trim(),
       gross: grossNum,
       notes: form.notes.trim() || undefined,
     });
@@ -137,6 +144,7 @@ export default function Dividendes() {
                 <th className="px-3 py-2 text-right font-semibold">Impôt</th>
                 <th className="px-3 py-2 text-right font-semibold">Net</th>
                 <th className="px-3 py-2 text-left font-semibold">Réf.</th>
+                <th className="px-3 py-2 text-left font-semibold">Statut</th>
                 <th className="px-3 py-2" />
               </tr>
             </thead>
@@ -150,6 +158,12 @@ export default function Dividendes() {
                   <td className="px-3 py-2 text-right text-amber-400">{fmtMoney(p.tax)} $</td>
                   <td className="px-3 py-2 text-right font-medium text-emerald-400">{fmtMoney(p.net)} $</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{p.reference}</td>
+                  <td className="px-3 py-2">
+                    <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${DIV_STATUS[p.status]?.cls ?? ''}`}>
+                      {DIV_STATUS[p.status]?.label ?? p.status}
+                    </span>
+                    {p.transferValidated && <span className="ml-1 text-[11px] text-emerald-400">· transfert ✓</span>}
+                  </td>
                   <td className="px-3 py-2 text-right">
                     {canDelete && (
                       <button
@@ -200,12 +214,12 @@ export default function Dividendes() {
             >
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="text-sm">
-                  <span className={labelCls}>Actionnaire</span>
-                  <input className={inputCls} value={form.shareholderName} onChange={(e) => set('shareholderName', e.target.value)} />
+                  <span className={labelCls}>Actionnaire (nom prénom) <span className="text-destructive">*</span></span>
+                  <input className={inputCls} value={form.shareholderName} onChange={(e) => set('shareholderName', e.target.value)} placeholder="ex. Ryuuji Kanzaki" />
                 </label>
                 <label className="text-sm">
-                  <span className={labelCls}>RIB</span>
-                  <input className={inputCls} value={form.rib} onChange={(e) => set('rib', e.target.value)} placeholder="Optionnel" />
+                  <span className={labelCls}>RIB <span className="text-destructive">*</span></span>
+                  <input className={inputCls} value={form.rib} onChange={(e) => set('rib', e.target.value)} placeholder="Obligatoire" />
                 </label>
                 <label className="text-sm">
                   <span className={labelCls}>Montant brut ($)</span>

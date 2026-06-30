@@ -1,0 +1,2 @@
+ALTER TABLE `dividend_payouts` ADD `div_status` enum('pending','paid','cancelled') DEFAULT 'pending' NOT NULL;--> statement-breakpoint
+ALTER TABLE `dividend_payouts` ADD `transfer_validated` boolean DEFAULT false NOT NULL;

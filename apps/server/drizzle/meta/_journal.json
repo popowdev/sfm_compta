@@ -274,6 +274,13 @@
       "when": 1782475743866,
       "tag": "0038_free_electro",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "5",
+      "when": 1782838560845,
+      "tag": "0039_silly_ender_wiggin",
+      "breakpoints": true
     }
   ]
 }
