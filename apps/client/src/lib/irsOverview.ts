@@ -12,6 +12,7 @@ export interface IrsOverview {
   pendingSubventions: { id: number; companyName: string; motif: string; amountRequested: number; createdAt: string }[];
   submittedDeclarations: { id: number; companyName: string; weekLabel: string; totalTax: number; createdAt: string }[];
   recentMessages: { id: number; companyName: string; fromIrs: boolean; senderName: string; body: string; createdAt: string }[];
+  companiesShares: { id: number; name: string; valuation: number; shareholderCount: number; attributedPct: number }[];
 }
 
 export const getIrsOverview = () => apiFetch<IrsOverview>('/api/irs/overview');

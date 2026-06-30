@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { companies, associations, subventions, declarations, messages } from '../db/schema';
+import { companies, associations, subventions, declarations, messages, shareholders } from '../db/schema';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 
@@ -56,6 +56,21 @@ irsOverviewRouter.get(
       .orderBy(desc(messages.createdAt))
       .limit(6);
 
+    const shareRows = await db
+      .select({
+        id: companies.id,
+        name: companies.name,
+        valuation: companies.valuation,
+        count: sql<number>`COUNT(${shareholders.id})`,
+        pct: sql<string>`COALESCE(SUM(${shareholders.percentage}), 0)`,
+      })
+      .from(companies)
+      .leftJoin(shareholders, eq(shareholders.companyId, companies.id))
+      .where(and(isNull(companies.deletedAt), eq(companies.active, true)))
+      .groupBy(companies.id, companies.name, companies.valuation)
+      .orderBy(desc(companies.valuation))
+      .limit(12);
+
     res.json({
       kpis: {
         companies: Number(companyRows[0]?.n ?? 0),
@@ -86,6 +101,13 @@ irsOverviewRouter.get(
         senderName: r.m.senderName,
         body: r.m.body.slice(0, 90),
         createdAt: r.m.createdAt,
+      })),
+      companiesShares: shareRows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        valuation: Number(r.valuation),
+        shareholderCount: Number(r.count),
+        attributedPct: Math.round(Number(r.pct) * 100) / 100,
       })),
     });
   }),

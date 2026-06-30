@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Building2, Landmark, HandCoins, FileText, Coins, TrendingUp, ArrowRight, MessageSquare } from 'lucide-react';
+import { Building2, Landmark, HandCoins, FileText, Coins, TrendingUp, ArrowRight, MessageSquare, PieChart } from 'lucide-react';
 import { Kpi, KpiSkeleton } from '@/components/ui/kpi';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fmtMoney } from '@/lib/declarations';
@@ -94,6 +94,47 @@ export function IrsCockpit() {
             ))
           )}
         </Panel>
+      </div>
+
+      <div className="rounded-xl border bg-card p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <PieChart className="h-4 w-4 text-muted-foreground" /> Parts des entreprises
+          </h3>
+          <Link to="/entreprises" className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline">
+            Voir <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+        {d.companiesShares.length === 0 ? (
+          <p className="px-1 py-2 text-xs text-muted-foreground">Aucune entreprise.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-2 py-2 text-left font-semibold">Entreprise</th>
+                  <th className="px-2 py-2 text-right font-semibold">Valorisation</th>
+                  <th className="px-2 py-2 text-right font-semibold">Valeur/part</th>
+                  <th className="px-2 py-2 text-right font-semibold">Actionnaires</th>
+                  <th className="px-2 py-2 text-right font-semibold">Parts attribuées</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.companiesShares.map((c) => (
+                  <tr key={c.id} className="border-b last:border-b-0">
+                    <td className="px-2 py-2 font-medium">{c.name}</td>
+                    <td className="px-2 py-2 text-right">{fmtMoney(c.valuation)} $</td>
+                    <td className="px-2 py-2 text-right text-emerald-400">{fmtMoney(c.valuation / 100)} $</td>
+                    <td className="px-2 py-2 text-right text-muted-foreground">{c.shareholderCount}</td>
+                    <td className={`px-2 py-2 text-right font-medium ${c.attributedPct > 100 ? 'text-destructive' : ''}`}>
+                      {c.attributedPct.toLocaleString('fr-FR')} %
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
