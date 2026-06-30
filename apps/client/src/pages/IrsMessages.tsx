@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Plus, X } from 'lucide-react';
 import { getAllMessages, sendIrsMessage, fmtDateTime, type Message } from '@/lib/messages';
+import { getCompanies } from '@/lib/companies';
 import { MessageThread, MessageComposer } from '@/components/MessageThread';
 import { SearchInput } from '@/components/ui/filters';
 
@@ -15,7 +17,9 @@ export default function IrsMessages() {
   const queryClient = useQueryClient();
   const { data } = useQuery({ queryKey: ['irs-messages'], queryFn: getAllMessages });
   const [selected, setSelected] = useState<number | null>(null);
+  const [selectedName, setSelectedName] = useState<string>('');
   const [search, setSearch] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const threads = useMemo<Thread[]>(() => {
     const byCompany = new Map<number, Thread>();
@@ -42,7 +46,12 @@ export default function IrsMessages() {
     );
   }, [threads, search]);
 
-  const active = threads.find((t) => t.companyId === selected) ?? null;
+  const activeThread = threads.find((t) => t.companyId === selected);
+  const active: { companyId: number; companyName: string; messages: Message[] } | null = activeThread
+    ? activeThread
+    : selected
+      ? { companyId: selected, companyName: selectedName || `#${selected}`, messages: [] }
+      : null;
 
   const send = useMutation({
     mutationFn: (body: string) => sendIrsMessage(selected!, body),
@@ -58,7 +67,18 @@ export default function IrsMessages() {
 
       <div className="mt-6 grid gap-4 md:grid-cols-[300px_1fr]">
         <div className="overflow-hidden rounded-xl border bg-card">
-          <div className="border-b px-4 py-3 text-sm font-semibold">Entreprises</div>
+          <div className="flex items-center justify-between border-b px-4 py-3">
+            <span className="text-sm font-semibold">Entreprises</span>
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              title="Nouvelle conversation"
+              aria-label="Nouvelle conversation"
+              className="grid h-7 w-7 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
           <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
             <SearchInput
               value={search}
@@ -120,8 +140,58 @@ export default function IrsMessages() {
             </>
           ) : (
             <div className="grid flex-1 place-items-center text-sm text-muted-foreground">
-              Sélectionnez une entreprise pour voir la conversation.
+              Sélectionnez une entreprise (ou « + ») pour démarrer une conversation.
             </div>
+          )}
+        </div>
+      </div>
+
+      {pickerOpen && (
+        <CompanyPickerModal
+          onClose={() => setPickerOpen(false)}
+          onPick={(id, name) => {
+            setSelected(id);
+            setSelectedName(name);
+            setPickerOpen(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function CompanyPickerModal({ onClose, onPick }: { onClose: () => void; onPick: (id: number, name: string) => void }) {
+  const { data } = useQuery({ queryKey: ['companies'], queryFn: getCompanies });
+  const [q, setQ] = useState('');
+  const term = q.trim().toLowerCase();
+  const list = (data ?? []).filter((c) => !term || c.name.toLowerCase().includes(term));
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
+      <div className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b px-5 py-4">
+          <h2 className="text-sm font-semibold">Nouvelle conversation</h2>
+          <button type="button" onClick={onClose} aria-label="Fermer" className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="border-b p-3">
+          <SearchInput value={q} onChange={setQ} placeholder="Rechercher une entreprise…" className="w-full" />
+        </div>
+        <div className="max-h-[55vh] divide-y overflow-y-auto">
+          {list.length === 0 ? (
+            <div className="px-4 py-6 text-sm text-muted-foreground">Aucune entreprise.</div>
+          ) : (
+            list.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => onPick(c.id, c.name)}
+                className="block w-full px-4 py-3 text-left text-sm font-medium transition-colors hover:bg-accent"
+              >
+                {c.name}
+              </button>
+            ))
           )}
         </div>
       </div>
