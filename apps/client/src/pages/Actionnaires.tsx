@@ -1,12 +1,15 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { PieChart as PieIcon, Coins, Users } from 'lucide-react';
+import { PieChart as PieIcon, Coins, Users, Settings2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Kpi, KpiSkeleton } from '@/components/ui/kpi';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useModulePerms } from '@/lib/useCompany';
 import { fmtMoney } from '@/lib/declarations';
 import { getMyShareholders } from '@/lib/shareholders';
+import { ManageShareholdersModal } from '@/components/ManageShareholdersModal';
 
 const COLORS = ['#34d399', '#2dd4bf', '#22c55e', '#10b981', '#059669', '#14b8a6', '#84cc16', '#06b6d4'];
 const tooltipStyle = {
@@ -19,7 +22,9 @@ const tooltipStyle = {
 
 export default function Actionnaires() {
   const { companyId } = useModulePerms('actionnaires');
+  const [manageOpen, setManageOpen] = useState(false);
   const q = useQuery({ queryKey: ['shareholders', companyId], queryFn: () => getMyShareholders(companyId) });
+  const canManage = q.data?.canManage ?? false;
 
   if (q.isLoading) {
     return (
@@ -45,17 +50,33 @@ export default function Actionnaires() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Kpi icon={Coins} label="Valorisation" value={`${fmtMoney(valuation)} $`} accent="text-primary" />
-        <Kpi icon={PieIcon} label="Valeur d'une part" value={`${fmtMoney(partValue)} $`} accent="text-emerald-400" />
-        <Kpi icon={Users} label="Actionnaires" value={String(list.length)} />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-3">
+          <Kpi icon={Coins} label="Valorisation" value={`${fmtMoney(valuation)} $`} accent="text-primary" />
+          <Kpi icon={PieIcon} label="Valeur d'une part" value={`${fmtMoney(partValue)} $`} accent="text-emerald-400" />
+          <Kpi icon={Users} label="Actionnaires" value={String(list.length)} />
+        </div>
+        {canManage && (
+          <Button variant="outline" onClick={() => setManageOpen(true)}>
+            <Settings2 className="h-4 w-4" />
+            Gérer les actionnaires
+          </Button>
+        )}
       </div>
 
       {list.length === 0 ? (
         <EmptyState
           icon={PieIcon}
           title="Aucun actionnaire"
-          hint="La répartition du capital est gérée par l'IRS et apparaîtra ici."
+          hint={canManage ? 'Clique « Gérer les actionnaires » pour définir la répartition du capital.' : "La répartition du capital est gérée par l'IRS et apparaîtra ici."}
+          action={
+            canManage ? (
+              <Button variant="outline" onClick={() => setManageOpen(true)}>
+                <Settings2 className="h-4 w-4" />
+                Gérer les actionnaires
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
@@ -134,6 +155,8 @@ export default function Actionnaires() {
           </div>
         </div>
       )}
+
+      <ManageShareholdersModal companyId={companyId} open={manageOpen} onClose={() => setManageOpen(false)} />
     </div>
   );
 }
