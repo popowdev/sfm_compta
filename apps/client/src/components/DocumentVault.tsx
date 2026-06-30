@@ -61,7 +61,7 @@ export function DocumentVault({
   isLoading: boolean;
   canCreate: boolean;
   canDelete: boolean;
-  onUpload: (file: File, name: string) => Promise<void>;
+  onUpload: (file: File, name: string, folder: string) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
   emptyTitle?: string;
   emptyHint?: string;
@@ -71,15 +71,23 @@ export function DocumentVault({
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState('');
+  const [folder, setFolder] = useState('');
+  const [folderFilter, setFolderFilter] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const folders = [...new Set(documents.map((d) => d.folder).filter((f): f is string => !!f))].sort((a, b) =>
+    a.localeCompare(b, 'fr'),
+  );
+  const shown = folderFilter ? documents.filter((d) => (d.folder ?? '') === folderFilter) : documents;
 
   const submit = async () => {
     if (!file || busy) return;
     setBusy(true);
     try {
-      await onUpload(file, name);
+      await onUpload(file, name, folder);
       setFile(null);
       setName('');
+      setFolder('');
       if (fileRef.current) fileRef.current.value = '';
       toast('Document ajouté.', 'success');
     } catch (e) {
@@ -114,7 +122,7 @@ export function DocumentVault({
                 className="block text-sm text-muted-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground hover:file:bg-accent"
               />
             </label>
-            <label className="min-w-[12rem] flex-1 text-sm">
+            <label className="min-w-[10rem] flex-1 text-sm">
               <span className="mb-1 block text-muted-foreground">Nom (optionnel)</span>
               <input
                 value={name}
@@ -122,6 +130,21 @@ export function DocumentVault({
                 placeholder={file ? file.name : 'Nom du document'}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
               />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-muted-foreground">Dossier (optionnel)</span>
+              <input
+                list="doc-folders"
+                value={folder}
+                onChange={(e) => setFolder(e.target.value)}
+                placeholder="ex. convoi, décrets…"
+                className="h-9 w-44 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
+              />
+              <datalist id="doc-folders">
+                {folders.map((f) => (
+                  <option key={f} value={f} />
+                ))}
+              </datalist>
             </label>
             <Button onClick={submit} disabled={!file || busy}>
               <Upload className="h-4 w-4" />
@@ -143,8 +166,36 @@ export function DocumentVault({
       ) : documents.length === 0 ? (
         <EmptyState icon={FolderOpen} title={emptyTitle} hint={emptyHint} />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
-          {documents.map((d, i) => {
+        <div className="space-y-3">
+          {folders.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setFolderFilter('')}
+                className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${!folderFilter ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent'}`}
+              >
+                Tous ({documents.length})
+              </button>
+              {folders.map((f) => {
+                const n = documents.filter((d) => d.folder === f).length;
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setFolderFilter(f)}
+                    className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${folderFilter === f ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent'}`}
+                  >
+                    <FolderOpen className="h-3 w-3" /> {f} ({n})
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="overflow-hidden rounded-xl border bg-card">
+            {shown.length === 0 ? (
+              <div className="p-6 text-sm text-muted-foreground">Aucun document dans ce dossier.</div>
+            ) : (
+              shown.map((d, i) => {
             const { Icon, cls } = docIcon(d.mimeType);
             return (
               <div key={d.id} className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? 'border-t' : ''}`}>
@@ -152,7 +203,14 @@ export function DocumentVault({
                   <Icon className={`h-[18px] w-[18px] ${cls}`} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{d.name}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium">{d.name}</span>
+                    {d.folder && (
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                        <FolderOpen className="h-3 w-3" /> {d.folder}
+                      </span>
+                    )}
+                  </div>
                   <div className="truncate text-xs text-muted-foreground">
                     {fmtSize(d.size)} · {fmtDateTime(d.createdAt)}
                     {d.uploadedByName ? ` · ${d.uploadedByName}` : ''}
@@ -182,7 +240,9 @@ export function DocumentVault({
                 )}
               </div>
             );
-          })}
+              })
+            )}
+          </div>
         </div>
       )}
     </div>

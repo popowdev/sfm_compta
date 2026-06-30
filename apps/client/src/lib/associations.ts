@@ -90,8 +90,8 @@ export const deleteAssociationTransaction = (id: number, tid: number) =>
 
 export const getAssociationDocuments = (id: number) =>
   apiFetch<{ canWrite: boolean; documents: DocItem[] }>(`/api/me/associations/${id}/documents`);
-export const uploadAssociationDocument = (id: number, file: File, name: string) =>
-  multipart(`/api/me/associations/${id}/documents`, { name }, 'file', file);
+export const uploadAssociationDocument = (id: number, file: File, name: string, folder?: string) =>
+  multipart(`/api/me/associations/${id}/documents`, { name, folder: folder ?? '' }, 'file', file);
 export const deleteAssociationDocument = (id: number, did: number) =>
   apiFetch<{ ok: boolean }>(`/api/me/associations/${id}/documents/${did}`, { method: 'DELETE' });
 

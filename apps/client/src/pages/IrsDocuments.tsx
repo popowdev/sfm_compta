@@ -45,8 +45,8 @@ export default function IrsDocuments() {
           canDelete
           emptyTitle={documents.length > 0 ? 'Aucun résultat' : 'Aucun document'}
           emptyHint={documents.length > 0 ? 'Aucun document ne correspond à ta recherche.' : 'Les fichiers déposés apparaîtront ici.'}
-          onUpload={async (file, name) => {
-            await uploadIrsDocument(file, name);
+          onUpload={async (file, name, folder) => {
+            await uploadIrsDocument(file, name, folder);
             invalidate();
           }}
           onDelete={async (id) => {

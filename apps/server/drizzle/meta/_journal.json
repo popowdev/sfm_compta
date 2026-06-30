@@ -281,6 +281,13 @@
       "when": 1782838560845,
       "tag": "0039_silly_ender_wiggin",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "5",
+      "when": 1782839581338,
+      "tag": "0040_spicy_northstar",
+      "breakpoints": true
     }
   ]
 }

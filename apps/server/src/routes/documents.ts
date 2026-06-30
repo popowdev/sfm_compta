@@ -38,6 +38,10 @@ function docName(req: Request): string {
   const fallback = req.file?.originalname ?? 'document';
   return (raw || fallback).slice(0, 200);
 }
+function docFolder(req: Request): string | null {
+  const raw = typeof req.body?.folder === 'string' ? req.body.folder.trim() : '';
+  return raw ? raw.slice(0, 60) : null;
+}
 
 // ---------- Company documents ----------
 
@@ -69,6 +73,7 @@ meDocumentsRouter.get(
         url: companyDocuments.url,
         mimeType: companyDocuments.mimeType,
         size: companyDocuments.size,
+        folder: companyDocuments.folder,
         uploadedByName: users.displayName,
         createdAt: companyDocuments.createdAt,
       })
@@ -101,6 +106,7 @@ meDocumentsRouter.post(
       url: documentFileUrl(req.file.filename),
       mimeType: req.file.mimetype,
       size: req.file.size,
+      folder: docFolder(req),
       uploadedByUserId: req.user!.id,
     });
     emitInvalidate(['irs', `company:${companyId}`], [['company-documents', companyId]]);
@@ -146,6 +152,7 @@ irsDocumentsRouter.get(
         url: irsDocuments.url,
         mimeType: irsDocuments.mimeType,
         size: irsDocuments.size,
+        folder: irsDocuments.folder,
         uploadedByName: users.displayName,
         createdAt: irsDocuments.createdAt,
       })
@@ -166,6 +173,7 @@ irsDocumentsRouter.post(
       url: documentFileUrl(req.file.filename),
       mimeType: req.file.mimetype,
       size: req.file.size,
+      folder: docFolder(req),
       uploadedByUserId: req.user!.id,
     });
     emitInvalidate(['irs'], [['irs-documents']]);

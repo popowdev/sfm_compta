@@ -21,8 +21,8 @@ function DocsBody({ associationId }: { associationId: number }) {
       isLoading={q.isLoading}
       canCreate={q.data?.canWrite ?? false}
       canDelete={q.data?.canWrite ?? false}
-      onUpload={async (file, name) => {
-        await uploadAssociationDocument(associationId, file, name);
+      onUpload={async (file, name, folder) => {
+        await uploadAssociationDocument(associationId, file, name, folder);
         invalidate();
       }}
       onDelete={async (id) => {

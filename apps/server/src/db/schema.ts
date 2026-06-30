@@ -294,6 +294,7 @@ export const companyDocuments = mysqlTable('company_documents', {
   name: varchar('name', { length: 200 }).notNull(),
   url: varchar('url', { length: 255 }).notNull(),
   mimeType: varchar('mime_type', { length: 120 }).notNull(),
+  folder: varchar('folder', { length: 60 }),
   size: int('size').notNull().default(0),
   uploadedByUserId: int('uploaded_by_user_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at')
@@ -306,6 +307,7 @@ export const irsDocuments = mysqlTable('irs_documents', {
   name: varchar('name', { length: 200 }).notNull(),
   url: varchar('url', { length: 255 }).notNull(),
   mimeType: varchar('mime_type', { length: 120 }).notNull(),
+  folder: varchar('folder', { length: 60 }),
   size: int('size').notNull().default(0),
   uploadedByUserId: int('uploaded_by_user_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at')
@@ -366,6 +368,7 @@ export const associationDocuments = mysqlTable('association_documents', {
   name: varchar('name', { length: 200 }).notNull(),
   url: varchar('url', { length: 255 }).notNull(),
   mimeType: varchar('mime_type', { length: 120 }).notNull(),
+  folder: varchar('folder', { length: 60 }),
   size: int('size').notNull().default(0),
   uploadedByUserId: int('uploaded_by_user_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at')

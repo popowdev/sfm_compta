@@ -22,8 +22,8 @@ export default function Documents() {
       isLoading={q.isLoading}
       canCreate={canCreate}
       canDelete={canDelete}
-      onUpload={async (file, name) => {
-        await uploadCompanyDocument(companyId, file, name);
+      onUpload={async (file, name, folder) => {
+        await uploadCompanyDocument(companyId, file, name, folder);
         invalidate();
       }}
       onDelete={async (id) => {

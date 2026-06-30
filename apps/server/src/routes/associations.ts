@@ -453,6 +453,7 @@ meAssociationsRouter.get(
         url: associationDocuments.url,
         mimeType: associationDocuments.mimeType,
         size: associationDocuments.size,
+        folder: associationDocuments.folder,
         uploadedByName: users.displayName,
         createdAt: associationDocuments.createdAt,
       })
@@ -480,12 +481,14 @@ meAssociationsRouter.post(
     }
     if (!req.file) return res.status(400).json({ error: 'file_required' });
     const raw = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    const rawFolder = typeof req.body?.folder === 'string' ? req.body.folder.trim() : '';
     await db.insert(associationDocuments).values({
       associationId: id,
       name: (raw || req.file.originalname || 'document').slice(0, 200),
       url: documentFileUrl(req.file.filename),
       mimeType: req.file.mimetype,
       size: req.file.size,
+      folder: rawFolder ? rawFolder.slice(0, 60) : null,
       uploadedByUserId: req.user!.id,
     });
     emitInvalidate(['irs', `assoc:${id}`], [['association-documents', id]]);
