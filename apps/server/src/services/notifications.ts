@@ -39,6 +39,15 @@ export async function companyManagerUserIds(companyId: number): Promise<number[]
   return rows.map((r) => r.userId);
 }
 
+export async function allCompanyManagerUserIds(): Promise<number[]> {
+  const rows = await db
+    .select({ userId: memberships.userId })
+    .from(memberships)
+    .innerJoin(companyRoles, eq(memberships.companyRoleId, companyRoles.id))
+    .where(and(eq(memberships.active, true), eq(companyRoles.canManage, true)));
+  return [...new Set(rows.map((r) => r.userId))];
+}
+
 export async function irsUserIds(): Promise<number[]> {
   const rows = await db
     .select({ userId: userAppRoles.userId })

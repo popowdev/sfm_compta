@@ -18,6 +18,8 @@ import ModulePage from '@/pages/ModulePage';
 import CompanySettings from '@/pages/CompanySettings';
 import Associations from '@/pages/Associations';
 import Calendrier from '@/pages/Calendrier';
+import Annonces from '@/pages/Annonces';
+import Bourse from '@/pages/Bourse';
 import AssociationIndex from '@/pages/AssociationIndex';
 import AssociationMembers from '@/pages/AssociationMembers';
 import AssociationTresorerie from '@/pages/AssociationTresorerie';
@@ -49,6 +51,8 @@ function ProtectedApp() {
         <Route path="/entreprise/:slug/parametres" element={<CompanySettings />} />
         <Route path="/associations" element={<Associations />} />
         <Route path="/calendrier" element={<Calendrier />} />
+        <Route path="/annonces" element={<Annonces />} />
+        <Route path="/bourse" element={<Bourse />} />
         <Route path="/association/:slug" element={<AssociationIndex />} />
         <Route path="/association/:slug/membres" element={<AssociationMembers />} />
         <Route path="/association/:slug/tresorerie" element={<AssociationTresorerie />} />

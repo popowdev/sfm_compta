@@ -412,6 +412,48 @@ export const auditLog = mysqlTable(
   (t) => ({ idxCreated: index('idx_audit_created').on(t.createdAt) }),
 );
 
+export const announcements = mysqlTable('announcements', {
+  id: int('id').autoincrement().primaryKey(),
+  title: varchar('title', { length: 160 }).notNull(),
+  body: text('body').notNull(),
+  pinned: boolean('pinned').notNull().default(false),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdByName: varchar('created_by_name', { length: 120 }).notNull(),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const shareListings = mysqlTable('share_listings', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  sellerShareholderId: int('seller_shareholder_id').references(() => shareholders.id, { onDelete: 'set null' }),
+  parts: decimal('parts', { precision: 5, scale: 2 }).notNull(),
+  pricePerPart: decimal('price_per_part', { precision: 14, scale: 2 }).notNull().default('0'),
+  note: varchar('note', { length: 250 }),
+  status: mysqlEnum('listing_status', ['open', 'closed']).notNull().default('open'),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const shareRequests = mysqlTable('share_requests', {
+  id: int('id').autoincrement().primaryKey(),
+  listingId: int('listing_id')
+    .notNull()
+    .references(() => shareListings.id, { onDelete: 'cascade' }),
+  buyerUserId: int('buyer_user_id').references(() => users.id, { onDelete: 'set null' }),
+  buyerName: varchar('buyer_name', { length: 120 }).notNull(),
+  parts: decimal('parts', { precision: 5, scale: 2 }).notNull(),
+  status: mysqlEnum('request_status', ['pending', 'accepted', 'refused']).notNull().default('pending'),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const events = mysqlTable('events', {
   id: int('id').autoincrement().primaryKey(),
   title: varchar('title', { length: 150 }).notNull(),

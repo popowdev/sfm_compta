@@ -288,6 +288,13 @@
       "when": 1782839581338,
       "tag": "0040_spicy_northstar",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "5",
+      "when": 1782840072018,
+      "tag": "0041_freezing_invaders",
+      "breakpoints": true
     }
   ]
 }

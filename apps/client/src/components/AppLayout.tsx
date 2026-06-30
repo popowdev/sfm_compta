@@ -14,6 +14,8 @@ import {
   Landmark,
   CalendarDays,
   ScrollText,
+  Megaphone,
+  TrendingUp,
   Wallet,
   SlidersHorizontal,
   Settings,
@@ -159,6 +161,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
         items: [
           { to: '/', label: 'Tableau de bord', Icon: LayoutDashboard, end: true },
           { to: '/calendrier', label: 'Calendrier', Icon: CalendarDays },
+          { to: '/annonces', label: 'Annonces', Icon: Megaphone },
+          { to: '/bourse', label: 'Bourse de parts', Icon: TrendingUp },
           // Members who belong to an association keep a personal entry point
           // (the IRS registry lives in the IRS group below).
           ...(!isIrs && assocData.length > 0
