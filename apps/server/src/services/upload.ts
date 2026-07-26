@@ -60,6 +60,34 @@ export const subventionUpload = multer({
 
 export const subventionFileUrl = (filename: string) => `/uploads/subventions/${filename}`;
 
+const TICKET_UPLOAD_DIR = path.join(env.UPLOAD_DIR, 'tickets');
+mkdirSync(TICKET_UPLOAD_DIR, { recursive: true });
+
+export const ticketUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, TICKET_UPLOAD_DIR),
+    filename: (_req, file, cb) => cb(null, safeName(file.mimetype)),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024, files: 3 },
+  fileFilter: (_req, file, cb) => cb(null, IMAGE_MIMES.includes(file.mimetype)),
+});
+
+export const ticketFilePath = (filename: string) => path.join(TICKET_UPLOAD_DIR, filename);
+
+const EVENT_POSTER_DIR = path.join(env.UPLOAD_DIR, 'events');
+mkdirSync(EVENT_POSTER_DIR, { recursive: true });
+
+export const eventPosterUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, EVENT_POSTER_DIR),
+    filename: (_req, file, cb) => cb(null, safeName(file.mimetype)),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => cb(null, IMAGE_MIMES.includes(file.mimetype)),
+});
+
+export const eventPosterUrl = (filename: string) => `/uploads/events/${filename}`;
+
 const DOCUMENT_UPLOAD_DIR = path.join(env.UPLOAD_DIR, 'documents');
 mkdirSync(DOCUMENT_UPLOAD_DIR, { recursive: true });
 

@@ -20,6 +20,7 @@ export interface MyCompany {
   company: { id: number; name: string; slug: string; logoUrl: string | null };
   grade: { id: number; name: string } | null;
   canManage: boolean;
+  fivemActive: boolean;
   modules: MyModule[];
 }
 

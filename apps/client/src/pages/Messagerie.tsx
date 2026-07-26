@@ -1,12 +1,16 @@
+import { useState } from 'react';
 import { useModulePerms } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getMyMessages, sendMyMessage } from '@/lib/messages';
 import { MessageThread, MessageComposer } from '@/components/MessageThread';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/toast';
 
 export default function Messagerie() {
   const { companyId, canCreate } = useModulePerms('messagerie');
   const queryClient = useQueryClient();
+  const toast = useToast();
+  const [sentTick, setSentTick] = useState(0);
 
   const q = useQuery({
     queryKey: ['messages', companyId],
@@ -15,7 +19,11 @@ export default function Messagerie() {
 
   const send = useMutation({
     mutationFn: (body: string) => sendMyMessage(companyId, body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['messages', companyId] }),
+    onSuccess: () => {
+      setSentTick((n) => n + 1);
+      queryClient.invalidateQueries({ queryKey: ['messages', companyId] });
+    },
+    onError: () => toast("Échec de l'envoi du message. Réessaie.", 'error'),
   });
 
   const messages = q.data?.messages ?? [];
@@ -52,7 +60,7 @@ export default function Messagerie() {
           )}
         </div>
       </div>
-      <MessageComposer onSend={(b) => send.mutate(b)} pending={send.isPending} disabled={!canCreate} />
+      <MessageComposer onSend={(b) => send.mutate(b)} pending={send.isPending} disabled={!canCreate} clearSignal={sentTick} />
     </div>
   );
 }

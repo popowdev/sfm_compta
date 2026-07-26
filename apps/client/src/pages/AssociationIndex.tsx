@@ -1,11 +1,9 @@
 import { Link } from 'react-router-dom';
 import { Users, Wallet, Activity, ArrowRight, Coins, FolderArchive } from 'lucide-react';
-import { ASSOCIATION_TX_TYPES } from '@rp-compta/shared';
 import { Kpi } from '@/components/ui/kpi';
 import { AssocPage } from '@/components/AssocPage';
 import { fmtMoney } from '@/lib/declarations';
 
-const TX_LABEL: Record<string, string> = Object.fromEntries(ASSOCIATION_TX_TYPES.map((t) => [t.key, t.label]));
 
 export default function AssociationIndex() {
   return (
@@ -47,7 +45,9 @@ export default function AssociationIndex() {
                       <li key={t.id} className="flex items-center justify-between gap-3 text-sm">
                         <span className="min-w-0 truncate">
                           <span className="font-medium">{t.label}</span>
-                          <span className="ml-2 text-xs text-muted-foreground">{TX_LABEL[t.type] ?? t.type}</span>
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {t.direction === 'in' ? `de ${t.fromName ?? '—'}` : `vers ${t.toName ?? '—'}`}
+                          </span>
                         </span>
                         <span className={`shrink-0 font-medium ${t.amount >= 0 ? 'text-emerald-400' : 'text-destructive'}`}>
                           {t.amount >= 0 ? '+' : ''}

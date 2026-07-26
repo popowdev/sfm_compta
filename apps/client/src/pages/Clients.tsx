@@ -306,7 +306,7 @@ export default function Clients() {
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={close}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
           <div
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card shadow-xl"
             onClick={(e) => e.stopPropagation()}
@@ -398,7 +398,7 @@ export default function Clients() {
       )}
 
       {balanceClient && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => setBalanceClient(null)}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h2 className="truncate text-sm font-semibold">Ajuster le solde · {balanceClient.name}</h2>

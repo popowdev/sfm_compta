@@ -41,12 +41,14 @@ export interface ExercicePatch {
 export interface PayrollLine {
   employeeId: number;
   name: string;
-  position: string;
+  companyRoleId: number | null;
+  gradeName: string | null;
   hours: number;
   cappedHours: number;
   hourlyRate: number;
   base: number;
   commission: number;
+  garageCommission: number;
   bonus: number;
   deductions: number;
   theoretical: number;
@@ -56,7 +58,6 @@ export interface PayrollLine {
 }
 
 export interface PayrollInput {
-  commission: number;
   bonus: number;
   deductions: number;
   notes?: string;
@@ -65,6 +66,8 @@ export interface PayrollInput {
 export interface ExerciceSummary {
   revenue: number;
   salesRevenue: number;
+  garageRevenue: number;
+  garageCommission: number;
   caGross: number;
   salesDiscount: number;
   caNet: number;
@@ -131,6 +134,7 @@ export interface ExerciceDetail extends Exercice {
   canWrite: boolean;
   canEdit: boolean;
   payrollVisible: boolean;
+  stocksEnabled: boolean;
   summary: ExerciceSummary;
   expensesByCategory: ExpenseCategoryLine[];
   payroll: PayrollLine[];

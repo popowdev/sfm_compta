@@ -121,13 +121,45 @@ calendarRouter.get(
   }),
 );
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const SLOTS: Record<1 | 2, { start: string; end: string; nextDay: boolean }> = {
+  1: { start: '21:30:00', end: '23:00:00', nextDay: false },
+  2: { start: '23:15:00', end: '01:00:00', nextDay: true },
+};
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+function addOneDay(date: string): string {
+  const d = new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+function slotRange(date: string, slot: 1 | 2): { startAt: string; endAt: string } {
+  const s = SLOTS[slot];
+  return { startAt: `${date} ${s.start}`, endAt: `${s.nextDay ? addOneDay(date) : date} ${s.end}` };
+}
+function nowStr(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const g = (t: string) => parts.find((p) => p.type === t)!.value;
+  return `${g('year')}-${g('month')}-${g('day')} ${g('hour')}:${g('minute')}:${g('second')}`;
+}
+
 const createSchema = z.object({
   title: z.string().trim().min(1).max(150),
   category: z.string().trim().max(80).nullish(),
   ownerType: z.enum(['company', 'association']),
   ownerId: z.number().int().positive(),
-  startAt: z.string().regex(DT_RE),
-  endAt: z.string().regex(DT_RE),
+  date: z.string().regex(DATE_RE),
+  slot: z.union([z.literal(1), z.literal(2)]),
 });
 
 calendarRouter.post(
@@ -136,14 +168,29 @@ calendarRouter.post(
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     const d = parsed.data;
-    const start = normalizeDt(d.startAt);
-    const end = normalizeDt(d.endAt);
-    if (end <= start) return res.status(400).json({ error: 'invalid_range' });
+    const { startAt, endAt } = slotRange(d.date, d.slot);
+    const now = nowStr();
+    if (startAt <= now) return res.status(400).json({ error: 'past_slot' });
 
     const staff = await isStaff(req.user!.id);
     const mine = await manageableEntities(req.user!.id, staff);
     const entity = mine.find((e) => e.type === d.ownerType && e.id === d.ownerId);
     if (!entity) return res.status(403).json({ error: 'forbidden' });
+
+    const ownerCol = d.ownerType === 'company' ? events.companyId : events.associationId;
+    const activeForEntity = await db
+      .select({ id: events.id })
+      .from(events)
+      .where(and(eq(events.ownerType, d.ownerType), eq(ownerCol, d.ownerId), gt(events.endAt, now)))
+      .limit(1);
+    if (activeForEntity.length) return res.status(409).json({ error: 'already_booked' });
+
+    const clash = await db
+      .select({ id: events.id })
+      .from(events)
+      .where(and(lt(events.startAt, endAt), gt(events.endAt, startAt)))
+      .limit(1);
+    if (clash.length) return res.status(409).json({ error: 'slot_taken' });
 
     await db.insert(events).values({
       title: d.title,
@@ -152,8 +199,8 @@ calendarRouter.post(
       companyId: d.ownerType === 'company' ? d.ownerId : null,
       associationId: d.ownerType === 'association' ? d.ownerId : null,
       ownerName: entity.name,
-      startAt: start,
-      endAt: end,
+      startAt,
+      endAt,
       createdByUserId: req.user!.id,
     });
     emitInvalidateAll([['calendar']]);

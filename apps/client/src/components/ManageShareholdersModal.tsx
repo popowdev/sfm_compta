@@ -74,7 +74,7 @@ export function ManageShareholdersModal({
   const addValid = add.name.trim().length > 0 && add.percentage !== '' && Number(add.percentage) >= 0;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
       <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b px-5 py-4">
           <h2 className="text-sm font-semibold">Gérer les actionnaires</h2>

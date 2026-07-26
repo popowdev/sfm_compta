@@ -14,12 +14,17 @@ import {
   saleItems,
   stockMovements,
   companyClients,
+  salaryGrid,
+  companyRoles,
+  garageRepairs,
+  garageCustoms,
 } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
 import { computeTaxes } from '../services/declarations';
 import { emitInvalidate } from '../realtime/socket';
+import { recordAudit } from '../services/audit';
 
 function methodAction(method: string): PermAction {
   return method === 'POST' ? 'create' : method === 'PUT' ? 'edit' : method === 'DELETE' ? 'delete' : 'view';
@@ -257,6 +262,14 @@ meExercicesRouter.delete(
       .delete(exercices)
       .where(and(eq(exercices.id, id), eq(exercices.companyId, companyId)));
     if (!result[0].affectedRows) return res.status(404).json({ error: 'not_found' });
+    await recordAudit({
+      actorUserId: req.user!.id,
+      actorName: req.user!.displayName,
+      action: 'exercice_delete',
+      targetType: 'exercice',
+      targetLabel: `#${id}`,
+      detail: `entreprise ${companyId}`,
+    });
     emitInvalidate(['irs', `company:${companyId}`], [['exercices', companyId]]);
     res.json({ ok: true });
   }),
@@ -283,11 +296,11 @@ meExercicesRouter.get(
       .from(companyModules)
       .where(and(eq(companyModules.companyId, companyId), eq(companyModules.moduleKey, 'exercices')))
       .limit(1);
-    const dividendsEnabled = moduleConfigBool(
-      cmRows[0]?.config as Record<string, unknown> | null,
-      'exercices',
-      'dividends',
-    );
+    const rawExConfig = cmRows[0]?.config;
+    const exConfig = (
+      typeof rawExConfig === 'string' ? JSON.parse(rawExConfig) : rawExConfig
+    ) as Record<string, unknown> | null;
+    const dividendsEnabled = moduleConfigBool(exConfig, 'exercices', 'dividends');
     const effectiveDividends = dividendsEnabled ? ex.dividends : 0;
 
     const catRows = await db
@@ -323,57 +336,39 @@ meExercicesRouter.get(
       .select({
         employeeId: companyEmployees.id,
         name: companyEmployees.name,
-        position: companyEmployees.position,
+        companyRoleId: companyEmployees.companyRoleId,
+        gradeName: companyRoles.name,
         hourlyRate: companyEmployees.hourlyRate,
+        commissionRate: companyEmployees.commissionRate,
         workedMin: sql<string>`COALESCE(SUM(GREATEST(0, TIMESTAMPDIFF(MINUTE, ${timeEntries.clockIn}, ${timeEntries.clockOut}) - ${timeEntries.pauseMinutes})), 0)`,
       })
-      .from(timeEntries)
-      .innerJoin(companyEmployees, eq(timeEntries.employeeId, companyEmployees.id))
-      .where(
+      .from(companyEmployees)
+      .leftJoin(
+        timeEntries,
         and(
+          eq(timeEntries.employeeId, companyEmployees.id),
           eq(timeEntries.companyId, companyId),
           isNotNull(timeEntries.clockOut),
           gte(sql`DATE(${timeEntries.clockIn})`, ex.startDate),
           lte(sql`DATE(${timeEntries.clockIn})`, ex.endDate),
         ),
       )
-      .groupBy(companyEmployees.id);
+      .leftJoin(companyRoles, eq(companyEmployees.companyRoleId, companyRoles.id))
+      .where(and(eq(companyEmployees.companyId, companyId), eq(companyEmployees.active, true)))
+      .groupBy(companyEmployees.id, companyRoles.name);
 
-    const payroll = payRows.map((r) => {
-      const rawHours = Number(r.workedMin) / 60;
-      const hours = round2(rawHours);
-      const cappedHours = ex.hoursCap > 0 ? Math.min(rawHours, ex.hoursCap) : rawHours;
-      const rate = Number(r.hourlyRate);
-      const base = round2(cappedHours * rate);
-      const o = overrides.get(r.employeeId);
-      const commission = o ? Number(o.commission) : 0;
-      const bonus = o ? Number(o.bonus) : 0;
-      const deductions = o ? Number(o.deductions) : 0;
-      const theoretical = round2(Math.max(0, base + commission + bonus - deductions));
-      const paid = ex.salaryCap > 0 ? Math.min(theoretical, ex.salaryCap) : theoretical;
-      return {
-        employeeId: r.employeeId,
-        name: r.name,
-        position: r.position,
-        hours,
-        cappedHours: round2(cappedHours),
-        hourlyRate: rate,
-        base,
-        commission,
-        bonus,
-        deductions,
-        theoretical,
-        paid: round2(paid),
-        excess: round2(Math.max(0, theoretical - paid)),
-        notes: o?.notes ?? null,
-      };
-    });
-    const payrollTotal = round2(payroll.reduce((s, p) => s + p.paid, 0));
-    const excessToCompany = round2(payroll.reduce((s, p) => s + p.excess, 0));
+    const gridRows = await db.select().from(salaryGrid).where(eq(salaryGrid.companyId, companyId));
+    const gridByRole = new Map(gridRows.map((g) => [g.companyRoleId, g]));
 
     const badgeuseAcc = await getModuleAccess(req.user!.id, companyId, 'badgeuse');
     const payrollVisible =
       !!badgeuseAcc && badgeuseAcc.enabled && !badgeuseAcc.blocked && badgeuseAcc.canView;
+
+    const garageAcc = await getModuleAccess(req.user!.id, companyId, 'garage');
+    const garageEnabled = !!garageAcc && garageAcc.enabled && !garageAcc.blocked;
+
+    const stocksAcc = await getModuleAccess(req.user!.id, companyId, 'stocks');
+    const stocksEnabled = !!stocksAcc && stocksAcc.enabled && !stocksAcc.blocked && stocksAcc.canView;
 
     const salesWhere = and(
       eq(sales.companyId, companyId),
@@ -467,14 +462,134 @@ meExercicesRouter.get(
         ),
     ]);
 
+    let garageRevenue = 0;
+    let garagePartsCost = 0;
+    let garageTxCount = 0;
+    const garageCommByEmp = new Map<number, number>();
+    const garageRevByEmp = new Map<number, number>();
+    const garageCountByEmp = new Map<number, number>();
+    const garageByDay = new Map<string, number>();
+    if (garageEnabled) {
+      const repWhere = and(
+        eq(garageRepairs.companyId, companyId),
+        gte(sql`DATE(${garageRepairs.createdAt})`, ex.startDate),
+        lte(sql`DATE(${garageRepairs.createdAt})`, ex.endDate),
+      );
+      const custWhere = and(
+        eq(garageCustoms.companyId, companyId),
+        gte(sql`DATE(${garageCustoms.createdAt})`, ex.startDate),
+        lte(sql`DATE(${garageCustoms.createdAt})`, ex.endDate),
+      );
+      const gRepDay = sql<string>`DATE_FORMAT(${garageRepairs.createdAt}, '%Y-%m-%d')`;
+      const gCustDay = sql<string>`DATE_FORMAT(${garageCustoms.createdAt}, '%Y-%m-%d')`;
+      const [repByUser, custByUser, custTot, empUserRows, repDay, custDay] = await Promise.all([
+        db
+          .select({
+            userId: garageRepairs.mechanicUserId,
+            commission: sql<string>`COALESCE(SUM(${garageRepairs.commissionAmount}),0)`,
+            revenue: sql<string>`COALESCE(SUM(${garageRepairs.total}),0)`,
+            count: sql<number>`COUNT(*)`,
+          })
+          .from(garageRepairs)
+          .where(repWhere)
+          .groupBy(garageRepairs.mechanicUserId),
+        db
+          .select({
+            userId: garageCustoms.mechanicUserId,
+            commission: sql<string>`COALESCE(SUM(${garageCustoms.commissionAmount}),0)`,
+            revenue: sql<string>`COALESCE(SUM(${garageCustoms.finalPrice}),0)`,
+            count: sql<number>`COUNT(*)`,
+          })
+          .from(garageCustoms)
+          .where(custWhere)
+          .groupBy(garageCustoms.mechanicUserId),
+        db
+          .select({ cost: sql<string>`COALESCE(SUM(${garageCustoms.costPrice}),0)` })
+          .from(garageCustoms)
+          .where(custWhere),
+        db
+          .select({ id: companyEmployees.id, userId: companyEmployees.userId })
+          .from(companyEmployees)
+          .where(eq(companyEmployees.companyId, companyId)),
+        db
+          .select({ date: gRepDay, total: sql<string>`COALESCE(SUM(${garageRepairs.total}),0)` })
+          .from(garageRepairs)
+          .where(repWhere)
+          .groupBy(gRepDay),
+        db
+          .select({ date: gCustDay, total: sql<string>`COALESCE(SUM(${garageCustoms.finalPrice}),0)` })
+          .from(garageCustoms)
+          .where(custWhere)
+          .groupBy(gCustDay),
+      ]);
+      const empByUser = new Map<number, number>();
+      for (const e of empUserRows) if (e.userId != null) empByUser.set(e.userId, e.id);
+      const addGarage = (userId: number | null, commission: number, revenue: number, count: number) => {
+        garageRevenue += revenue;
+        garageTxCount += count;
+        if (userId == null) return;
+        const empId = empByUser.get(userId);
+        if (empId == null) return;
+        garageCommByEmp.set(empId, (garageCommByEmp.get(empId) ?? 0) + commission);
+        garageRevByEmp.set(empId, (garageRevByEmp.get(empId) ?? 0) + revenue);
+        garageCountByEmp.set(empId, (garageCountByEmp.get(empId) ?? 0) + count);
+      };
+      for (const r of repByUser) addGarage(r.userId, Number(r.commission), Number(r.revenue), Number(r.count));
+      for (const c of custByUser) addGarage(c.userId, Number(c.commission), Number(c.revenue), Number(c.count));
+      for (const r of repDay) garageByDay.set(r.date, (garageByDay.get(r.date) ?? 0) + Number(r.total));
+      for (const c of custDay) garageByDay.set(c.date, (garageByDay.get(c.date) ?? 0) + Number(c.total));
+      garageRevenue = round2(garageRevenue);
+      garagePartsCost = round2(Number(custTot[0]?.cost ?? 0));
+    }
+
+    const caByEmp = new Map(perfRows.map((r) => [r.employeeId, Number(r.ca)]));
+    const payroll = payRows.map((r) => {
+      const rawHours = Number(r.workedMin) / 60;
+      const hours = round2(rawHours);
+      const cappedHours = ex.hoursCap > 0 ? Math.min(rawHours, ex.hoursCap) : rawHours;
+      const g = r.companyRoleId != null ? gridByRole.get(r.companyRoleId) : undefined;
+      const rate = g && Number(g.hourlyRate) > 0 ? Number(g.hourlyRate) : Number(r.hourlyRate);
+      const baseSalary = g ? Number(g.baseSalary) : 0;
+      const base = Math.round(baseSalary + cappedHours * rate);
+      const ca = caByEmp.get(r.employeeId) ?? 0;
+      const autoCommission = Math.round((Number(r.commissionRate) / 100) * ca);
+      const o = overrides.get(r.employeeId);
+      const commission = autoCommission;
+      const garageCommission = Math.round(garageCommByEmp.get(r.employeeId) ?? 0);
+      const bonus = o ? Math.round(Number(o.bonus)) : 0;
+      const deductions = o ? Math.round(Number(o.deductions)) : 0;
+      const theoretical = Math.max(0, base + commission + garageCommission + bonus - deductions);
+      const paid = ex.salaryCap > 0 ? Math.min(theoretical, Math.round(ex.salaryCap)) : theoretical;
+      return {
+        employeeId: r.employeeId,
+        name: r.name,
+        companyRoleId: r.companyRoleId,
+        gradeName: r.gradeName,
+        hours,
+        cappedHours: round2(cappedHours),
+        hourlyRate: rate,
+        base,
+        commission,
+        garageCommission,
+        bonus,
+        deductions,
+        theoretical,
+        paid: Math.round(paid),
+        excess: Math.round(Math.max(0, theoretical - paid)),
+        notes: o?.notes ?? null,
+      };
+    });
+    const payrollTotal = Math.round(payroll.reduce((s, p) => s + p.paid, 0));
+    const excessToCompany = Math.round(payroll.reduce((s, p) => s + p.excess, 0));
+
     const salesGross = round2(Number(aggRows[0]?.gross ?? 0));
     const salesDiscount = round2(Number(aggRows[0]?.discount ?? 0));
     const salesNet = round2(Number(aggRows[0]?.net ?? 0));
-    const productionCost = round2(Number(aggRows[0]?.cost ?? 0));
-    const salesCount = Number(aggRows[0]?.count ?? 0);
+    const productionCost = round2(Number(aggRows[0]?.cost ?? 0) + garagePartsCost);
+    const salesCount = Number(aggRows[0]?.count ?? 0) + garageTxCount;
     const componentPurchases = round2(Number(purchRows[0]?.purchases ?? 0));
 
-    const caGross = round2(salesGross + ex.revenue);
+    const caGross = round2(salesGross + ex.revenue + garageRevenue);
     const caNet = round2(caGross - salesDiscount);
     const grossMargin = round2(caNet - productionCost);
 
@@ -491,7 +606,7 @@ meExercicesRouter.get(
     const byDay: { date: string; total: number }[] = [];
     for (let t = startMs; t <= endMs; t += 86_400_000) {
       const d = new Date(t).toISOString().slice(0, 10);
-      byDay.push({ date: d, total: round2(dayMap.get(d) ?? 0) });
+      byDay.push({ date: d, total: round2((dayMap.get(d) ?? 0) + (garageByDay.get(d) ?? 0)) });
     }
 
     const detailBase = {
@@ -499,6 +614,8 @@ meExercicesRouter.get(
       summary: {
         revenue: ex.revenue,
         salesRevenue: salesNet,
+        garageRevenue,
+        garageCommission: Math.round(payroll.reduce((s, p) => s + p.garageCommission, 0)),
         caGross,
         salesDiscount,
         caNet,
@@ -529,8 +646,8 @@ meExercicesRouter.get(
       perfByEmployee: perfRows.map((r) => ({
         employeeId: r.employeeId,
         name: r.name,
-        salesCount: Number(r.count),
-        ca: round2(Number(r.ca)),
+        salesCount: Number(r.count) + (garageCountByEmp.get(r.employeeId) ?? 0),
+        ca: round2(Number(r.ca) + (garageRevByEmp.get(r.employeeId) ?? 0)),
         discounts: round2(Number(r.discounts)),
       })),
       topProducts: topRows.map((r) => {
@@ -555,7 +672,10 @@ meExercicesRouter.get(
     let frozen = false;
     if (ex.status === 'closed') {
       frozen = true;
-      const snap = exRows[0].snapshot as typeof detailBase | null;
+      const rawSnap = exRows[0].snapshot;
+      const snap = (
+        rawSnap == null ? null : typeof rawSnap === 'string' ? JSON.parse(rawSnap) : rawSnap
+      ) as typeof detailBase | null;
       if (snap) {
         base = snap;
       } else {
@@ -571,6 +691,7 @@ meExercicesRouter.get(
       canWrite: g.canWrite,
       canEdit: g.canEdit,
       payrollVisible,
+      stocksEnabled,
       payroll: payrollVisible ? (base.payroll ?? []) : [],
       frozen,
     });
@@ -579,7 +700,6 @@ meExercicesRouter.get(
 
 const payrollMoney = z.number().nonnegative().finite().max(9_999_999_999.99);
 const payrollSchema = z.object({
-  commission: payrollMoney,
   bonus: payrollMoney,
   deductions: payrollMoney,
   notes: z.string().trim().max(200).nullish().or(z.literal('')),
@@ -613,9 +733,9 @@ meExercicesRouter.put(
       .limit(1);
     if (!empRow[0]) return res.status(404).json({ error: 'not_found' });
     const amounts = {
-      commission: String(round2(parsed.data.commission)),
-      bonus: String(round2(parsed.data.bonus)),
-      deductions: String(round2(parsed.data.deductions)),
+      commission: '0',
+      bonus: String(Math.round(parsed.data.bonus)),
+      deductions: String(Math.round(parsed.data.deductions)),
     };
     const setOnUpdate: Record<string, unknown> = { ...amounts };
     if (parsed.data.notes !== undefined) setOnUpdate.notes = blank(parsed.data.notes);

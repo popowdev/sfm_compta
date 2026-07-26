@@ -4,6 +4,7 @@ import {
   BookOpen,
   Receipt,
   ShoppingCart,
+  Wrench,
   Contact,
   Boxes,
   CalendarClock,
@@ -22,6 +23,9 @@ import {
   MessageCircle,
   LineChart,
   FolderArchive,
+  Home,
+  Map,
+  Car,
   type LucideIcon,
 } from 'lucide-react';
 import type { ModuleKey } from '@rp-compta/shared';
@@ -32,6 +36,7 @@ const ICONS: Record<ModuleKey, LucideIcon> = {
   exercices: BookOpen,
   depenses: Receipt,
   caisse: ShoppingCart,
+  garage: Wrench,
   clients: Contact,
   stocks: Boxes,
   locations: CalendarClock,
@@ -44,6 +49,9 @@ const ICONS: Record<ModuleKey, LucideIcon> = {
   dividendes: Coins,
   actionnaires: PieChart,
   documents: FolderArchive,
+  immobilier: Home,
+  immo_carte: Map,
+  taxi: Car,
 };
 
 export function moduleIcon(key: string): LucideIcon {

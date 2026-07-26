@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { db } from '../db';
-import { timeEntries, companyEmployees } from '../db/schema';
+import { timeEntries, companyEmployees, companyRoles } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
@@ -43,7 +43,7 @@ function computeEntry(t: Entry, rate: number, now: string) {
     clockOut: t.clockOut,
     workedMinutes: worked,
     pauseMinutes: pause,
-    salary: round2((worked / 60) * rate),
+    salary: Math.round((worked / 60) * rate),
     complete: t.clockOut !== null,
   };
 }
@@ -57,7 +57,7 @@ async function gate(userId: number, companyId: number, action: PermAction) {
   if (!acc.enabled || acc.blocked) return { ok: false as const, status: 403, error: 'module_unavailable' };
   if (!acc.canView) return { ok: false as const, status: 403, error: 'forbidden' };
   if (actionDenied(acc, action)) return { ok: false as const, status: 403, error: 'forbidden' };
-  return { ok: true as const, canWrite: acc.canWrite };
+  return { ok: true as const, canWrite: acc.canWrite, canEdit: acc.canEdit, canDelete: acc.canDelete };
 }
 
 async function myEmployee(userId: number, companyId: number) {
@@ -197,14 +197,17 @@ meTimeclockRouter.get(
   asyncHandler(async (req, res) => {
     const companyId = parseId(req.params.companyId);
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
-    const g = await gate(req.user!.id, companyId, 'edit');
+    const g = await gate(req.user!.id, companyId, 'view');
     if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
 
     const now = nowStr();
-    const [emps, entries] = await Promise.all([
+    const [emps, entries, roles] = await Promise.all([
       db.select().from(companyEmployees).where(eq(companyEmployees.companyId, companyId)).orderBy(asc(companyEmployees.name)),
       db.select().from(timeEntries).where(eq(timeEntries.companyId, companyId)).orderBy(asc(timeEntries.clockIn)),
+      db.select({ id: companyRoles.id, name: companyRoles.name }).from(companyRoles).where(eq(companyRoles.companyId, companyId)),
     ]);
+    const roleName = new Map(roles.map((r) => [r.id, r.name]));
 
     const byEmp = new Map<number, Entry[]>();
     for (const e of entries) {
@@ -229,15 +232,15 @@ meTimeclockRouter.get(
       return {
         id: emp.id,
         name: emp.name,
-        position: emp.position,
+        grade: emp.companyRoleId != null ? (roleName.get(emp.companyRoleId) ?? null) : null,
         hourlyRate: rate,
         active: emp.active,
         entries: list,
-        totals: { minutes: totalMin, salary: round2(totalSalary), days: days.size },
+        totals: { minutes: totalMin, salary: Math.round(totalSalary), days: days.size },
       };
     });
 
-    res.json({ canWrite: g.canWrite, employees });
+    res.json({ canWrite: g.canWrite, canEdit: g.canEdit, canDelete: g.canDelete, employees });
   }),
 );
 
@@ -288,6 +291,42 @@ meTimeclockRouter.post(
     await db.insert(timeEntries).values({ companyId, employeeId: d.employeeId, clockIn, clockOut });
     emitInvalidate(['irs', `company:${companyId}`], [['timeclock', companyId]]);
     res.status(201).json({ ok: true });
+  }),
+);
+
+const editSchema = createSchema.omit({ employeeId: true });
+
+meTimeclockRouter.patch(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const id = parseId(req.params.id);
+    if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req.user!.id, companyId, 'edit');
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    const parsed = editSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    const d = parsed.data;
+
+    const existing = await db
+      .select({ id: timeEntries.id })
+      .from(timeEntries)
+      .where(and(eq(timeEntries.id, id), eq(timeEntries.companyId, companyId)))
+      .limit(1);
+    if (!existing[0]) return res.status(404).json({ error: 'not_found' });
+
+    const clockIn = `${d.date} ${d.clockIn}:00`;
+    let clockOut: string | null = null;
+    if (d.clockOut) {
+      const outDate = d.clockOut < d.clockIn ? addDay(d.date) : d.date;
+      clockOut = `${outDate} ${d.clockOut}:00`;
+    }
+    await db
+      .update(timeEntries)
+      .set({ clockIn, clockOut, pauseStart: null })
+      .where(and(eq(timeEntries.id, id), eq(timeEntries.companyId, companyId)));
+    emitInvalidate(['irs', `company:${companyId}`], [['timeclock', companyId]]);
+    res.json({ ok: true });
   }),
 );
 

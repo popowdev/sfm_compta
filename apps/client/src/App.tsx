@@ -1,33 +1,44 @@
-import { type ReactNode } from 'react';
+import { lazyRetry } from '@/lib/lazyRetry';
+import { Suspense, type ReactNode } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { hasAppAccess } from '@rp-compta/shared';
-import Login from '@/pages/Login';
-import Dashboard from '@/pages/Dashboard';
-import Companies from '@/pages/Companies';
-import Fiscal from '@/pages/Fiscal';
-import Modules from '@/pages/Modules';
-import IrsDeclarations from '@/pages/IrsDeclarations';
-import IrsSubventions from '@/pages/IrsSubventions';
-import IrsDividends from '@/pages/IrsDividends';
-import IrsUsers from '@/pages/IrsUsers';
-import IrsMessages from '@/pages/IrsMessages';
-import IrsDocuments from '@/pages/IrsDocuments';
-import IrsAudit from '@/pages/IrsAudit';
-import EntrepriseIndex from '@/pages/EntrepriseIndex';
-import ModulePage from '@/pages/ModulePage';
-import CompanySettings from '@/pages/CompanySettings';
-import Associations from '@/pages/Associations';
-import Calendrier from '@/pages/Calendrier';
-import Annonces from '@/pages/Annonces';
-import Bourse from '@/pages/Bourse';
-import AssociationIndex from '@/pages/AssociationIndex';
-import AssociationMembers from '@/pages/AssociationMembers';
-import AssociationTresorerie from '@/pages/AssociationTresorerie';
-import AssociationDocuments from '@/pages/AssociationDocuments';
-import AssociationSettings from '@/pages/AssociationSettings';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppLayout } from '@/components/AppLayout';
 import { useAuth } from '@/auth/AuthContext';
+
+const Login = lazyRetry(() => import('@/pages/Login'));
+const Dashboard = lazyRetry(() => import('@/pages/Dashboard'));
+const Companies = lazyRetry(() => import('@/pages/Companies'));
+const Fiscal = lazyRetry(() => import('@/pages/Fiscal'));
+const Modules = lazyRetry(() => import('@/pages/Modules'));
+const IrsDeclarations = lazyRetry(() => import('@/pages/IrsDeclarations'));
+const IrsSubventions = lazyRetry(() => import('@/pages/IrsSubventions'));
+const IrsDividends = lazyRetry(() => import('@/pages/IrsDividends'));
+const IrsUsers = lazyRetry(() => import('@/pages/IrsUsers'));
+const IrsMessages = lazyRetry(() => import('@/pages/IrsMessages'));
+const IrsDocuments = lazyRetry(() => import('@/pages/IrsDocuments'));
+const IrsAudit = lazyRetry(() => import('@/pages/IrsAudit'));
+const TicketLogs = lazyRetry(() => import('@/pages/TicketLogs'));
+const EntrepriseIndex = lazyRetry(() => import('@/pages/EntrepriseIndex'));
+const ModulePage = lazyRetry(() => import('@/pages/ModulePage'));
+const CompanySettings = lazyRetry(() => import('@/pages/CompanySettings'));
+const Evenements = lazyRetry(() => import('@/pages/Evenements'));
+const Fivem = lazyRetry(() => import('@/pages/Fivem'));
+const Associations = lazyRetry(() => import('@/pages/Associations'));
+const Calendrier = lazyRetry(() => import('@/pages/Calendrier'));
+const Support = lazyRetry(() => import('@/pages/Support'));
+const SupportStaff = lazyRetry(() => import('@/pages/SupportStaff'));
+const Annonces = lazyRetry(() => import('@/pages/Annonces'));
+const Bourse = lazyRetry(() => import('@/pages/Bourse'));
+const AssociationIndex = lazyRetry(() => import('@/pages/AssociationIndex'));
+const AssociationMembers = lazyRetry(() => import('@/pages/AssociationMembers'));
+const AssociationTresorerie = lazyRetry(() => import('@/pages/AssociationTresorerie'));
+const AssociationDocuments = lazyRetry(() => import('@/pages/AssociationDocuments'));
+const AssociationSettings = lazyRetry(() => import('@/pages/AssociationSettings'));
+
+function PageLoader() {
+  return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
+}
 
 function IrsRoute({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -41,121 +52,152 @@ function StaffRoute({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function DevRoute({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  if (!user?.isDev) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 function ProtectedApp() {
   return (
     <AppLayout>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/entreprise/:slug" element={<EntrepriseIndex />} />
-        <Route path="/entreprise/:slug/m/:moduleKey" element={<ModulePage />} />
-        <Route path="/entreprise/:slug/parametres" element={<CompanySettings />} />
-        <Route path="/associations" element={<Associations />} />
-        <Route path="/calendrier" element={<Calendrier />} />
-        <Route path="/annonces" element={<Annonces />} />
-        <Route path="/bourse" element={<Bourse />} />
-        <Route path="/association/:slug" element={<AssociationIndex />} />
-        <Route path="/association/:slug/membres" element={<AssociationMembers />} />
-        <Route path="/association/:slug/tresorerie" element={<AssociationTresorerie />} />
-        <Route path="/association/:slug/documents" element={<AssociationDocuments />} />
-        <Route path="/association/:slug/parametres" element={<AssociationSettings />} />
-        <Route
-          path="/entreprises"
-          element={
-            <IrsRoute>
-              <Companies />
-            </IrsRoute>
-          }
-        />
-        <Route
-          path="/bareme"
-          element={
-            <IrsRoute>
-              <Fiscal />
-            </IrsRoute>
-          }
-        />
-        <Route
-          path="/declarations"
-          element={
-            <IrsRoute>
-              <IrsDeclarations />
-            </IrsRoute>
-          }
-        />
-        <Route
-          path="/subventions"
-          element={
-            <IrsRoute>
-              <IrsSubventions />
-            </IrsRoute>
-          }
-        />
-        <Route
-          path="/dividendes"
-          element={
-            <IrsRoute>
-              <IrsDividends />
-            </IrsRoute>
-          }
-        />
-        <Route
-          path="/comptes"
-          element={
-            <IrsRoute>
-              <IrsUsers />
-            </IrsRoute>
-          }
-        />
-        <Route
-          path="/messages"
-          element={
-            <IrsRoute>
-              <IrsMessages />
-            </IrsRoute>
-          }
-        />
-        <Route
-          path="/irs-documents"
-          element={
-            <IrsRoute>
-              <IrsDocuments />
-            </IrsRoute>
-          }
-        />
-        <Route
-          path="/audit"
-          element={
-            <IrsRoute>
-              <IrsAudit />
-            </IrsRoute>
-          }
-        />
-        <Route
-          path="/modules"
-          element={
-            <StaffRoute>
-              <Modules />
-            </StaffRoute>
-          }
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/entreprise/:slug" element={<EntrepriseIndex />} />
+          <Route path="/entreprise/:slug/m/:moduleKey" element={<ModulePage />} />
+          <Route path="/entreprise/:slug/parametres" element={<CompanySettings />} />
+          <Route path="/entreprise/:slug/evenements" element={<Evenements />} />
+          <Route path="/associations" element={<Associations />} />
+          <Route path="/calendrier" element={<Calendrier />} />
+          <Route path="/support" element={<Support />} />
+          <Route path="/support/:ref" element={<Support />} />
+          <Route path="/staff/support" element={<SupportStaff />} />
+          <Route path="/staff/support/:ref" element={<SupportStaff />} />
+          <Route path="/annonces" element={<Annonces />} />
+          <Route path="/bourse" element={<Bourse />} />
+          <Route path="/association/:slug" element={<AssociationIndex />} />
+          <Route path="/association/:slug/membres" element={<AssociationMembers />} />
+          <Route path="/association/:slug/tresorerie" element={<AssociationTresorerie />} />
+          <Route path="/association/:slug/documents" element={<AssociationDocuments />} />
+          <Route path="/association/:slug/parametres" element={<AssociationSettings />} />
+          <Route
+            path="/entreprises"
+            element={
+              <IrsRoute>
+                <Companies />
+              </IrsRoute>
+            }
+          />
+          <Route
+            path="/bareme"
+            element={
+              <IrsRoute>
+                <Fiscal />
+              </IrsRoute>
+            }
+          />
+          <Route
+            path="/declarations"
+            element={
+              <IrsRoute>
+                <IrsDeclarations />
+              </IrsRoute>
+            }
+          />
+          <Route
+            path="/subventions"
+            element={
+              <IrsRoute>
+                <IrsSubventions />
+              </IrsRoute>
+            }
+          />
+          <Route
+            path="/dividendes"
+            element={
+              <IrsRoute>
+                <IrsDividends />
+              </IrsRoute>
+            }
+          />
+          <Route
+            path="/comptes"
+            element={
+              <StaffRoute>
+                <IrsUsers />
+              </StaffRoute>
+            }
+          />
+          <Route
+            path="/messages"
+            element={
+              <IrsRoute>
+                <IrsMessages />
+              </IrsRoute>
+            }
+          />
+          <Route
+            path="/irs-documents"
+            element={
+              <IrsRoute>
+                <IrsDocuments />
+              </IrsRoute>
+            }
+          />
+          <Route
+            path="/audit"
+            element={
+              <IrsRoute>
+                <IrsAudit />
+              </IrsRoute>
+            }
+          />
+          <Route
+            path="/fivem"
+            element={
+              <StaffRoute>
+                <Fivem />
+              </StaffRoute>
+            }
+          />
+          <Route
+            path="/modules"
+            element={
+              <StaffRoute>
+                <Modules />
+              </StaffRoute>
+            }
+          />
+          <Route
+            path="/dev/logs-tickets"
+            element={
+              <DevRoute>
+                <TicketLogs />
+              </DevRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </AppLayout>
   );
 }
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route
-        path="/*"
-        element={
-          <ProtectedRoute>
-            <ProtectedApp />
-          </ProtectedRoute>
-        }
-      />
-    </Routes>
+    <Suspense fallback={<div className="grid min-h-screen place-items-center text-sm text-muted-foreground">Chargement…</div>}>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/*"
+          element={
+            <ProtectedRoute>
+              <ProtectedApp />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </Suspense>
   );
 }

@@ -14,11 +14,13 @@ import {
   companyClients,
   clientLoyaltyTiers,
   companyModules,
+  users,
 } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
+import { recordAudit } from '../services/audit';
 
 function methodAction(method: string): PermAction {
   return method === 'POST' ? 'create' : method === 'PUT' ? 'edit' : method === 'DELETE' ? 'delete' : 'view';
@@ -117,10 +119,12 @@ meSalesRouter.get(
         notes: sales.notes,
         createdAt: sales.createdAt,
         employeeName: companyEmployees.name,
+        createdByName: users.displayName,
         clientName: companyClients.name,
       })
       .from(sales)
       .leftJoin(companyEmployees, eq(sales.employeeId, companyEmployees.id))
+      .leftJoin(users, eq(sales.createdByUserId, users.id))
       .leftJoin(companyClients, eq(sales.clientId, companyClients.id))
       .where(eq(sales.companyId, companyId))
       .orderBy(desc(sales.createdAt))
@@ -137,7 +141,7 @@ meSalesRouter.get(
         paymentMethod: r.paymentMethod,
         notes: r.notes,
         createdAt: r.createdAt,
-        employeeName: r.employeeName,
+        employeeName: r.employeeName ?? r.createdByName,
         clientName: r.clientName,
       })),
     });
@@ -164,10 +168,12 @@ meSalesRouter.get(
         notes: sales.notes,
         createdAt: sales.createdAt,
         employeeName: companyEmployees.name,
+        createdByName: users.displayName,
         clientName: companyClients.name,
       })
       .from(sales)
       .leftJoin(companyEmployees, eq(sales.employeeId, companyEmployees.id))
+      .leftJoin(users, eq(sales.createdByUserId, users.id))
       .leftJoin(companyClients, eq(sales.clientId, companyClients.id))
       .where(and(eq(sales.id, id), eq(sales.companyId, companyId)))
       .limit(1);
@@ -178,6 +184,7 @@ meSalesRouter.get(
       .where(eq(saleItems.saleId, id));
     res.json({
       ...head[0],
+      employeeName: head[0].employeeName ?? head[0].createdByName,
       subtotal: Number(head[0].subtotal),
       discount: Number(head[0].discount),
       total: Number(head[0].total),
@@ -236,7 +243,12 @@ meSalesRouter.post(
       arr.push(r);
       recipeByItem.set(r.catalogItemId, arr);
     }
-    const stockCostIds = [...new Set(recipes.map((r) => r.stockItemId))];
+    const stockCostIds = [
+      ...new Set([
+        ...recipes.map((r) => r.stockItemId),
+        ...cItems.map((c) => c.stockItemId).filter((v): v is number => !!v),
+      ]),
+    ];
     const stockRows = stockCostIds.length
       ? await db
           .select({ id: stockItems.id, unitCost: stockItems.unitCost })
@@ -256,10 +268,20 @@ meSalesRouter.post(
         const unitPrice = Number(c.price);
         const lineRecipe = recipeByItem.get(c.id) ?? [];
         let lineUnitCost = 0;
-        for (const r of lineRecipe) {
-          lineUnitCost += Number(r.quantity) * (costById.get(r.stockItemId) ?? 0);
+        if (c.stockItemId) {
+          // Produit fini stocké : on décrémente SON stock. Les matières premières ont déjà
+          // été consommées lors du craft, on ne les redécompte pas à la vente.
+          lineUnitCost = costById.get(c.stockItemId) ?? 0;
           if (cfg.stockLink && c.type === 'product') {
-            consume.set(r.stockItemId, (consume.get(r.stockItemId) ?? 0) + Number(r.quantity) * qty);
+            consume.set(c.stockItemId, (consume.get(c.stockItemId) ?? 0) + qty);
+          }
+        } else {
+          // Produit fabriqué à la volée : on décompte ses matières premières directement.
+          for (const r of lineRecipe) {
+            lineUnitCost += Number(r.quantity) * (costById.get(r.stockItemId) ?? 0);
+            if (cfg.stockLink && c.type === 'product') {
+              consume.set(r.stockItemId, (consume.get(r.stockItemId) ?? 0) + Number(r.quantity) * qty);
+            }
           }
         }
         const lineCost = round2(lineUnitCost * qty);
@@ -498,6 +520,14 @@ meSalesRouter.delete(
     });
 
     if (result.notFound) return res.status(404).json({ error: 'not_found' });
+    await recordAudit({
+      actorUserId: req.user!.id,
+      actorName: req.user!.displayName,
+      action: 'sale_delete',
+      targetType: 'sale',
+      targetLabel: `#${id}`,
+      detail: `entreprise ${companyId}`,
+    });
     emitInvalidate(['irs', `company:${companyId}`], [
       ['sales', companyId],
       ['stocks', companyId],

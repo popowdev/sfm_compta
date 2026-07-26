@@ -17,6 +17,7 @@ import { Kpi, KpiSkeleton } from '@/components/ui/kpi';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useConfirm } from '@/components/ui/confirm';
+import { useToast } from '@/components/ui/toast';
 import { fmtMoney } from '@/lib/declarations';
 import { useModulePerms } from '@/lib/useCompany';
 import {
@@ -63,6 +64,7 @@ export default function Locations() {
   const showTime = moduleConfigBool(cfg, 'locations', 'time');
   const queryClient = useQueryClient();
   const confirm = useConfirm();
+  const toast = useToast();
 
   const q = useQuery({ queryKey: ['rentals', companyId], queryFn: () => getRentals(companyId) });
 
@@ -85,14 +87,17 @@ export default function Locations() {
   const create = useMutation({
     mutationFn: (body: RentalInput) => createRental(companyId, body),
     onSuccess: invalidate,
+    onError: () => toast('Impossible de créer la location.', 'error'),
   });
   const update = useMutation({
     mutationFn: (v: { id: number; body: RentalInput }) => updateRental(companyId, v.id, v.body),
     onSuccess: invalidate,
+    onError: () => toast('Impossible de modifier la location.', 'error'),
   });
   const remove = useMutation({
     mutationFn: (rid: number) => deleteRental(companyId, rid),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rentals', companyId] }),
+    onError: () => toast('Impossible de supprimer la location.', 'error'),
   });
 
   const openNew = () => {
@@ -126,7 +131,9 @@ export default function Locations() {
       eventDate: form.eventDate,
       eventTime: showTime || editing !== null ? form.eventTime.trim() || undefined : undefined,
       durationHours:
-        (showDuration || editing !== null) && form.durationHours ? Number(form.durationHours) : undefined,
+        (showDuration || editing !== null) && form.durationHours
+          ? Math.round(Number(form.durationHours))
+          : undefined,
       rentalPrice: Number(form.rentalPrice) || 0,
       deposit: showDeposit || editing !== null ? Number(form.deposit) || 0 : 0,
       depositStatus: showDeposit || editing !== null ? form.depositStatus : 'paid',
@@ -157,6 +164,17 @@ export default function Locations() {
             <Skeleton key={i} className="h-16 rounded-xl" />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (q.isError) {
+    return (
+      <div className="grid place-items-center gap-3 py-12 text-center">
+        <p className="text-sm text-muted-foreground">Impossible de charger les locations.</p>
+        <Button variant="outline" onClick={() => q.refetch()}>
+          Réessayer
+        </Button>
       </div>
     );
   }
@@ -282,7 +300,7 @@ export default function Locations() {
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={close}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
           <div
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card shadow-xl"
             onClick={(e) => e.stopPropagation()}

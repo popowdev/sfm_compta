@@ -45,7 +45,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     <ConfirmCtx.Provider value={confirm}>
       {children}
       {opts && (
-        <div className="fixed inset-0 z-[100] grid place-items-center bg-black/50 p-4" onClick={() => close(false)}>
+        <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/50 p-4">
           <div
             role="dialog"
             aria-modal="true"

@@ -1,28 +1,34 @@
-import { type ComponentType } from 'react';
+import { lazyRetry } from '@/lib/lazyRetry';
+import { Suspense, type ComponentType, type LazyExoticComponent } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 import { MODULES } from '@rp-compta/shared';
 import { type MyModule } from '@/lib/me';
 import { useCompany } from '@/lib/useCompany';
 import { moduleIcon } from '@/lib/moduleIcons';
-import Declarations from '@/pages/Declarations';
-import Depenses from '@/pages/Depenses';
-import Subventions from '@/pages/Subventions';
-import Messagerie from '@/pages/Messagerie';
-import Employes from '@/pages/Employes';
-import Stats from '@/pages/Stats';
-import Badgeuse from '@/pages/Badgeuse';
-import Locations from '@/pages/Locations';
-import Clients from '@/pages/Clients';
-import Stocks from '@/pages/Stocks';
-import Exercices from '@/pages/Exercices';
-import Caisse from '@/pages/Caisse';
-import Dividendes from '@/pages/Dividendes';
-import Documents from '@/pages/Documents';
-import Actionnaires from '@/pages/Actionnaires';
+
+const Declarations = lazyRetry(() => import('@/pages/Declarations'));
+const Depenses = lazyRetry(() => import('@/pages/Depenses'));
+const Subventions = lazyRetry(() => import('@/pages/Subventions'));
+const Messagerie = lazyRetry(() => import('@/pages/Messagerie'));
+const Employes = lazyRetry(() => import('@/pages/Employes'));
+const Stats = lazyRetry(() => import('@/pages/Stats'));
+const Badgeuse = lazyRetry(() => import('@/pages/Badgeuse'));
+const Locations = lazyRetry(() => import('@/pages/Locations'));
+const Clients = lazyRetry(() => import('@/pages/Clients'));
+const Stocks = lazyRetry(() => import('@/pages/Stocks'));
+const Exercices = lazyRetry(() => import('@/pages/Exercices'));
+const Caisse = lazyRetry(() => import('@/pages/Caisse'));
+const Garage = lazyRetry(() => import('@/pages/Garage'));
+const Dividendes = lazyRetry(() => import('@/pages/Dividendes'));
+const Documents = lazyRetry(() => import('@/pages/Documents'));
+const Actionnaires = lazyRetry(() => import('@/pages/Actionnaires'));
+const Immobilier = lazyRetry(() => import('@/pages/Immobilier'));
+const ImmoCarte = lazyRetry(() => import('@/pages/ImmoCarte'));
+const Taxi = lazyRetry(() => import('@/pages/Taxi'));
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
-const CONTENT: Partial<Record<string, ComponentType>> = {
+const CONTENT: Partial<Record<string, LazyExoticComponent<ComponentType>>> = {
   declarations: Declarations,
   depenses: Depenses,
   subventions: Subventions,
@@ -35,9 +41,13 @@ const CONTENT: Partial<Record<string, ComponentType>> = {
   stocks: Stocks,
   exercices: Exercices,
   caisse: Caisse,
+  garage: Garage,
   dividendes: Dividendes,
   documents: Documents,
   actionnaires: Actionnaires,
+  immobilier: Immobilier,
+  immo_carte: ImmoCarte,
+  taxi: Taxi,
 };
 
 function Placeholder({ mod }: { mod: MyModule }) {
@@ -70,7 +80,11 @@ export default function ModulePage() {
       </div>
       <h1 className="mt-1 text-2xl font-bold tracking-tight">{mod.label}</h1>
 
-      <div className="mt-6">{Body ? <Body /> : <Placeholder mod={mod} />}</div>
+      <div className="mt-6">
+        <Suspense fallback={<div className="text-sm text-muted-foreground">Chargement…</div>}>
+          {Body ? <Body /> : <Placeholder mod={mod} />}
+        </Suspense>
+      </div>
     </div>
   );
 }

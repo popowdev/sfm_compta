@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
 
 type ToastKind = 'success' | 'error' | 'info';
@@ -12,6 +20,12 @@ type Push = (message: string, kind?: ToastKind) => void;
 const ToastCtx = createContext<Push>(() => {});
 export function useToast(): Push {
   return useContext(ToastCtx);
+}
+
+// Pont pour pousser un toast hors React (ex. handler d'erreur global du QueryClient).
+let globalPush: Push | null = null;
+export function toast(message: string, kind: ToastKind = 'info'): void {
+  globalPush?.(message, kind);
 }
 
 const ICON: Record<ToastKind, typeof Info> = {
@@ -37,6 +51,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     },
     [remove],
   );
+
+  useEffect(() => {
+    globalPush = push;
+    return () => {
+      globalPush = null;
+    };
+  }, [push]);
 
   return (
     <ToastCtx.Provider value={push}>

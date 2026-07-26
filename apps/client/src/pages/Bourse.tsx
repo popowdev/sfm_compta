@@ -208,7 +208,7 @@ function CreateListingModal({ onClose, onDone }: { onClose: () => void; onDone: 
     Number(parts) <= seller.percentage;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b px-5 py-4">
           <h2 className="text-sm font-semibold">Mettre des parts en vente</h2>
@@ -280,7 +280,7 @@ function RequestModal({ listing, onClose, onDone }: { listing: ShareListing; onC
   const valid = Number(parts) > 0 && Number(parts) <= listing.parts && buyerName.trim().length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
       <div className="w-full max-w-sm rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b px-5 py-4">
           <h2 className="text-sm font-semibold">Demande d’achat — {listing.companyName}</h2>

@@ -8,6 +8,7 @@ import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import { env } from './env';
 import { logger } from './logger';
+import { runRentAutoGeneration, runRentReminders } from './services/rentAutoGen';
 import { healthRouter } from './routes/health';
 import { authRouter } from './routes/auth';
 import { internalRouter } from './routes/internal';
@@ -19,6 +20,17 @@ import { meRouter } from './routes/me';
 import { meDeclarationsRouter, irsDeclarationsRouter } from './routes/declarations';
 import { meExpensesRouter } from './routes/expenses';
 import { meSubventionsRouter, irsSubventionsRouter } from './routes/subventions';
+import { meCompanyEventsRouter } from './routes/companyEvents';
+import { fivemRouter } from './routes/fivem';
+import { meFivemRouter } from './routes/fivemMe';
+import { refreshSelectedCharacters } from './services/fivemSync';
+import { genErrorCode, recordError } from './services/errorLog';
+import { errorsRouter, adminErrorsRouter } from './routes/errors';
+import { meTicketsRouter, supportTicketsRouter, ticketFilesRouter, devTicketLogsRouter } from './routes/tickets';
+import { meImmoRentalsRouter, meImmoSalesRouter, meImmoParcelsRouter } from './routes/immo';
+import { meTaxiRouter } from './routes/taxi';
+import { irsCompanyNotesRouter } from './routes/companyNotes';
+import { meGarageRouter } from './routes/garage';
 import { meDividendsRouter, irsDividendsRouter } from './routes/dividends';
 import { meMessagesRouter, irsMessagesRouter } from './routes/messages';
 import { meEmployeesRouter } from './routes/employees';
@@ -44,7 +56,7 @@ import { meShareListingsRouter, irsShareListingsRouter } from './routes/shareLis
 import { adminModulesRouter } from './routes/adminModules';
 import { adminUsersRouter } from './routes/admin';
 import { fiscalRouter } from './routes/fiscal';
-import { createSocketServer } from './realtime/socket';
+import { createSocketServer, emitInvalidate } from './realtime/socket';
 import { purgeExpiredSessions } from './auth/session';
 
 const app = express();
@@ -53,22 +65,45 @@ app.set('trust proxy', 1);
 
 app.use(helmet());
 app.use(cors({ origin: env.CLIENT_ORIGIN, credentials: true }));
+app.use('/api/fivem', express.json({ limit: '2mb' }));
 app.use(express.json());
 app.use(cookieParser());
 app.use(pinoHttp({ logger }));
 
-app.use('/api', rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: true, legacyHeaders: false }));
+const rateLimited = (_req: express.Request, res: express.Response) =>
+  res.status(429).json({ error: 'rate_limited' });
 
-const authLimiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false });
+app.use(
+  '/api',
+  rateLimit({
+    windowMs: 60_000,
+    limit: 1200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: rateLimited,
+  }),
+);
+
+const authLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  handler: rateLimited,
+});
+const fivemLimiter = rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: true, legacyHeaders: false, handler: rateLimited });
 
 app.use('/health', healthRouter);
 app.use('/api/health', healthRouter);
-app.use('/api/auth', authLimiter, authRouter);
+app.use('/api/auth/discord', authLimiter);
+app.use('/api/auth', authRouter);
 app.use('/api/internal', internalRouter);
 app.use('/api/companies', companiesRouter);
 app.use('/api/companies/:companyId/shareholders', shareholdersRouter);
 app.use('/api/companies/:companyId/roles', gradesRouter);
 app.use('/api/companies/:companyId/members', membersRouter);
+app.use('/api/companies/:companyId/notes', irsCompanyNotesRouter);
 app.use('/api/me', meRouter);
 app.use('/api/me/associations', meAssociationsRouter);
 app.use('/api/me/notifications', meNotificationsRouter);
@@ -78,6 +113,10 @@ app.use('/api/share-listings', meShareListingsRouter);
 app.use('/api/me/companies/:companyId/declarations', meDeclarationsRouter);
 app.use('/api/me/companies/:companyId/expenses', meExpensesRouter);
 app.use('/api/me/companies/:companyId/subventions', meSubventionsRouter);
+app.use('/api/me/companies/:companyId/evenements', meCompanyEventsRouter);
+app.use('/api/me/companies/:companyId/garage', meGarageRouter);
+app.use('/api/fivem', fivemLimiter, fivemRouter);
+app.use('/api/me/fivem', meFivemRouter);
 app.use('/api/me/companies/:companyId/dividends', meDividendsRouter);
 app.use('/api/me/companies/:companyId/messages', meMessagesRouter);
 app.use('/api/me/companies/:companyId/employees', meEmployeesRouter);
@@ -89,6 +128,10 @@ app.use('/api/me/companies/:companyId/rentals', meRentalsRouter);
 app.use('/api/me/companies/:companyId/stocks', meStocksRouter);
 app.use('/api/me/companies/:companyId/stock-categories', meStockCategoriesRouter);
 app.use('/api/me/companies/:companyId/catalog', meCatalogRouter);
+app.use('/api/me/companies/:companyId/immo-rentals', meImmoRentalsRouter);
+app.use('/api/me/companies/:companyId/immo-sales', meImmoSalesRouter);
+app.use('/api/me/companies/:companyId/immo-parcels', meImmoParcelsRouter);
+app.use('/api/me/companies/:companyId/taxi', meTaxiRouter);
 app.use('/api/me/companies/:companyId/sales', meSalesRouter);
 app.use('/api/me/companies/:companyId/exercices', meExercicesRouter);
 app.use('/api/me/companies/:companyId/clients', meClientsRouter);
@@ -109,6 +152,12 @@ app.use('/api/irs/share-listings', irsShareListingsRouter);
 app.use('/api/messages', irsMessagesRouter);
 app.use('/api/admin/modules', adminModulesRouter);
 app.use('/api/fiscal', fiscalRouter);
+app.use('/api/errors', errorsRouter);
+app.use('/api/admin/errors', adminErrorsRouter);
+app.use('/api/me/tickets', meTicketsRouter);
+app.use('/api/support/tickets', supportTicketsRouter);
+app.use('/api/tickets', ticketFilesRouter);
+app.use('/api/dev/ticket-logs', devTicketLogsRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'not_found' });
@@ -125,15 +174,26 @@ app.use((err: unknown, _req: express.Request, res: express.Response, next: expre
   next(err);
 });
 
-app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  logger.error({ err }, 'unhandled error');
-  res.status(500).json({ error: 'internal_error' });
+app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const code = genErrorCode();
+  const e = err as { message?: string; stack?: string };
+  logger.error({ err, errorCode: code, method: req.method, path: req.originalUrl }, 'unhandled error');
+  void recordError({
+    code,
+    source: 'server',
+    message: e?.message ?? String(err),
+    stack: e?.stack ?? null,
+    method: req.method,
+    path: req.originalUrl,
+    userId: req.user?.id ?? null,
+  });
+  res.status(500).json({ error: 'internal_error', errorId: code });
 });
 
 const httpServer = createServer(app);
 createSocketServer(httpServer);
 
-httpServer.listen(env.PORT, () => {
+httpServer.listen(env.PORT, '127.0.0.1', () => {
   logger.info(`RP Compta API → http://127.0.0.1:${env.PORT} (${env.NODE_ENV})`);
 });
 
@@ -143,3 +203,39 @@ setInterval(
   },
   60 * 60 * 1000,
 ).unref();
+
+if (env.FIVEM_PLAYER_API_URL) {
+  let fivemRefreshRunning = false;
+  setInterval(
+    () => {
+      if (fivemRefreshRunning) return;
+      fivemRefreshRunning = true;
+      void refreshSelectedCharacters()
+        .then((r) => {
+          if (!r.userIds.length) return;
+          emitInvalidate('irs', [['fivem-players'], ['companies'], ['members']]);
+          for (const uid of new Set(r.userIds)) emitInvalidate(`user:${uid}`, [['my-companies']]);
+        })
+        .catch((err) => logger.error({ err }, 'fivem refresh failed'))
+        .finally(() => {
+          fivemRefreshRunning = false;
+        });
+    },
+    10 * 60 * 1000,
+  ).unref();
+}
+
+// Génération automatique des loyers (hebdo, idempotente) — vérifiée toutes les heures.
+{
+  let rentGenRunning = false;
+  const tick = () => {
+    if (rentGenRunning) return;
+    rentGenRunning = true;
+    void runRentAutoGeneration()
+      .then(() => runRentReminders())
+      .catch((err) => logger.error({ err }, 'auto-génération / relance loyers échouée'))
+      .finally(() => { rentGenRunning = false; });
+  };
+  setTimeout(tick, 30 * 1000); // un passage peu après le démarrage
+  setInterval(tick, 60 * 60 * 1000).unref();
+}

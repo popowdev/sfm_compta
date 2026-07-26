@@ -15,6 +15,9 @@ export interface CatalogItem {
   name: string;
   categoryId: number | null;
   categoryName: string | null;
+  stockItemId: number | null;
+  stockItemName: string | null;
+  stockQuantity: number | null;
   type: CatalogItemType;
   price: number;
   active: boolean;
@@ -36,6 +39,8 @@ export interface CatalogStock {
 export interface CatalogItemInput {
   name: string;
   categoryId?: number | null;
+  ownStock?: boolean;
+  stockQuantity?: number | null;
   type: CatalogItemType;
   price: number;
   active?: boolean;
@@ -45,6 +50,24 @@ export interface CatalogItemInput {
 export interface RecipeInput {
   lines: { stockItemId: number; quantity: number }[];
 }
+
+export interface CraftLine {
+  catalogItemId: number;
+  quantity: number;
+}
+
+export const craftItems = (companyId: number, lines: CraftLine[]) =>
+  apiFetch<{ ok: boolean; crafted: number }>(`/api/me/companies/${companyId}/catalog/craft`, {
+    method: 'POST',
+    body: JSON.stringify({ lines }),
+  });
+
+// Ajuste le stock propre d'un article (+ ajoute / − retire). Crée le stock au 1er ajout.
+export const adjustCatalogStock = (companyId: number, id: number, delta: number) =>
+  apiFetch<{ ok: boolean; quantity: number }>(`/api/me/companies/${companyId}/catalog/${id}/stock`, {
+    method: 'POST',
+    body: JSON.stringify({ delta }),
+  });
 
 export const getCatalog = (companyId: number) =>
   apiFetch<{

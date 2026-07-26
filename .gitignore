@@ -28,3 +28,7 @@ coverage/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# runtime uploads & generated map tiles (data, not source)
+uploads/
+tiles/

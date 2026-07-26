@@ -17,6 +17,7 @@ export interface Declaration {
   notes: string | null;
   createdAt: string;
   paidAt: string | null;
+  archivedAt: string | null;
   companyName?: string;
 }
 
@@ -54,7 +55,8 @@ export interface DeclarationPrefill {
 export const getDeclarationPrefill = (companyId: number, offset = 0) =>
   apiFetch<DeclarationPrefill>(`/api/me/companies/${companyId}/declarations/prefill?offset=${offset}`);
 
-export const getAllDeclarations = () => apiFetch<Declaration[]>('/api/declarations');
+export const getAllDeclarations = (archived = false) =>
+  apiFetch<Declaration[]>(`/api/declarations${archived ? '?archived=1' : ''}`);
 
 export const setDeclarationStatus = (id: number, status: 'submitted' | 'paid' | 'cancelled') =>
   apiFetch<{ ok: boolean }>(`/api/declarations/${id}`, {
@@ -62,6 +64,19 @@ export const setDeclarationStatus = (id: number, status: 'submitted' | 'paid' | 
     body: JSON.stringify({ status }),
   });
 
+export const archiveDeclaration = (id: number) =>
+  apiFetch<{ ok: boolean }>(`/api/declarations/${id}`, { method: 'DELETE' });
+
+export const restoreDeclaration = (id: number) =>
+  apiFetch<{ ok: boolean }>(`/api/declarations/${id}/restore`, { method: 'POST' });
+
+export const purgeDeclaration = (id: number) =>
+  apiFetch<{ ok: boolean }>(`/api/declarations/${id}/purge`, { method: 'DELETE' });
+
 export function fmtMoney(n: number): string {
   return n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export function fmtInt(n: number): string {
+  return Math.round(n).toLocaleString('fr-FR', { maximumFractionDigits: 0 });
 }

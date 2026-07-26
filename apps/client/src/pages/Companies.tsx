@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, ChevronRight, Trash2 } from 'lucide-react';
+import { Plus, ChevronRight, Trash2, Lock } from 'lucide-react';
 import type { ModuleKey } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -20,6 +20,17 @@ import {
 } from '@/lib/companies';
 import { getGrades, createGrade, deleteGrade, setGradePermission } from '@/lib/grades';
 import { getMembers, addMember, setMemberGrade, removeMember } from '@/lib/members';
+import { useToast } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirm';
+import { useAuth } from '@/auth/AuthContext';
+import {
+  getCompanyNotes,
+  addCompanyNote,
+  deleteCompanyNote,
+  NOTE_LABELS,
+  type NoteType,
+  type CompanyNote,
+} from '@/lib/companyNotes';
 
 const inputCls =
   'h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
@@ -491,6 +502,8 @@ function GradesPanel({ company }: { company: Company }) {
 }
 
 function MembersPanel({ company }: { company: Company }) {
+  const { user } = useAuth();
+  const isDev = user?.isDev ?? false;
   const queryClient = useQueryClient();
   const members = useQuery({ queryKey: ['members', company.id], queryFn: () => getMembers(company.id) });
   const gradesQ = useQuery({ queryKey: ['grades', company.id], queryFn: () => getGrades(company.id) });
@@ -571,6 +584,12 @@ function MembersPanel({ company }: { company: Company }) {
         )}
       </div>
 
+      {!isDev ? (
+        <div className="flex items-center gap-2 rounded-lg border border-dashed p-4 text-xs text-muted-foreground">
+          <Lock className="h-3.5 w-3.5" />
+          Les membres sont synchronisés automatiquement depuis le jeu (FiveM). Ajout manuel réservé au dev.
+        </div>
+      ) : (
       <form
         className="rounded-lg border p-4"
         onSubmit={(e) => {
@@ -617,6 +636,7 @@ function MembersPanel({ company }: { company: Company }) {
           <p className="mt-1 text-xs text-destructive">Échec — vérifie l'ID Discord.</p>
         )}
       </form>
+      )}
     </div>
   );
 }
@@ -647,7 +667,7 @@ function TabBtn({
 
 function CompanyDetail({ company }: { company: Company }) {
   const [tab, setTab] = useState<
-    'modules' | 'grades' | 'members' | 'shareholders' | 'infos'
+    'modules' | 'grades' | 'members' | 'shareholders' | 'infos' | 'notes'
   >('modules');
   return (
     <div>
@@ -667,18 +687,147 @@ function CompanyDetail({ company }: { company: Company }) {
         <TabBtn active={tab === 'infos'} onClick={() => setTab('infos')}>
           Infos
         </TabBtn>
+        <TabBtn active={tab === 'notes'} onClick={() => setTab('notes')}>
+          Notes IRS
+        </TabBtn>
       </div>
       {tab === 'modules' && <ModulesPanel company={company} />}
       {tab === 'grades' && <GradesPanel company={company} />}
       {tab === 'members' && <MembersPanel company={company} />}
       {tab === 'shareholders' && <ShareholdersPanel company={company} />}
       {tab === 'infos' && <CompanyInfoPanel company={company} />}
+      {tab === 'notes' && <NotesPanel company={company} />}
+    </div>
+  );
+}
+
+function nowLocal(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function fmtIncident(s: string): string {
+  const d = new Date(s.replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return s;
+  const date = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
+  return `${date} à ${time}`;
+}
+const NOTE_STYLE: Record<NoteType, string> = {
+  no_answer: 'border-red-500/40 bg-red-500/10 text-red-300',
+  not_present: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
+  other: 'border-slate-500/40 bg-slate-500/10 text-slate-300',
+};
+
+function NotesPanel({ company }: { company: Company }) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const q = useQuery({ queryKey: ['company-notes', company.id], queryFn: () => getCompanyNotes(company.id) });
+  const notes = q.data?.notes ?? [];
+  const noAnswer = notes.filter((n) => n.type === 'no_answer').length;
+
+  const [type, setType] = useState<NoteType>('no_answer');
+  const [incidentAt, setIncidentAt] = useState(nowLocal());
+  const [body, setBody] = useState('');
+
+  const add = useMutation({
+    mutationFn: () => addCompanyNote(company.id, { type, incidentAt, body: body.trim() || undefined }),
+    onSuccess: () => {
+      toast('Note ajoutée.', 'success');
+      setBody('');
+      setIncidentAt(nowLocal());
+      setType('no_answer');
+      queryClient.invalidateQueries({ queryKey: ['company-notes', company.id] });
+    },
+    onError: () => toast("Échec de l'ajout.", 'error'),
+  });
+  const del = useMutation({
+    mutationFn: (id: number) => deleteCompanyNote(company.id, id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['company-notes', company.id] }),
+    onError: () => toast('Suppression impossible.', 'error'),
+  });
+
+  const remove = async (n: CompanyNote) => {
+    if (await confirm({ title: 'Supprimer cette note ?', message: `${NOTE_LABELS[n.type]} — ${fmtIncident(n.incidentAt)}`, destructive: true })) {
+      del.mutate(n.id);
+    }
+  };
+
+  return (
+    <div className="space-y-4 p-4">
+      <form
+        className="grid gap-2 rounded-lg border bg-card p-4 sm:grid-cols-[1fr_1fr_auto]"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (incidentAt && !add.isPending) add.mutate();
+        }}
+      >
+        <label className="text-sm">
+          <span className="mb-1 block text-muted-foreground">Motif</span>
+          <select className={`${inputCls} w-full`} value={type} onChange={(e) => setType(e.target.value as NoteType)}>
+            <option value="no_answer">N'a pas répondu</option>
+            <option value="not_present">Pas sur place</option>
+            <option value="other">Autre</option>
+          </select>
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-muted-foreground">Date &amp; heure de l'incident</span>
+          <input type="datetime-local" className={`${inputCls} w-full`} value={incidentAt} onChange={(e) => setIncidentAt(e.target.value)} />
+        </label>
+        <div className="flex items-end">
+          <Button type="submit" disabled={add.isPending || !incidentAt}>
+            <Plus className="h-4 w-4" /> Ajouter
+          </Button>
+        </div>
+        <label className="text-sm sm:col-span-3">
+          <span className="mb-1 block text-muted-foreground">Note (optionnel)</span>
+          <input className={`${inputCls} w-full`} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Précision…" />
+        </label>
+      </form>
+
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">{notes.length} note(s)</span>
+        {noAnswer > 0 && (
+          <span className="rounded-full border border-red-500/40 bg-red-500/10 px-2.5 py-0.5 text-xs font-medium text-red-300">
+            {noAnswer} non-réponse(s)
+          </span>
+        )}
+      </div>
+
+      {q.isLoading ? (
+        <div className="text-sm text-muted-foreground">Chargement…</div>
+      ) : notes.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+          Aucune note pour cette entreprise.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {notes.map((n) => (
+            <div key={n.id} className="flex items-start gap-3 rounded-lg border bg-card p-3">
+              <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${NOTE_STYLE[n.type]}`}>
+                {NOTE_LABELS[n.type]}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium">{fmtIncident(n.incidentAt)}</div>
+                {n.body && <div className="text-sm text-muted-foreground">{n.body}</div>}
+                <div className="mt-0.5 text-xs text-muted-foreground">par {n.authorName || 'IRS'}</div>
+              </div>
+              <button type="button" onClick={() => remove(n)} className="shrink-0 text-muted-foreground hover:text-red-400" aria-label="Supprimer">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 export default function Companies() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isDev = user?.isDev ?? false;
   const [name, setName] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
@@ -715,24 +864,31 @@ export default function Companies() {
 
       <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[1.1fr_1fr]">
         <div className="rounded-xl border bg-card">
-          <form
-            className="flex gap-2 border-b p-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (name.trim()) create.mutate();
-            }}
-          >
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Nom de l'entreprise"
-              className={`${inputCls} flex-1`}
-            />
-            <Button type="submit" disabled={!name.trim() || create.isPending}>
-              <Plus className="h-4 w-4" />
-              Créer
-            </Button>
-          </form>
+          {isDev ? (
+            <form
+              className="flex gap-2 border-b p-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (name.trim()) create.mutate();
+              }}
+            >
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Nom de l'entreprise"
+                className={`${inputCls} flex-1`}
+              />
+              <Button type="submit" disabled={!name.trim() || create.isPending}>
+                <Plus className="h-4 w-4" />
+                Créer
+              </Button>
+            </form>
+          ) : (
+            <div className="flex items-center gap-2 border-b p-4 text-xs text-muted-foreground">
+              <Lock className="h-3.5 w-3.5" />
+              Les entreprises sont créées automatiquement depuis le jeu (FiveM). Création manuelle réservée au dev.
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-2 border-b p-4">
             <SearchInput

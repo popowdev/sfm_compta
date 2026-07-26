@@ -16,8 +16,15 @@ const envSchema = z.object({
 
   SESSION_SECRET: z.string().min(16).default('dev-only-secret-change-me-please!'),
   INTERNAL_API_KEY: z.string().optional(),
+  FIVEM_SYNC_TOKEN: z.string().optional(),
+  FIVEM_PLAYER_API_URL: z.string().url().optional(),
+  FIVEM_PLAYER_API_TOKEN: z.string().optional(),
   UPLOAD_DIR: z.string().default('/var/www/rp-compta/uploads'),
 
+  DISCORD_BOT_TOKEN: z.string().optional(),
+  DISCORD_TICKET_WEBHOOK_URL: z.string().url().optional(),
+  DISCORD_TICKET_ROLE_ID: z.string().regex(/^\d{5,32}$/).optional(),
+  DEV_DISCORD_IDS: z.string().optional(),
   DISCORD_CLIENT_ID: z.string().optional(),
   DISCORD_CLIENT_SECRET: z.string().optional(),
   DISCORD_REDIRECT_URI: z.string().optional(),

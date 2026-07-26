@@ -28,17 +28,18 @@ irsOverviewRouter.get(
       .select({ d: declarations, companyName: companies.name })
       .from(declarations)
       .innerJoin(companies, eq(declarations.companyId, companies.id))
-      .where(eq(declarations.status, 'submitted'))
+      .where(and(eq(declarations.status, 'submitted'), isNull(declarations.archivedAt)))
       .orderBy(desc(declarations.createdAt))
       .limit(8);
 
     const taxRow = await db
       .select({ t: sql<string>`COALESCE(SUM(${declarations.totalTax}), 0)` })
       .from(declarations)
-      .where(eq(declarations.status, 'paid'));
+      .where(and(eq(declarations.status, 'paid'), isNull(declarations.archivedAt)));
     const caRow = await db
       .select({ t: sql<string>`COALESCE(SUM(${declarations.caNet}), 0)` })
-      .from(declarations);
+      .from(declarations)
+      .where(isNull(declarations.archivedAt));
 
     const pendingSubCount = await db
       .select({ n: sql<number>`COUNT(*)` })
@@ -47,7 +48,7 @@ irsOverviewRouter.get(
     const submittedDeclCount = await db
       .select({ n: sql<number>`COUNT(*)` })
       .from(declarations)
-      .where(eq(declarations.status, 'submitted'));
+      .where(and(eq(declarations.status, 'submitted'), isNull(declarations.archivedAt)));
 
     const recentMessages = await db
       .select({ m: messages, companyName: companies.name })

@@ -1,0 +1,1 @@
+ALTER TABLE `companies` ADD `managed_by_fivem` boolean DEFAULT false NOT NULL;

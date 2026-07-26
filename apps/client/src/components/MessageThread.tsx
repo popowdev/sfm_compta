@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { fmtDateTime, type Message } from '@/lib/messages';
 
@@ -54,22 +54,31 @@ export function MessageComposer({
   onSend,
   pending,
   disabled,
+  clearSignal,
 }: {
   onSend: (body: string) => void;
   pending: boolean;
   disabled?: boolean;
+  clearSignal?: number;
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const [value, setValue] = useState('');
+  const lastClear = useRef(clearSignal);
+  useEffect(() => {
+    if (clearSignal !== lastClear.current) {
+      lastClear.current = clearSignal;
+      setValue('');
+    }
+  }, [clearSignal]);
   const submit = () => {
-    const v = ref.current?.value.trim() ?? '';
+    const v = value.trim();
     if (!v) return;
     onSend(v);
-    if (ref.current) ref.current.value = '';
   };
   return (
     <div className="flex items-end gap-2">
       <textarea
-        ref={ref}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
         disabled={disabled}
         rows={2}
         aria-label="Écrire un message"

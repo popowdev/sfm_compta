@@ -107,7 +107,7 @@ export function buildContractSvg(d: ContractData): string {
     ['Type de contrat', d.contractLabel],
     ["Date d'embauche", d.hireDate || '—'],
     ['Date de naissance', d.dateOfBirth || '—'],
-    ['Rémunération', `${money(d.hourlyRate)} $/h${d.commissionRate > 0 ? ` + ${d.commissionRate}% de commission` : ''}`],
+    ['Rémunération', `${Math.round(d.hourlyRate)} $/h${d.commissionRate > 0 ? ` + ${d.commissionRate}% de commission` : ''}`],
   ];
   let y = 175;
   const intro = wrap(

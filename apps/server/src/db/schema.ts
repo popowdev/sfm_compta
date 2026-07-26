@@ -22,6 +22,7 @@ export const users = mysqlTable('users', {
   displayName: varchar('display_name', { length: 100 }).notNull(),
   avatarUrl: varchar('avatar_url', { length: 255 }),
   whitelisted: boolean('whitelisted').notNull().default(false),
+  staffMode: boolean('staff_mode').notNull().default(true),
   lastWhitelistCheck: timestamp('last_whitelist_check'),
   createdAt: timestamp('created_at')
     .notNull()
@@ -52,6 +53,7 @@ export const companies = mysqlTable('companies', {
   slug: varchar('slug', { length: 150 }).notNull().unique(),
   logoUrl: varchar('logo_url', { length: 255 }),
   fivemJob: varchar('fivem_job', { length: 64 }).unique(),
+  managedByFivem: boolean('managed_by_fivem').notNull().default(false),
   externalLink: varchar('external_link', { length: 255 }),
   valuation: decimal('valuation', { precision: 14, scale: 2 }).notNull().default('0'),
   active: boolean('active').notNull().default(true),
@@ -140,10 +142,47 @@ export const companyRoles = mysqlTable('company_roles', {
   rank: int('rank').notNull().default(0),
   isDefault: boolean('is_default').notNull().default(false),
   canManage: boolean('can_manage').notNull().default(false),
+  fivemGrade: int('fivem_grade'),
   createdAt: timestamp('created_at')
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const fivemPlayers = mysqlTable('fivem_players', {
+  id: int('id').autoincrement().primaryKey(),
+  discordId: varchar('discord_id', { length: 32 }).notNull().unique(),
+  identifier: varchar('identifier', { length: 80 }),
+  name: varchar('name', { length: 120 }).notNull().default(''),
+  job: varchar('job', { length: 64 }).notNull().default(''),
+  jobGrade: int('job_grade').notNull().default(0),
+  selectedChar: varchar('selected_char', { length: 120 }),
+  jobLabel: varchar('job_label', { length: 120 }),
+  gradeLabel: varchar('grade_label', { length: 120 }),
+  online: boolean('online').notNull().default(false),
+  updatedAt: timestamp('updated_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`)
+    .onUpdateNow(),
+});
+
+export const fivemCharacters = mysqlTable(
+  'fivem_characters',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    discordId: varchar('discord_id', { length: 32 }).notNull(),
+    name: varchar('name', { length: 120 }).notNull(),
+    jobId: varchar('job_id', { length: 64 }).notNull().default(''),
+    jobLabel: varchar('job_label', { length: 120 }),
+    grade: int('grade').notNull().default(0),
+    gradeLabel: varchar('grade_label', { length: 120 }),
+    unemployed: boolean('unemployed').notNull().default(false),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .onUpdateNow(),
+  },
+  (t) => ({ uq: unique('uq_fivem_char').on(t.discordId, t.name) }),
+);
 
 export const rolePermissions = mysqlTable(
   'role_permissions',
@@ -231,6 +270,7 @@ export const declarations = mysqlTable('declarations', {
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
   paidAt: timestamp('paid_at'),
+  archivedAt: timestamp('archived_at'),
 });
 
 export const companyExpenses = mysqlTable('company_expenses', {
@@ -351,7 +391,11 @@ export const associationTransactions = mysqlTable('association_transactions', {
   associationId: int('association_id')
     .notNull()
     .references(() => associations.id, { onDelete: 'cascade' }),
-  type: mysqlEnum('type', ['cotisation', 'don', 'subvention', 'depense', 'autre']).notNull(),
+  type: mysqlEnum('type', ['cotisation', 'don', 'subvention', 'depense', 'autre']),
+  direction: mysqlEnum('direction', ['in', 'out']).notNull().default('in'),
+  partyType: mysqlEnum('party_type', ['entreprise', 'particulier']),
+  fromName: varchar('from_name', { length: 140 }),
+  toName: varchar('to_name', { length: 140 }),
   label: varchar('label', { length: 200 }).notNull(),
   amount: decimal('amount', { precision: 14, scale: 2 }).notNull(),
   createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
@@ -470,6 +514,162 @@ export const events = mysqlTable('events', {
     .default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const companyEvents = mysqlTable('company_events', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  title: varchar('title', { length: 150 }).notNull(),
+  posterPath: varchar('poster_path', { length: 255 }),
+  eventDate: date('event_date', { mode: 'string' }).notNull(),
+  revenue: decimal('revenue', { precision: 14, scale: 2 }).notNull().default('0'),
+  charges: decimal('charges', { precision: 14, scale: 2 }).notNull().default('0'),
+  profit: decimal('profit', { precision: 14, scale: 2 }).notNull().default('0'),
+  notes: text('notes'),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const companyNotes = mysqlTable('company_notes', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  authorUserId: int('author_user_id').references(() => users.id, { onDelete: 'set null' }),
+  authorName: varchar('author_name', { length: 140 }).notNull().default(''),
+  type: mysqlEnum('type', ['no_answer', 'not_present', 'other']).notNull().default('no_answer'),
+  incidentAt: datetime('incident_at', { mode: 'string' }).notNull(),
+  body: text('body'),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const garageContracts = mysqlTable('garage_contracts', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 120 }).notNull(),
+  description: text('description'),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const garageVehicles = mysqlTable('garage_vehicles', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  ownerFirstName: varchar('owner_first_name', { length: 80 }),
+  ownerLastName: varchar('owner_last_name', { length: 80 }),
+  model: varchar('model', { length: 120 }),
+  plate: varchar('plate', { length: 20 }).notNull(),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const garageRepairTypes = mysqlTable('garage_repair_types', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 80 }).notNull(),
+  price: decimal('price', { precision: 12, scale: 2 }).notNull().default('0'),
+  sortOrder: int('sort_order').notNull().default(0),
+  active: boolean('active').notNull().default(true),
+}, (t) => ({ uq: unique('uq_garage_type').on(t.companyId, t.name) }));
+
+export const garagePacks = mysqlTable('garage_packs', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 80 }).notNull(),
+  price: decimal('price', { precision: 12, scale: 2 }).notNull().default('0'),
+  active: boolean('active').notNull().default(true),
+});
+
+export const garageContractPrices = mysqlTable('garage_contract_prices', {
+  id: int('id').autoincrement().primaryKey(),
+  contractId: int('contract_id')
+    .notNull()
+    .references(() => garageContracts.id, { onDelete: 'cascade' }),
+  typeId: int('type_id').references(() => garageRepairTypes.id, { onDelete: 'cascade' }),
+  packId: int('pack_id').references(() => garagePacks.id, { onDelete: 'cascade' }),
+  price: decimal('price', { precision: 12, scale: 2 }).notNull().default('0'),
+});
+
+export const garageSettings = mysqlTable('garage_settings', {
+  companyId: int('company_id')
+    .primaryKey()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  depannagePerKm: decimal('depannage_per_km', { precision: 12, scale: 2 }).notNull().default('25'),
+  depannageMultiplier: int('depannage_multiplier').notNull().default(2),
+  customMarginPct: decimal('custom_margin_pct', { precision: 6, scale: 2 }).notNull().default('25'),
+  commissionPct: decimal('commission_pct', { precision: 6, scale: 2 }).notNull().default('30'),
+});
+
+export const garageRepairs = mysqlTable('garage_repairs', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  contractId: int('contract_id').references(() => garageContracts.id, { onDelete: 'set null' }),
+  vehicleId: int('vehicle_id').references(() => garageVehicles.id, { onDelete: 'set null' }),
+  mechanicName: varchar('mechanic_name', { length: 140 }).notNull().default(''),
+  clientName: varchar('client_name', { length: 140 }),
+  plate: varchar('plate', { length: 20 }),
+  model: varchar('model', { length: 120 }),
+  packName: varchar('pack_name', { length: 80 }),
+  items: json('items'),
+  mechanicUserId: int('mechanic_user_id').references(() => users.id, { onDelete: 'set null' }),
+  commissionAmount: decimal('commission_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  depannageKm: int('depannage_km').notNull().default(0),
+  total: decimal('total', { precision: 12, scale: 2 }).notNull().default('0'),
+  description: text('description'),
+  paid: boolean('paid').notNull().default(false),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const garageCustoms = mysqlTable('garage_customs', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  contractId: int('contract_id').references(() => garageContracts.id, { onDelete: 'set null' }),
+  vehicleId: int('vehicle_id').references(() => garageVehicles.id, { onDelete: 'set null' }),
+  mechanicName: varchar('mechanic_name', { length: 140 }).notNull().default(''),
+  clientName: varchar('client_name', { length: 140 }),
+  plate: varchar('plate', { length: 20 }),
+  model: varchar('model', { length: 120 }),
+  mechanicUserId: int('mechanic_user_id').references(() => users.id, { onDelete: 'set null' }),
+  commissionAmount: decimal('commission_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  costPrice: decimal('cost_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  discountPct: decimal('discount_pct', { precision: 6, scale: 2 }).notNull().default('0'),
+  marginPct: decimal('margin_pct', { precision: 6, scale: 2 }).notNull().default('25'),
+  finalPrice: decimal('final_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  profit: decimal('profit', { precision: 12, scale: 2 }).notNull().default('0'),
+  description: text('description'),
+  paid: boolean('paid').notNull().default(false),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const vehicleModels = mysqlTable(
+  'vehicle_models',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    name: varchar('name', { length: 120 }).notNull(),
+    manufacturer: varchar('manufacturer', { length: 80 }),
+    category: varchar('category', { length: 40 }),
+    createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => ({ idxName: index('idx_vehicle_model_name').on(t.name) }),
+);
+
 export const companyEmployees = mysqlTable('company_employees', {
   id: int('id').autoincrement().primaryKey(),
   companyId: int('company_id')
@@ -478,13 +678,13 @@ export const companyEmployees = mysqlTable('company_employees', {
   userId: int('user_id').references(() => users.id, { onDelete: 'set null' }),
   name: varchar('name', { length: 120 }).notNull(),
   phone: varchar('phone', { length: 50 }),
+  iban: varchar('iban', { length: 40 }),
   dateOfBirth: date('date_of_birth', { mode: 'string' }),
   hireDate: date('hire_date', { mode: 'string' }),
-  position: mysqlEnum('position', ['pdg', 'patron', 'co_patron', 'gerant', 'employe', 'apprenti'])
-    .notNull()
-    .default('employe'),
+  companyRoleId: int('company_role_id').references(() => companyRoles.id, { onDelete: 'set null' }),
   contractType: mysqlEnum('contract_type', ['cdi', 'cdd', 'interim']).notNull().default('cdi'),
   contractSigned: boolean('contract_signed').notNull().default(false),
+  medicalVisit: boolean('medical_visit').notNull().default(false),
   hourlyRate: decimal('hourly_rate', { precision: 10, scale: 2 }).notNull().default('0'),
   commissionRate: decimal('commission_rate', { precision: 5, scale: 2 }).notNull().default('0'),
   warnings: int('warnings').notNull().default(0),
@@ -522,11 +722,13 @@ export const salaryGrid = mysqlTable(
     companyId: int('company_id')
       .notNull()
       .references(() => companies.id, { onDelete: 'cascade' }),
-    position: mysqlEnum('position', ['pdg', 'patron', 'co_patron', 'gerant', 'employe', 'apprenti']).notNull(),
+    companyRoleId: int('company_role_id')
+      .notNull()
+      .references(() => companyRoles.id, { onDelete: 'cascade' }),
     hourlyRate: decimal('hourly_rate', { precision: 10, scale: 2 }).notNull().default('0'),
     baseSalary: decimal('base_salary', { precision: 12, scale: 2 }).notNull().default('0'),
   },
-  (t) => ({ uq: unique('uq_salary_grid').on(t.companyId, t.position) }),
+  (t) => ({ uq: unique('uq_salary_grid').on(t.companyRoleId) }),
 );
 
 export const messages = mysqlTable('messages', {
@@ -754,6 +956,7 @@ export const catalogItems = mysqlTable('catalog_items', {
   name: varchar('name', { length: 150 }).notNull(),
   category: varchar('category', { length: 80 }),
   categoryId: int('category_id').references(() => stockCategories.id, { onDelete: 'set null' }),
+  stockItemId: int('stock_item_id').references(() => stockItems.id, { onDelete: 'set null' }),
   type: mysqlEnum('type', ['product', 'service']).notNull().default('product'),
   price: decimal('price', { precision: 12, scale: 2 }).notNull().default('0'),
   active: boolean('active').notNull().default(true),
@@ -811,6 +1014,238 @@ export const sessions = mysqlTable('sessions', {
   createdAt: timestamp('created_at')
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const errorLog = mysqlTable('error_log', {
+  id: int('id').autoincrement().primaryKey(),
+  code: varchar('code', { length: 16 }).notNull(),
+  source: varchar('source', { length: 10 }).notNull(),
+  message: varchar('message', { length: 500 }),
+  stack: text('stack'),
+  method: varchar('method', { length: 10 }),
+  path: varchar('path', { length: 255 }),
+  userId: int('user_id'),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const tickets = mysqlTable('tickets', {
+  id: int('id').autoincrement().primaryKey(),
+  ref: varchar('ref', { length: 8 }).notNull(),
+  type: mysqlEnum('type', ['bug', 'question', 'suggestion']).notNull(),
+  priority: mysqlEnum('priority', ['low', 'normal', 'high']).notNull().default('normal'),
+  status: mysqlEnum('status', ['waiting_staff', 'waiting_user', 'resolved', 'closed']).notNull().default('waiting_staff'),
+  title: varchar('title', { length: 150 }).notNull(),
+  userId: int('user_id').notNull(),
+  assignedUserId: int('assigned_user_id'),
+  companyId: int('company_id'),
+  contextPath: varchar('context_path', { length: 255 }),
+  contextErrorCode: varchar('context_error_code', { length: 16 }),
+  contextAgent: varchar('context_agent', { length: 255 }),
+  lastMessageAt: timestamp('last_message_at'),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  resolvedAt: timestamp('resolved_at'),
+  closedAt: timestamp('closed_at'),
+});
+
+export const ticketMessages = mysqlTable('ticket_messages', {
+  id: int('id').autoincrement().primaryKey(),
+  ticketId: int('ticket_id').notNull(),
+  userId: int('user_id'),
+  body: text('body').notNull(),
+  internal: boolean('internal').notNull().default(false),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const ticketAttachments = mysqlTable('ticket_attachments', {
+  id: int('id').autoincrement().primaryKey(),
+  ticketId: int('ticket_id').notNull(),
+  messageId: int('message_id'),
+  path: varchar('path', { length: 255 }).notNull(),
+  originalName: varchar('original_name', { length: 200 }),
+  size: int('size').notNull().default(0),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const ticketMessageReactions = mysqlTable('ticket_message_reactions', {
+  id: int('id').autoincrement().primaryKey(),
+  ticketId: int('ticket_id').notNull(),
+  messageId: int('message_id').notNull(),
+  userId: int('user_id').notNull(),
+  emoji: varchar('emoji', { length: 32 }).notNull(),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (t) => ({ uq: unique('uq_reaction').on(t.messageId, t.userId, t.emoji) }));
+
+export const ticketEvents = mysqlTable('ticket_events', {
+  id: int('id').autoincrement().primaryKey(),
+  ticketId: int('ticket_id').notNull(),
+  ref: varchar('ref', { length: 16 }).notNull(),
+  eventType: varchar('event_type', { length: 40 }).notNull(),
+  actorUserId: int('actor_user_id'),
+  actorName: varchar('actor_name', { length: 120 }),
+  detail: varchar('detail', { length: 255 }),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const immoRentals = mysqlTable('immo_rentals', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  propertyRef: varchar('property_ref', { length: 120 }).notNull(),
+  clientId: int('client_id').references(() => companyClients.id, { onDelete: 'set null' }),
+  tenantName: varchar('tenant_name', { length: 150 }),
+  agent: varchar('agent', { length: 120 }),
+  weeklyRent: decimal('weekly_rent', { precision: 14, scale: 2 }).notNull().default('0'),
+  startDate: date('start_date', { mode: 'string' }),
+  status: mysqlEnum('status', ['active', 'terminee', 'resiliee']).notNull().default('active'),
+  autoGenerate: boolean('auto_generate').notNull().default(false),
+  reminderEnabled: boolean('reminder_enabled').notNull().default(false),
+  tenantDiscordId: varchar('tenant_discord_id', { length: 32 }),
+  lastReminderAt: timestamp('last_reminder_at'),
+  notes: text('notes'),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const immoRentInvoices = mysqlTable('immo_rent_invoices', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  rentalId: int('rental_id')
+    .notNull()
+    .references(() => immoRentals.id, { onDelete: 'cascade' }),
+  weekStart: date('week_start', { mode: 'string' }).notNull(),
+  amount: decimal('amount', { precision: 14, scale: 2 }).notNull().default('0'),
+  status: mysqlEnum('status', ['paye', 'impaye']).notNull().default('impaye'),
+  paidAt: timestamp('paid_at'),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const immoSales = mysqlTable('immo_sales', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  propertyRef: varchar('property_ref', { length: 120 }).notNull(),
+  clientId: int('client_id').references(() => companyClients.id, { onDelete: 'set null' }),
+  buyerName: varchar('buyer_name', { length: 150 }),
+  agent: varchar('agent', { length: 120 }),
+  price: decimal('price', { precision: 14, scale: 2 }).notNull().default('0'),
+  status: mysqlEnum('status', ['disponible', 'vendu']).notNull().default('disponible'),
+  saleDate: date('sale_date', { mode: 'string' }),
+  notes: text('notes'),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const immoParcels = mysqlTable('immo_parcels', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  propertyRef: varchar('property_ref', { length: 120 }).notNull(),
+  status: mysqlEnum('status', ['disponible', 'vendu', 'active']).notNull().default('disponible'),
+  price: decimal('price', { precision: 14, scale: 2 }).notNull().default('0'),
+  ownerName: varchar('owner_name', { length: 150 }),
+  notes: text('notes'),
+  geometry: json('geometry').notNull(),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const taxiSettings = mysqlTable('taxi_settings', {
+  companyId: int('company_id').primaryKey().references(() => companies.id, { onDelete: 'cascade' }),
+  pricePerKm: decimal('price_per_km', { precision: 14, scale: 2 }).notNull().default('20'),
+  pricePerClient: decimal('price_per_client', { precision: 14, scale: 2 }).notNull().default('605'),
+});
+
+export const taxiVipTypes = mysqlTable('taxi_vip_types', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 120 }).notNull(),
+  fixedPrice: decimal('fixed_price', { precision: 14, scale: 2 }).notNull().default('0'),
+  pricePerKm: decimal('price_per_km', { precision: 14, scale: 2 }),
+  sortOrder: int('sort_order').notNull().default(0),
+  active: boolean('active').notNull().default(true),
+});
+
+export const taxiCitoyens = mysqlTable('taxi_citoyens', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  driverUserId: int('driver_user_id'),
+  driverName: varchar('driver_name', { length: 120 }).notNull().default(''),
+  km: decimal('km', { precision: 12, scale: 2 }).notNull().default('0'),
+  pricePerKm: decimal('price_per_km', { precision: 14, scale: 2 }).notNull().default('0'),
+  total: decimal('total', { precision: 14, scale: 2 }).notNull().default('0'),
+  notes: text('notes'),
+  createdByUserId: int('created_by_user_id'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const taxiConcitoyens = mysqlTable('taxi_concitoyens', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  driverUserId: int('driver_user_id'),
+  driverName: varchar('driver_name', { length: 120 }).notNull().default(''),
+  clients: int('clients').notNull().default(1),
+  pricePerClient: decimal('price_per_client', { precision: 14, scale: 2 }).notNull().default('0'),
+  total: decimal('total', { precision: 14, scale: 2 }).notNull().default('0'),
+  notes: text('notes'),
+  createdByUserId: int('created_by_user_id'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const taxiVip = mysqlTable('taxi_vip', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  driverUserId: int('driver_user_id'),
+  driverName: varchar('driver_name', { length: 120 }).notNull().default(''),
+  typeId: int('type_id').references(() => taxiVipTypes.id, { onDelete: 'set null' }),
+  typeName: varchar('type_name', { length: 120 }).notNull().default(''),
+  km: decimal('km', { precision: 12, scale: 2 }),
+  total: decimal('total', { precision: 14, scale: 2 }).notNull().default('0'),
+  notes: text('notes'),
+  createdByUserId: int('created_by_user_id'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const taxiVehicles = mysqlTable('taxi_vehicles', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  plate: varchar('plate', { length: 20 }).notNull(),
+  perf: boolean('perf').notNull().default(false),
+  assignedEmployeeId: int('assigned_employee_id').references(() => companyEmployees.id, { onDelete: 'set null' }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const employeeWarnings = mysqlTable('employee_warnings', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  employeeId: int('employee_id').notNull().references(() => companyEmployees.id, { onDelete: 'cascade' }),
+  reason: varchar('reason', { length: 500 }).notNull(),
+  createdByUserId: int('created_by_user_id'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const usersRelations = relations(users, ({ many }) => ({

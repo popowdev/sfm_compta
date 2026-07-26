@@ -1,5 +1,5 @@
 import { apiFetch } from './api';
-import type { EmployeePosition, ContractType } from '@rp-compta/shared';
+import type { ContractType } from '@rp-compta/shared';
 
 export interface Employee {
   id: number;
@@ -7,9 +7,10 @@ export interface Employee {
   userId: number | null;
   name: string;
   phone: string | null;
+  iban: string | null;
   dateOfBirth: string | null;
   hireDate: string | null;
-  position: EmployeePosition;
+  companyRoleId: number | null;
   contractType: ContractType;
   contractSigned: boolean;
   hourlyRate: number;
@@ -33,9 +34,10 @@ export interface EmployeeInput {
   userId?: number;
   name: string;
   phone?: string;
+  iban?: string;
   dateOfBirth?: string;
   hireDate?: string;
-  position: EmployeePosition;
+  companyRoleId?: number | null;
   contractType: ContractType;
   contractSigned: boolean;
   hourlyRate: number;

@@ -48,6 +48,14 @@ export async function allCompanyManagerUserIds(): Promise<number[]> {
   return [...new Set(rows.map((r) => r.userId))];
 }
 
+export async function staffUserIds(): Promise<number[]> {
+  const rows = await db
+    .select({ userId: userAppRoles.userId })
+    .from(userAppRoles)
+    .where(eq(userAppRoles.role, 'staff'));
+  return [...new Set(rows.map((r) => r.userId))];
+}
+
 export async function irsUserIds(): Promise<number[]> {
   const rows = await db
     .select({ userId: userAppRoles.userId })

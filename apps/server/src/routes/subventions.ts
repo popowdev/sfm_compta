@@ -1,7 +1,8 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { unlink } from 'node:fs/promises';
+import path from 'node:path';
 import { SUBVENTION_TYPE_KEYS } from '@rp-compta/shared';
 import { db } from '../db';
 import { subventions, subventionDocuments, companies } from '../db/schema';
@@ -12,6 +13,18 @@ import { notify, companyManagerUserIds } from '../services/notifications';
 import { recordAudit } from '../services/audit';
 import { emitInvalidate } from '../realtime/socket';
 import { subventionUpload, subventionFileUrl } from '../services/upload';
+import { env } from '../env';
+
+const SUB_DIR = path.join(env.UPLOAD_DIR, 'subventions');
+
+function serveSubFile(res: import('express').Response, storedUrl: string): void {
+  const base = path.basename(storedUrl);
+  if (!base || base.includes('..')) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  res.sendFile(path.join(SUB_DIR, base));
+}
 
 function parseId(value: string | undefined): number | null {
   const n = Number(value);
@@ -24,7 +37,7 @@ interface DocRow {
   name: string;
 }
 
-function serialize(s: typeof subventions.$inferSelect, docs: DocRow[]) {
+function serialize(s: typeof subventions.$inferSelect, docs: DocRow[], fileBase: string) {
   return {
     id: s.id,
     companyId: s.companyId,
@@ -34,8 +47,8 @@ function serialize(s: typeof subventions.$inferSelect, docs: DocRow[]) {
     amountRequested: Number(s.amountRequested),
     amountGranted: s.amountGranted === null ? null : Number(s.amountGranted),
     status: s.status,
-    photoUrl: s.photoUrl,
-    documents: docs,
+    photoUrl: s.photoUrl ? `${fileBase}/${s.id}/photo` : null,
+    documents: docs.map((d) => ({ id: d.id, name: d.name, url: `${fileBase}/${s.id}/documents/${d.id}` })),
     notes: s.notes,
     decidedAt: s.decidedAt,
     createdAt: s.createdAt,
@@ -86,7 +99,58 @@ meSubventionsRouter.get(
       .where(eq(subventions.companyId, companyId))
       .orderBy(desc(subventions.createdAt));
     const docs = await docsBySubvention(rows.map((r) => r.id));
-    res.json({ canWrite: acc.canWrite, subventions: rows.map((r) => serialize(r, docs.get(r.id) ?? [])) });
+    const fileBase = `/api/me/companies/${companyId}/subventions`;
+    res.json({
+      canWrite: acc.canWrite,
+      subventions: rows.map((r) => serialize(r, docs.get(r.id) ?? [], fileBase)),
+    });
+  }),
+);
+
+async function meSubventionGate(req: Request, companyId: number): Promise<boolean> {
+  const acc = await getModuleAccess(req.user!.id, companyId, 'subventions');
+  return !!acc && acc.enabled && !acc.blocked && acc.canView;
+}
+
+meSubventionsRouter.get(
+  '/:id/photo',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const id = parseId(req.params.id);
+    if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
+    if (!(await meSubventionGate(req, companyId))) return res.status(403).json({ error: 'forbidden' });
+    const row = await db
+      .select({ photoUrl: subventions.photoUrl })
+      .from(subventions)
+      .where(and(eq(subventions.id, id), eq(subventions.companyId, companyId)))
+      .limit(1);
+    if (!row[0]?.photoUrl) return res.status(404).json({ error: 'not_found' });
+    serveSubFile(res, row[0].photoUrl);
+  }),
+);
+
+meSubventionsRouter.get(
+  '/:id/documents/:docId',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const id = parseId(req.params.id);
+    const docId = parseId(req.params.docId);
+    if (!companyId || !id || !docId) return res.status(400).json({ error: 'bad_request' });
+    if (!(await meSubventionGate(req, companyId))) return res.status(403).json({ error: 'forbidden' });
+    const row = await db
+      .select({ url: subventionDocuments.url })
+      .from(subventionDocuments)
+      .innerJoin(subventions, eq(subventionDocuments.subventionId, subventions.id))
+      .where(
+        and(
+          eq(subventionDocuments.id, docId),
+          eq(subventionDocuments.subventionId, id),
+          eq(subventions.companyId, companyId),
+        ),
+      )
+      .limit(1);
+    if (!row[0]) return res.status(404).json({ error: 'not_found' });
+    serveSubFile(res, row[0].url);
   }),
 );
 
@@ -170,7 +234,42 @@ irsSubventionsRouter.get(
       .innerJoin(companies, eq(subventions.companyId, companies.id))
       .orderBy(desc(subventions.createdAt));
     const docs = await docsBySubvention(rows.map((r) => r.sub.id));
-    res.json(rows.map((r) => ({ ...serialize(r.sub, docs.get(r.sub.id) ?? []), companyName: r.companyName })));
+    res.json(
+      rows.map((r) => ({
+        ...serialize(r.sub, docs.get(r.sub.id) ?? [], '/api/subventions'),
+        companyName: r.companyName,
+      })),
+    );
+  }),
+);
+
+irsSubventionsRouter.get(
+  '/:id/photo',
+  asyncHandler(async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'bad_request' });
+    const row = await db
+      .select({ photoUrl: subventions.photoUrl })
+      .from(subventions)
+      .where(eq(subventions.id, id))
+      .limit(1);
+    if (!row[0]?.photoUrl) return res.status(404).json({ error: 'not_found' });
+    serveSubFile(res, row[0].photoUrl);
+  }),
+);
+
+irsSubventionsRouter.get(
+  '/:id/documents/:docId',
+  asyncHandler(async (req, res) => {
+    const docId = parseId(req.params.docId);
+    if (!docId) return res.status(400).json({ error: 'bad_request' });
+    const row = await db
+      .select({ url: subventionDocuments.url })
+      .from(subventionDocuments)
+      .where(eq(subventionDocuments.id, docId))
+      .limit(1);
+    if (!row[0]) return res.status(404).json({ error: 'not_found' });
+    serveSubFile(res, row[0].url);
   }),
 );
 

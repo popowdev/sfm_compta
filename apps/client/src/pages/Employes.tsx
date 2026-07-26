@@ -17,14 +17,9 @@ import {
   Users,
   UserCheck,
 } from 'lucide-react';
-import {
-  EMPLOYEE_POSITIONS,
-  CONTRACT_TYPES,
-  moduleConfigBool,
-  type EmployeePosition,
-  type ContractType,
-} from '@rp-compta/shared';
+import { CONTRACT_TYPES, moduleConfigBool, type ContractType } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
+import { fmtInt } from '@/lib/declarations';
 import {
   getEmployees,
   createEmployee,
@@ -41,14 +36,13 @@ import { Kpi, KpiSkeleton } from '@/components/ui/kpi';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useConfirm } from '@/components/ui/confirm';
+import { useToast } from '@/components/ui/toast';
+import { ApiError } from '@/lib/api';
 
 const inputCls =
   'h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
 const labelCls = 'mb-1 block text-muted-foreground';
 
-const POS_LABEL: Record<string, string> = Object.fromEntries(
-  EMPLOYEE_POSITIONS.map((p) => [p.key, p.label]),
-);
 const CONTRACT_LABEL: Record<string, string> = Object.fromEntries(
   CONTRACT_TYPES.map((c) => [c.key, c.label]),
 );
@@ -61,10 +55,11 @@ function fmtDate(d: string | null): string {
 
 const EMPTY = {
   name: '',
-  position: 'employe' as EmployeePosition,
+  companyRoleId: null as number | null,
   contractType: 'cdi' as ContractType,
   contractSigned: false,
   phone: '',
+  iban: '',
   dateOfBirth: '',
   hireDate: '',
   hourlyRate: '',
@@ -116,17 +111,18 @@ export default function Employes() {
   const showWarnings = moduleConfigBool(rhCfg, 'rh', 'warnings');
   const queryClient = useQueryClient();
   const confirm = useConfirm();
+  const toast = useToast();
 
   const q = useQuery({ queryKey: ['employees', companyId], queryFn: () => getEmployees(companyId) });
   const grid = useQuery({ queryKey: ['salary-grid', companyId], queryFn: () => getSalaryGrid(companyId) });
-  const gridRate = (pos: string) =>
-    grid.data?.grid.find((g) => g.position === pos)?.hourlyRate ?? 0;
+  const gridRate = (roleId: number | null) =>
+    grid.data?.grid.find((g) => g.companyRoleId === roleId)?.hourlyRate ?? 0;
 
   const downloadContract = (e: Employee) => {
     const svg = buildContractSvg({
       companyName: company?.company.name ?? 'Entreprise',
       employeeName: e.name,
-      positionLabel: POS_LABEL[e.position] ?? e.position,
+      positionLabel: e.gradeName ?? '—',
       contractLabel: CONTRACT_LABEL[e.contractType] ?? e.contractType,
       hireDate: fmtDate(e.hireDate),
       dateOfBirth: fmtDate(e.dateOfBirth),
@@ -165,21 +161,45 @@ export default function Employes() {
     close();
   };
 
+  const saveErrorMsg = (e: unknown): string => {
+    const code = e instanceof ApiError ? e.code : null;
+    switch (code) {
+      case 'already_linked':
+        return 'Ce membre a déjà une fiche RH.';
+      case 'not_a_member':
+        return "Ce joueur n'est pas membre de l'entreprise.";
+      case 'invalid_grade':
+        return 'Grade invalide.';
+      case 'bad_request':
+        return 'Champs invalides, vérifie le formulaire.';
+      case 'not_found':
+        return 'Employé introuvable.';
+      default:
+        return "Échec de l'enregistrement.";
+    }
+  };
+
   const create = useMutation({
     mutationFn: (body: EmployeeInput) => createEmployee(companyId, body),
     onSuccess: invalidate,
+    onError: (e) => toast(saveErrorMsg(e), 'error'),
   });
   const update = useMutation({
     mutationFn: (v: { id: number; body: EmployeeInput }) => updateEmployee(companyId, v.id, v.body),
     onSuccess: invalidate,
+    onError: (e) => toast(saveErrorMsg(e), 'error'),
   });
   const remove = useMutation({
     mutationFn: (eid: number) => deleteEmployee(companyId, eid),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees', companyId] }),
+    onError: (e) => {
+      const code = e instanceof ApiError ? e.code : null;
+      toast(code === 'not_found' ? 'Employé introuvable.' : 'Échec de la suppression.', 'error');
+    },
   });
 
   const defaultRate = () => {
-    const r = gridRate(EMPTY.position);
+    const r = gridRate(EMPTY.companyRoleId);
     return r > 0 ? String(r) : '';
   };
   const openNew = () => {
@@ -199,10 +219,11 @@ export default function Employes() {
     setLinkUserId(null);
     setForm({
       name: e.name,
-      position: e.position,
+      companyRoleId: e.companyRoleId,
       contractType: e.contractType,
       contractSigned: e.contractSigned,
       phone: e.phone ?? '',
+      iban: e.iban ?? '',
       dateOfBirth: e.dateOfBirth ?? '',
       hireDate: e.hireDate ?? '',
       hourlyRate: String(e.hourlyRate),
@@ -219,10 +240,11 @@ export default function Employes() {
     const body: EmployeeInput = {
       userId: linkUserId ?? undefined,
       name: form.name.trim(),
-      position: form.position,
+      companyRoleId: form.companyRoleId,
       contractType: form.contractType,
       contractSigned: form.contractSigned,
       phone: form.phone.trim() || undefined,
+      iban: form.iban.trim() || undefined,
       dateOfBirth: form.dateOfBirth || undefined,
       hireDate: form.hireDate || undefined,
       hourlyRate: Number(form.hourlyRate) || 0,
@@ -255,6 +277,17 @@ export default function Employes() {
           <Skeleton className="h-16 rounded-xl" />
           <Skeleton className="h-16 rounded-xl" />
         </div>
+      </div>
+    );
+  }
+
+  if (q.isError) {
+    return (
+      <div className="grid place-items-center gap-3 py-12 text-sm text-muted-foreground">
+        Impossible de charger les employés.
+        <Button variant="outline" onClick={() => q.refetch()}>
+          Réessayer
+        </Button>
       </div>
     );
   }
@@ -344,7 +377,7 @@ export default function Employes() {
                     />
                     <span className="text-base font-semibold">{e.name}</span>
                     <span className="rounded-md bg-secondary px-2 py-0.5 text-xs font-medium">
-                      {POS_LABEL[e.position] ?? e.position}
+                      {e.gradeName ?? 'membre'}
                     </span>
                     <span
                       className={`rounded-md px-2 py-0.5 text-xs font-medium ${
@@ -423,12 +456,13 @@ export default function Employes() {
               {isOpen && (
                 <div className="border-t px-4 pb-4 pt-3">
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <Field label="Taux horaire" value={`${e.hourlyRate.toFixed(0)} $/h`} />
+                    <Field label="Taux horaire" value={`${fmtInt(e.hourlyRate)} $/h`} />
                     {showCommission && (
                       <Field label="Commission" value={`${e.commissionRate.toFixed(0)} %`} />
                     )}
                     <Field label="Ancienneté" value={seniority(e.hireDate)} />
                     <Field label="Naissance" value={fmtDate(e.dateOfBirth)} />
+                    <Field label="IBAN" value={e.iban || '—'} />
                   </div>
 
                   <div className="mt-4 rounded-lg border bg-muted/30 p-3">
@@ -514,26 +548,27 @@ export default function Employes() {
                   <input className={inputCls} value={form.name} onChange={(e) => set('name', e.target.value)} />
                 </label>
                 <label className="text-sm">
-                  <span className={labelCls}>Poste</span>
+                  <span className={labelCls}>Grade</span>
                   <select
                     className={inputCls}
-                    value={form.position}
+                    value={form.companyRoleId ?? ''}
                     onChange={(e) => {
-                      const pos = e.target.value as EmployeePosition;
+                      const roleId = e.target.value ? Number(e.target.value) : null;
                       if (editing === null) {
                         const cur = form.hourlyRate.trim();
-                        const untouched = cur === '' || Number(cur) === gridRate(form.position);
+                        const untouched = cur === '' || Number(cur) === gridRate(form.companyRoleId);
                         if (untouched) {
-                          const r = gridRate(pos);
+                          const r = gridRate(roleId);
                           set('hourlyRate', r > 0 ? String(r) : '');
                         }
                       }
-                      set('position', pos);
+                      set('companyRoleId', roleId);
                     }}
                   >
-                    {EMPLOYEE_POSITIONS.map((p) => (
-                      <option key={p.key} value={p.key}>
-                        {p.label}
+                    <option value="">— Aucun grade —</option>
+                    {(grid.data?.grid ?? []).map((g) => (
+                      <option key={g.companyRoleId} value={g.companyRoleId}>
+                        {g.gradeName}
                       </option>
                     ))}
                   </select>
@@ -556,7 +591,8 @@ export default function Employes() {
                   <span className={labelCls}>Taux horaire ($)</span>
                   <input
                     type="number"
-                    step="0.01"
+                    min="0"
+                    step="1"
                     className={inputCls}
                     value={form.hourlyRate}
                     onChange={(e) => set('hourlyRate', e.target.value)}
@@ -567,6 +603,8 @@ export default function Employes() {
                     <span className={labelCls}>Commission (%)</span>
                     <input
                       type="number"
+                      min="0"
+                      max="100"
                       step="0.01"
                       className={inputCls}
                       value={form.commissionRate}
@@ -578,12 +616,17 @@ export default function Employes() {
                   <span className={labelCls}>Téléphone</span>
                   <input className={inputCls} value={form.phone} onChange={(e) => set('phone', e.target.value)} />
                 </label>
+                <label className="text-sm">
+                  <span className={labelCls}>IBAN</span>
+                  <input className={inputCls} value={form.iban} onChange={(e) => set('iban', e.target.value)} placeholder="FR76 …" />
+                </label>
                 {showWarnings && (
                   <label className="text-sm">
                     <span className={labelCls}>Avertissements</span>
                     <input
                       type="number"
                       min="0"
+                      max="1000"
                       className={inputCls}
                       value={form.warnings}
                       onChange={(e) => set('warnings', e.target.value)}

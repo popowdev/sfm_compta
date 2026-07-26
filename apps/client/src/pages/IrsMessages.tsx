@@ -5,6 +5,7 @@ import { getAllMessages, sendIrsMessage, fmtDateTime, type Message } from '@/lib
 import { getCompanies } from '@/lib/companies';
 import { MessageThread, MessageComposer } from '@/components/MessageThread';
 import { SearchInput } from '@/components/ui/filters';
+import { useToast } from '@/components/ui/toast';
 
 interface Thread {
   companyId: number;
@@ -15,6 +16,8 @@ interface Thread {
 
 export default function IrsMessages() {
   const queryClient = useQueryClient();
+  const toast = useToast();
+  const [sentTick, setSentTick] = useState(0);
   const { data } = useQuery({ queryKey: ['irs-messages'], queryFn: getAllMessages });
   const [selected, setSelected] = useState<number | null>(null);
   const [selectedName, setSelectedName] = useState<string>('');
@@ -55,7 +58,11 @@ export default function IrsMessages() {
 
   const send = useMutation({
     mutationFn: (body: string) => sendIrsMessage(selected!, body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['irs-messages'] }),
+    onSuccess: () => {
+      setSentTick((n) => n + 1);
+      queryClient.invalidateQueries({ queryKey: ['irs-messages'] });
+    },
+    onError: () => toast("Échec de l'envoi du message. Réessaie.", 'error'),
   });
 
   return (
@@ -135,6 +142,7 @@ export default function IrsMessages() {
                   key={active.companyId}
                   onSend={(b) => send.mutate(b)}
                   pending={send.isPending}
+                  clearSignal={sentTick}
                 />
               </div>
             </>
@@ -167,7 +175,7 @@ function CompanyPickerModal({ onClose, onPick }: { onClose: () => void; onPick: 
   const list = (data ?? []).filter((c) => !term || c.name.toLowerCase().includes(term));
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
       <div className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b px-5 py-4">
           <h2 className="text-sm font-semibold">Nouvelle conversation</h2>

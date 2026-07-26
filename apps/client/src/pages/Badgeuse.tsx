@@ -10,6 +10,7 @@ import {
   LogIn,
   LogOut,
   Trash2,
+  Pencil,
   Clock,
   Play,
   Coffee,
@@ -20,11 +21,13 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useConfirm } from '@/components/ui/confirm';
-import { fmtMoney } from '@/lib/declarations';
+import { useToast } from '@/components/ui/toast';
+import { fmtMoney, fmtInt } from '@/lib/declarations';
 import {
   getMyTimeclock,
   getTimeclock,
   addTimeEntry,
+  updateTimeEntry,
   deleteTimeEntry,
   clockStart,
   clockPause,
@@ -36,6 +39,7 @@ import {
   fmtDay,
   parseLocal,
   type AddTimeEntryInput,
+  type EditTimeEntryInput,
   type EmployeeTimesheet,
   type TimeEntry,
 } from '@/lib/timeclock';
@@ -47,7 +51,9 @@ const inputCls =
   'h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
 
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 function useNow(active: boolean): number {
@@ -96,7 +102,7 @@ function EntriesTable({ entries }: { entries: TimeEntry[] }) {
                 <td className="px-4 py-3 font-medium">{fmtHours(t.workedMinutes)}</td>
                 <td className="px-4 py-3 text-muted-foreground">{fmtHours(t.pauseMinutes)}</td>
                 <td className="px-4 py-3 text-right font-medium text-emerald-400">
-                  {fmtMoney(t.salary)} $
+                  {fmtInt(t.salary)} $
                 </td>
                 <td className="px-4 py-3">
                   <span
@@ -259,7 +265,19 @@ function StatBox({ label, value, accent }: { label: string; value: string; accen
   );
 }
 
-function Timesheet({ emp, onDelete }: { emp: EmployeeTimesheet; onDelete: (id: number) => void }) {
+function Timesheet({
+  emp,
+  onDelete,
+  onEdit,
+  canEdit,
+  canDelete,
+}: {
+  emp: EmployeeTimesheet;
+  onDelete: (id: number) => void;
+  onEdit: (t: TimeEntry) => void;
+  canEdit: boolean;
+  canDelete: boolean;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-xl border bg-card">
@@ -277,17 +295,23 @@ function Timesheet({ emp, onDelete }: { emp: EmployeeTimesheet; onDelete: (id: n
         </div>
         <span className="font-semibold">{emp.name}</span>
         <span className="rounded-md bg-secondary px-2 py-0.5 text-xs font-medium uppercase">
-          {POS_LABEL[emp.position] ?? emp.position}
+          {emp.grade ?? '—'}
         </span>
         <div className="ml-auto flex gap-2">
           <StatBox label="Heures" value={fmtHours(emp.totals.minutes)} accent="text-sky-400" />
-          <StatBox label="Salaire" value={`${fmtMoney(emp.totals.salary)} $`} accent="text-emerald-400" />
+          <StatBox label="Salaire" value={`${fmtInt(emp.totals.salary)} $`} accent="text-emerald-400" />
           <StatBox label="Jours" value={`${emp.totals.days}`} accent="text-foreground" />
         </div>
       </button>
       {open && (
         <div className="border-t">
-          <EntriesTableWithDelete entries={emp.entries} onDelete={onDelete} />
+          <EntriesTableWithDelete
+            entries={emp.entries}
+            onDelete={onDelete}
+            onEdit={onEdit}
+            canEdit={canEdit}
+            canDelete={canDelete}
+          />
         </div>
       )}
     </div>
@@ -297,9 +321,15 @@ function Timesheet({ emp, onDelete }: { emp: EmployeeTimesheet; onDelete: (id: n
 function EntriesTableWithDelete({
   entries,
   onDelete,
+  onEdit,
+  canEdit,
+  canDelete,
 }: {
   entries: TimeEntry[];
   onDelete: (id: number) => void;
+  onEdit: (t: TimeEntry) => void;
+  canEdit: boolean;
+  canDelete: boolean;
 }) {
   const confirm = useConfirm();
   if (entries.length === 0) {
@@ -350,7 +380,7 @@ function EntriesTableWithDelete({
                 </td>
                 <td className="px-4 py-3 font-medium text-sky-400">{fmtHours(t.workedMinutes)}</td>
                 <td className="px-4 py-3 text-right font-medium text-emerald-400">
-                  {fmtMoney(t.salary)} $
+                  {fmtInt(t.salary)} $
                 </td>
                 <td className="px-4 py-3">
                   <span
@@ -362,24 +392,39 @@ function EntriesTableWithDelete({
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button
-                    type="button"
-                    aria-label="Supprimer ce pointage"
-                    title="Supprimer ce pointage"
-                    onClick={async () => {
-                      if (
-                        await confirm({
-                          title: 'Supprimer ce pointage ?',
-                          message: 'Cette action est définitive.',
-                          destructive: true,
-                        })
-                      )
-                        onDelete(t.id);
-                    }}
-                    className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="flex items-center justify-end gap-1">
+                    {canEdit && (
+                      <button
+                        type="button"
+                        aria-label="Modifier ce pointage"
+                        title="Modifier les heures"
+                        onClick={() => onEdit(t)}
+                        className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        type="button"
+                        aria-label="Supprimer ce pointage"
+                        title="Supprimer ce pointage"
+                        onClick={async () => {
+                          if (
+                            await confirm({
+                              title: 'Supprimer ce pointage ?',
+                              message: 'Cette action est définitive.',
+                              destructive: true,
+                            })
+                          )
+                            onDelete(t.id);
+                        }}
+                        className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             );
@@ -392,29 +437,61 @@ function EntriesTableWithDelete({
 
 function TeamView({ companyId }: { companyId: number }) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const q = useQuery({ queryKey: ['timeclock', companyId], queryFn: () => getTimeclock(companyId) });
 
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editEmpName, setEditEmpName] = useState('');
   const [f, setF] = useState({ employeeId: '', date: today(), clockIn: '', clockOut: '' });
   const setField = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }));
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['timeclock', companyId] });
 
   const add = useMutation({
     mutationFn: (body: AddTimeEntryInput) => addTimeEntry(companyId, body),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['timeclock', companyId] });
+      invalidate();
       close();
     },
+    onError: () => toast("Échec de l'enregistrement du pointage.", 'error'),
+  });
+  const update = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: EditTimeEntryInput }) =>
+      updateTimeEntry(companyId, id, body),
+    onSuccess: () => {
+      invalidate();
+      close();
+    },
+    onError: () => toast('Échec de la modification du pointage.', 'error'),
   });
   function close() {
     setOpen(false);
+    setEditId(null);
+    setEditEmpName('');
     setF({ employeeId: '', date: today(), clockIn: '', clockOut: '' });
     add.reset();
+    update.reset();
+  }
+  function openEdit(emp: EmployeeTimesheet, t: TimeEntry) {
+    setEditId(t.id);
+    setEditEmpName(emp.name);
+    setF({
+      employeeId: String(emp.id),
+      date: t.clockIn.slice(0, 10),
+      clockIn: fmtTime(t.clockIn),
+      clockOut: t.clockOut ? fmtTime(t.clockOut) : '',
+    });
+    setOpen(true);
   }
   const remove = useMutation({
     mutationFn: (id: number) => deleteTimeEntry(companyId, id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['timeclock', companyId] }),
+    onSuccess: invalidate,
+    onError: () => toast('Échec de la suppression du pointage.', 'error'),
   });
 
+  const canEdit = q.data?.canEdit ?? false;
+  const canDelete = q.data?.canDelete ?? false;
   const all = q.data?.employees ?? [];
   const list = all.filter((e) => e.active || e.entries.length > 0);
   const addable = all.filter((e) => e.active);
@@ -434,10 +511,27 @@ function TeamView({ companyId }: { companyId: number }) {
     );
   }
 
+  if (q.isError) {
+    return (
+      <div className="grid place-items-center gap-3 rounded-xl border border-dashed bg-card p-12 text-center">
+        <p className="text-sm text-muted-foreground">Impossible de charger les pointages de l'équipe.</p>
+        <Button variant="outline" onClick={() => q.refetch()}>
+          Réessayer
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button onClick={() => setOpen(true)} disabled={addable.length === 0}>
+        <Button
+          onClick={() => {
+            setEditId(null);
+            setOpen(true);
+          }}
+          disabled={addable.length === 0}
+        >
           <Plus className="h-4 w-4" />
           Nouveau pointage
         </Button>
@@ -445,7 +539,14 @@ function TeamView({ companyId }: { companyId: number }) {
 
       <div className="space-y-3">
         {list.map((emp) => (
-          <Timesheet key={emp.id} emp={emp} onDelete={(id) => remove.mutate(id)} />
+          <Timesheet
+            key={emp.id}
+            emp={emp}
+            onDelete={(id) => remove.mutate(id)}
+            onEdit={(t) => openEdit(emp, t)}
+            canEdit={canEdit}
+            canDelete={canDelete}
+          />
         ))}
         {list.length === 0 &&
           (all.length === 0 ? (
@@ -460,7 +561,7 @@ function TeamView({ companyId }: { companyId: number }) {
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={close}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
           <div
             role="dialog"
             aria-modal="true"
@@ -468,7 +569,9 @@ function TeamView({ companyId }: { companyId: number }) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b px-5 py-4">
-              <h2 className="text-sm font-semibold">Nouveau pointage</h2>
+              <h2 className="text-sm font-semibold">
+                {editId ? 'Modifier le pointage' : 'Nouveau pointage'}
+              </h2>
               <button
                 type="button"
                 onClick={close}
@@ -484,24 +587,35 @@ function TeamView({ companyId }: { companyId: number }) {
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!f.employeeId || !f.clockIn) return;
-                add.mutate({
-                  employeeId: Number(f.employeeId),
-                  date: f.date,
-                  clockIn: f.clockIn,
-                  clockOut: f.clockOut || undefined,
-                });
+                if (editId) {
+                  update.mutate({
+                    id: editId,
+                    body: { date: f.date, clockIn: f.clockIn, clockOut: f.clockOut || undefined },
+                  });
+                } else {
+                  add.mutate({
+                    employeeId: Number(f.employeeId),
+                    date: f.date,
+                    clockIn: f.clockIn,
+                    clockOut: f.clockOut || undefined,
+                  });
+                }
               }}
             >
               <label className="block text-sm">
                 <span className="mb-1 block text-muted-foreground">Employé</span>
-                <select className={inputCls} value={f.employeeId} onChange={(e) => setField('employeeId', e.target.value)}>
-                  <option value="">— choisir —</option>
-                  {addable.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.name}
-                    </option>
-                  ))}
-                </select>
+                {editId ? (
+                  <input className={inputCls} value={editEmpName} disabled />
+                ) : (
+                  <select className={inputCls} value={f.employeeId} onChange={(e) => setField('employeeId', e.target.value)}>
+                    <option value="">— choisir —</option>
+                    {addable.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </label>
               <label className="block text-sm">
                 <span className="mb-1 block text-muted-foreground">Date</span>
@@ -517,15 +631,24 @@ function TeamView({ companyId }: { companyId: number }) {
                   <input type="time" className={inputCls} value={f.clockOut} onChange={(e) => setField('clockOut', e.target.value)} />
                 </label>
               </div>
-              {add.isError && (
-                <p className="text-sm text-destructive">Échec de l'ajout. Vérifie l'employé et les horaires.</p>
+              {(add.isError || update.isError) && (
+                <p className="text-sm text-destructive">Échec. Vérifie l'employé et les horaires.</p>
               )}
               <div className="flex justify-end gap-2 pt-1">
                 <Button type="button" variant="outline" onClick={close}>
                   Annuler
                 </Button>
-                <Button type="submit" disabled={!f.employeeId || !f.clockIn || add.isPending}>
-                  {add.isPending ? 'Ajout…' : 'Ajouter'}
+                <Button
+                  type="submit"
+                  disabled={!f.employeeId || !f.clockIn || add.isPending || update.isPending}
+                >
+                  {editId
+                    ? update.isPending
+                      ? 'Enregistrement…'
+                      : 'Enregistrer'
+                    : add.isPending
+                      ? 'Ajout…'
+                      : 'Ajouter'}
                 </Button>
               </div>
             </form>

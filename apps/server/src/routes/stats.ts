@@ -1,16 +1,18 @@
 import { Router } from 'express';
-import { and, asc, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 import { db } from '../db';
 import {
   declarations,
   companyExpenses,
   subventions,
   companyEmployees,
+  companyRoles,
   sales,
   saleItems,
 } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
+import type { ModuleKey } from '@rp-compta/shared';
 import { getModuleAccess } from '../services/access';
 
 function parseId(value: string | undefined): number | null {
@@ -34,12 +36,24 @@ meStatsRouter.get(
     if (!acc.enabled || acc.blocked) return res.status(403).json({ error: 'module_unavailable' });
     if (!acc.canView) return res.status(403).json({ error: 'forbidden' });
 
+    const canView = async (key: ModuleKey) => {
+      const a = await getModuleAccess(req.user!.id, companyId, key);
+      return !!a && a.enabled && !a.blocked && a.canView;
+    };
+    const [seeCaisse, seeDepenses, seeSubventions, seeRh, seeDecl] = await Promise.all([
+      canView('caisse'),
+      canView('depenses'),
+      canView('subventions'),
+      canView('rh'),
+      canView('declarations'),
+    ]);
+
     const since = new Date(Date.now() - 29 * 86_400_000);
     const sinceStr = since.toISOString().slice(0, 10);
     const dayExpr = sql<string>`DATE_FORMAT(${sales.createdAt}, '%Y-%m-%d')`;
 
     const [decls, exps, subs, emps, salesAgg, dayRows, empRows, topRows, payRows] = await Promise.all([
-      db.select().from(declarations).where(eq(declarations.companyId, companyId)).orderBy(asc(declarations.createdAt)),
+      db.select().from(declarations).where(and(eq(declarations.companyId, companyId), isNull(declarations.archivedAt))).orderBy(asc(declarations.createdAt)),
       db.select().from(companyExpenses).where(eq(companyExpenses.companyId, companyId)),
       db.select().from(subventions).where(eq(subventions.companyId, companyId)),
       db.select().from(companyEmployees).where(eq(companyEmployees.companyId, companyId)),
@@ -122,13 +136,17 @@ meStatsRouter.get(
       pending: subs.filter((s) => s.status === 'pending').length,
     };
 
-    const byPosition: Record<string, number> = {};
-    for (const e of emps) if (e.active) byPosition[e.position] = (byPosition[e.position] ?? 0) + 1;
+    const gradeCounts = await db
+      .select({ name: companyRoles.name, count: sql<number>`COUNT(*)` })
+      .from(companyEmployees)
+      .leftJoin(companyRoles, eq(companyEmployees.companyRoleId, companyRoles.id))
+      .where(and(eq(companyEmployees.companyId, companyId), eq(companyEmployees.active, true)))
+      .groupBy(companyRoles.name);
     const hrStat = {
       count: emps.length,
       active: emps.filter((e) => e.active).length,
       hourlyTotal: emps.filter((e) => e.active).reduce((s, e) => s + num(e.hourlyRate), 0),
-      byPosition: Object.entries(byPosition).map(([position, count]) => ({ position, count })),
+      byPosition: gradeCounts.map((r) => ({ position: r.name ?? 'Sans grade', count: Number(r.count) })),
     };
 
     const dayMap = new Map(dayRows.map((r) => [r.date, Number(r.total)]));
@@ -162,11 +180,13 @@ meStatsRouter.get(
     };
 
     res.json({
-      fiscal,
-      expenses: expensesStat,
-      subventions: subventionsStat,
-      hr: hrStat,
-      sales: salesStat,
+      fiscal: seeDecl ? fiscal : { caNet: 0, benefit: 0, totalTax: 0, dividends: 0, count: 0, weekly: [] },
+      expenses: seeDepenses ? expensesStat : { total: 0, deductible: 0, count: 0, byCategory: [] },
+      subventions: seeSubventions ? subventionsStat : { requested: 0, granted: 0, count: 0, pending: 0 },
+      hr: seeRh ? hrStat : { count: 0, active: 0, hourlyTotal: 0, byPosition: [] },
+      sales: seeCaisse
+        ? salesStat
+        : { total: 0, count: 0, margin: 0, byDay: [], byEmployee: [], topProducts: [], byPayment: [] },
     });
   }),
 );

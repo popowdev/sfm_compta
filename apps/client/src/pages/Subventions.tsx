@@ -138,7 +138,14 @@ export default function Subventions() {
         )}
       </div>
 
-      {list.length === 0 ? (
+      {q.isError ? (
+        <div className="grid place-items-center gap-3 rounded-xl border bg-card py-12 text-sm text-muted-foreground">
+          <span>Impossible de charger les demandes de subvention.</span>
+          <Button variant="outline" onClick={() => q.refetch()}>
+            Réessayer
+          </Button>
+        </div>
+      ) : list.length === 0 ? (
         <EmptyState
           icon={FileText}
           title="Aucune demande de subvention"
@@ -200,7 +207,7 @@ export default function Subventions() {
       )}
 
       {open && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={close}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
           <div
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card shadow-xl"
             onClick={(e) => e.stopPropagation()}

@@ -1,5 +1,5 @@
 import { Router, type Request } from 'express';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { db } from '../db';
@@ -20,6 +20,19 @@ function methodAction(method: string): PermAction {
 }
 
 const DOC_DIR = path.join(env.UPLOAD_DIR, 'documents');
+const DOC_QUOTA_COUNT = 300;
+const DOC_QUOTA_BYTES = 500 * 1024 * 1024;
+
+async function docQuotaExceeded(companyId: number, incomingSize: number): Promise<boolean> {
+  const usage = await db
+    .select({ n: sql<number>`COUNT(*)`, total: sql<string>`COALESCE(SUM(${companyDocuments.size}), 0)` })
+    .from(companyDocuments)
+    .where(eq(companyDocuments.companyId, companyId));
+  return (
+    Number(usage[0]?.n ?? 0) >= DOC_QUOTA_COUNT ||
+    Number(usage[0]?.total ?? 0) + incomingSize > DOC_QUOTA_BYTES
+  );
+}
 
 async function cleanupReqFile(req: Request): Promise<void> {
   if (req.file) await unlink(req.file.path).catch(() => {});
@@ -81,7 +94,30 @@ meDocumentsRouter.get(
       .leftJoin(users, eq(companyDocuments.uploadedByUserId, users.id))
       .where(eq(companyDocuments.companyId, companyId))
       .orderBy(desc(companyDocuments.createdAt));
-    res.json({ canWrite: g.canWrite, documents: rows });
+    res.json({
+      canWrite: g.canWrite,
+      documents: rows.map((r) => ({ ...r, url: `/api/me/companies/${companyId}/documents/${r.id}/download` })),
+    });
+  }),
+);
+
+meDocumentsRouter.get(
+  '/:id/download',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const id = parseId(req.params.id);
+    if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    const row = await db
+      .select({ url: companyDocuments.url })
+      .from(companyDocuments)
+      .where(and(eq(companyDocuments.id, id), eq(companyDocuments.companyId, companyId)))
+      .limit(1);
+    if (!row[0]) return res.status(404).json({ error: 'not_found' });
+    const base = path.basename(row[0].url);
+    if (!base || base.includes('..')) return res.status(404).json({ error: 'not_found' });
+    res.sendFile(path.join(DOC_DIR, base));
   }),
 );
 
@@ -100,6 +136,10 @@ meDocumentsRouter.post(
       return res.status(g.status).json({ error: g.error });
     }
     if (!req.file) return res.status(400).json({ error: 'file_required' });
+    if (await docQuotaExceeded(companyId, req.file.size)) {
+      await cleanupReqFile(req);
+      return res.status(400).json({ error: 'quota_exceeded' });
+    }
     await db.insert(companyDocuments).values({
       companyId,
       name: docName(req),
@@ -159,7 +199,24 @@ irsDocumentsRouter.get(
       .from(irsDocuments)
       .leftJoin(users, eq(irsDocuments.uploadedByUserId, users.id))
       .orderBy(desc(irsDocuments.createdAt));
-    res.json({ documents: rows });
+    res.json({ documents: rows.map((r) => ({ ...r, url: `/api/irs/documents/${r.id}/download` })) });
+  }),
+);
+
+irsDocumentsRouter.get(
+  '/:id/download',
+  asyncHandler(async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'bad_request' });
+    const row = await db
+      .select({ url: irsDocuments.url })
+      .from(irsDocuments)
+      .where(eq(irsDocuments.id, id))
+      .limit(1);
+    if (!row[0]) return res.status(404).json({ error: 'not_found' });
+    const base = path.basename(row[0].url);
+    if (!base || base.includes('..')) return res.status(404).json({ error: 'not_found' });
+    res.sendFile(path.join(DOC_DIR, base));
   }),
 );
 

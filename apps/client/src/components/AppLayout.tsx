@@ -1,8 +1,10 @@
 import { useState, type ComponentType, type ReactNode } from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard,
+  Shield,
+  ShieldOff,
   Building2,
   UsersRound,
   Scale,
@@ -13,8 +15,10 @@ import {
   FolderArchive,
   Landmark,
   CalendarDays,
+  Gamepad2,
   ScrollText,
   Megaphone,
+  LifeBuoy,
   TrendingUp,
   Wallet,
   SlidersHorizontal,
@@ -27,9 +31,11 @@ import {
   Search,
 } from 'lucide-react';
 import { hasAppAccess, MODULES, moduleConfigBool } from '@rp-compta/shared';
+import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/auth/AuthContext';
 import { getMyCompanies, type MyCompany } from '@/lib/me';
 import { getMyAssociations, type AssociationListItem } from '@/lib/associations';
+import { getSupportTickets } from '@/lib/tickets';
 import { moduleIcon } from '@/lib/moduleIcons';
 import { QuickClock } from '@/components/QuickClock';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -45,6 +51,7 @@ interface NavItem {
   Icon: ComponentType<{ className?: string }>;
   end?: boolean;
   active?: boolean;
+  badge?: number;
 }
 
 interface NavGroup {
@@ -87,14 +94,34 @@ export function AppLayout({ children }: { children: ReactNode }) {
       return next;
     });
 
+  const queryClient = useQueryClient();
   const roles = user?.appRoles ?? [];
+  const isStaffRole = roles.includes('staff');
+  const staffModeOn = user?.staffMode ?? true;
+  const adminView = isStaffRole ? staffModeOn : true;
+  const toggleStaffMode = async () => {
+    await apiFetch('/api/me/staff-mode', {
+      method: 'PUT',
+      body: JSON.stringify({ enabled: !staffModeOn }),
+    });
+    await queryClient.invalidateQueries({ queryKey: ['me'] });
+    await queryClient.invalidateQueries({ queryKey: ['my-companies'] });
+  };
   const isIrs = hasAppAccess(roles, 'irs');
+  const isDev = user?.isDev ?? false;
   const roleLabel = roles.includes('staff') ? 'Staff' : roles.includes('irs') ? 'Agent IRS' : null;
 
   const myCompanies = useQuery({ queryKey: ['my-companies'], queryFn: getMyCompanies });
   const data = myCompanies.data ?? [];
   const myAssociations = useQuery({ queryKey: ['my-associations'], queryFn: getMyAssociations });
   const assocData = myAssociations.data ?? [];
+
+  const supportQueue = useQuery({
+    queryKey: ['support-tickets', {}],
+    queryFn: () => getSupportTickets({}),
+    enabled: isStaffRole && staffModeOn,
+  });
+  const openTickets = supportQueue.data?.open ?? 0;
 
   const location = useLocation();
   const slugMatch = location.pathname.match(/^\/entreprise\/([^/]+)/);
@@ -134,6 +161,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       });
     }
     if (c.canManage) {
+      items.push({ to: `/entreprise/${c.company.slug}/evenements`, label: 'Évènements', Icon: CalendarDays });
       items.push({ to: `/entreprise/${c.company.slug}/parametres`, label: 'Paramètres', Icon: Settings });
     }
     return items;
@@ -150,6 +178,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     groups = [{ title: null, items: associationNavItems(activeAssocSlug!) }];
   } else {
     const companyGroups: NavGroup[] = data
+      .filter((c) => c.fivemActive)
       .map((c) => {
         const items = companyNavItems(c).filter((it) => !it.end);
         return { title: c.company.name, items, defaultClosed: isIrs };
@@ -168,16 +197,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
           ...(!isIrs && assocData.length > 0
             ? [{ to: '/associations', label: 'Associations', Icon: Landmark }]
             : []),
+          { to: '/support', label: 'Support', Icon: LifeBuoy },
         ],
       },
-      ...(isIrs
+      ...(isIrs && adminView
         ? [
             {
               title: 'IRS',
               items: [
                 { to: '/entreprises', label: 'Entreprises', Icon: Building2 },
                 { to: '/associations', label: 'Associations', Icon: Landmark },
-                { to: '/comptes', label: 'Comptes', Icon: UsersRound },
                 { to: '/declarations', label: 'Déclarations', Icon: FileText },
                 { to: '/subventions', label: 'Subventions', Icon: HandCoins },
                 { to: '/dividendes', label: 'Dividendes', Icon: Coins },
@@ -189,8 +218,26 @@ export function AppLayout({ children }: { children: ReactNode }) {
             },
           ]
         : []),
-      ...(roles.includes('staff')
-        ? [{ title: 'Staff', items: [{ to: '/modules', label: 'Modules', Icon: SlidersHorizontal }] }]
+      ...(isStaffRole && staffModeOn
+        ? [
+            {
+              title: 'Staff',
+              items: [
+                { to: '/staff/support', label: 'Support', Icon: LifeBuoy, badge: openTickets },
+                { to: '/comptes', label: 'Comptes', Icon: UsersRound },
+                { to: '/fivem', label: 'Joueurs FiveM', Icon: Gamepad2 },
+                { to: '/modules', label: 'Modules', Icon: SlidersHorizontal },
+              ],
+            },
+          ]
+        : []),
+      ...(isDev
+        ? [
+            {
+              title: 'Dev',
+              items: [{ to: '/dev/logs-tickets', label: 'Logs tickets', Icon: ScrollText }],
+            },
+          ]
         : []),
       ...companyGroups,
     ];
@@ -301,10 +348,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 {!isClosed && (
                   <div className="space-y-1">
                     {g.items.map((it) => {
+                      const badge = it.badge;
                       const inner = (
                         <>
                           <it.Icon className="h-[18px] w-[18px] shrink-0" />
                           {!collapsed && <span className="truncate">{it.label}</span>}
+                          {!collapsed && !!badge && (
+                            <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">
+                              {badge}
+                            </span>
+                          )}
                         </>
                       );
                       return it.active === undefined ? (
@@ -347,6 +400,20 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {collapsed ? (
             <div className="flex flex-col items-center gap-2">
               <NotificationBell collapsed />
+              {isStaffRole && (
+                <button
+                  type="button"
+                  onClick={toggleStaffMode}
+                  title={`Mode staff : ${staffModeOn ? 'ON — tu vois tout' : 'OFF — vue joueur'}`}
+                  className={`grid h-8 w-8 place-items-center rounded-md border transition-colors ${
+                    staffModeOn
+                      ? 'border-primary/40 bg-primary/10 text-primary'
+                      : 'border-input text-muted-foreground hover:bg-accent'
+                  }`}
+                >
+                  {staffModeOn ? <Shield className="h-4 w-4" /> : <ShieldOff className="h-4 w-4" />}
+                </button>
+              )}
               {user?.avatarUrl && <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full" />}
               <button
                 type="button"
@@ -367,6 +434,25 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 </div>
                 <NotificationBell collapsed={false} />
               </div>
+              {isStaffRole && (
+                <button
+                  type="button"
+                  onClick={toggleStaffMode}
+                  title={
+                    staffModeOn
+                      ? 'Tu vois toutes les entreprises (mode staff actif)'
+                      : 'Tu navigues comme un joueur normal'
+                  }
+                  className={`mb-2 flex h-9 w-full items-center justify-center gap-2 rounded-md border text-sm font-medium transition-colors ${
+                    staffModeOn
+                      ? 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/15'
+                      : 'border-input text-muted-foreground hover:bg-accent'
+                  }`}
+                >
+                  {staffModeOn ? <Shield className="h-4 w-4" /> : <ShieldOff className="h-4 w-4" />}
+                  Mode staff : {staffModeOn ? 'ON' : 'OFF'}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => logout()}

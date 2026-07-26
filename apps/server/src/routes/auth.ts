@@ -20,9 +20,11 @@ import {
   clearSessionCookie,
   SESSION_COOKIE,
 } from '../auth/session';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, isDevUser } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { computeManagedRoles, syncManagedRoles } from '../services/roles';
+import { refreshSelectedCharacter } from '../services/fivemSync';
+import { emitInvalidate } from '../realtime/socket';
 
 export const authRouter = Router();
 
@@ -91,6 +93,16 @@ authRouter.get('/discord/callback', async (req, res) => {
 
     await syncManagedRoles(userId, computeManagedRoles(discordUser.id, roles));
 
+    if (env.FIVEM_PLAYER_API_URL) {
+      void refreshSelectedCharacter(discordUser.id)
+        .then((uid) => {
+          if (!uid) return;
+          emitInvalidate(`user:${uid}`, [['my-companies']]);
+          emitInvalidate('irs', [['fivem-players'], ['companies'], ['members']]);
+        })
+        .catch((err) => logger.error({ err }, 'fivem login refresh failed'));
+    }
+
     if (whitelistConfigured && !whitelisted) return loginError('not_whitelisted');
 
     const sid = await createSession(userId);
@@ -129,6 +141,8 @@ authRouter.get(
       avatarUrl: user.avatarUrl ?? null,
       appRoles: roleRows.map((r) => r.role),
       whitelisted: user.whitelisted,
+      staffMode: user.staffMode,
+      isDev: isDevUser(user),
     };
     res.json(body);
   }),

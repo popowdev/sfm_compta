@@ -8,14 +8,20 @@ import {
   roleSpecialPermissions,
   companyRoles,
   userAppRoles,
+  users,
 } from '../db/schema';
 import { isModuleBlocked } from './modules';
 
+// Staff "omniscience" (voit toutes les entreprises, bypass des permissions) est
+// débrayable par l'utilisateur via users.staff_mode. Le rôle staff lui-même
+// (requireAppRole) n'est PAS affecté : couper le mode masque juste la vue globale.
 export async function isStaff(userId: number): Promise<boolean> {
   const rows = await db
-    .select({ role: userAppRoles.role })
-    .from(userAppRoles)
-    .where(eq(userAppRoles.userId, userId));
+    .select({ role: userAppRoles.role, staffMode: users.staffMode })
+    .from(users)
+    .leftJoin(userAppRoles, eq(userAppRoles.userId, users.id))
+    .where(eq(users.id, userId));
+  if (!rows[0]?.staffMode) return false;
   return rows.some((r) => r.role === 'staff');
 }
 
@@ -139,8 +145,9 @@ export async function getModuleAccess(
   }
 
   const mem = await db
-    .select({ gradeId: memberships.companyRoleId })
+    .select({ gradeId: memberships.companyRoleId, canManage: companyRoles.canManage })
     .from(memberships)
+    .leftJoin(companyRoles, eq(memberships.companyRoleId, companyRoles.id))
     .where(
       and(
         eq(memberships.userId, userId),
@@ -150,6 +157,21 @@ export async function getModuleAccess(
     )
     .limit(1);
   if (!mem[0]) return null;
+
+  // Un grade « gérant » (Patron / Co-patron) a accès complet à tous les modules,
+  // sans dépendre des rolePermissions.
+  if (mem[0].canManage) {
+    return {
+      enabled,
+      blocked,
+      canView: true,
+      canWrite: true,
+      canCreate: true,
+      canEdit: true,
+      canDelete: true,
+      gradeId: mem[0].gradeId,
+    };
+  }
 
   const gradeId = mem[0].gradeId;
   let canView = false;

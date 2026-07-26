@@ -7,17 +7,38 @@ import { getEffectiveModules } from './modules';
 interface DefaultGrade {
   name: string;
   rank: number;
-  canView: boolean;
-  canWrite: boolean;
   canManage: boolean;
 }
 
 const DEFAULT_GRADES: DefaultGrade[] = [
-  { name: 'Patron', rank: 0, canView: true, canWrite: true, canManage: true },
-  { name: 'Co-patron', rank: 1, canView: true, canWrite: true, canManage: true },
-  { name: 'Gérant', rank: 2, canView: true, canWrite: false, canManage: false },
-  { name: 'Employé', rank: 3, canView: true, canWrite: false, canManage: false },
+  { name: 'Patron', rank: 0, canManage: true },
+  { name: 'Co-patron', rank: 1, canManage: true },
+  { name: 'Gérant', rank: 2, canManage: false },
+  { name: 'Employé', rank: 3, canManage: false },
 ];
+
+// Modules accessibles par défaut à un simple employé (en lecture seule).
+// Tout le reste (RH, stats, dividendes, actionnaires, déclarations, exercices…)
+// est masqué par défaut ; seul un grade « gérant » (canManage) voit/gère tout.
+export const BASIC_MODULES: ModuleKey[] = ['caisse', 'garage', 'badgeuse'];
+
+export function defaultModulePerms(canManage: boolean, key: ModuleKey) {
+  if (canManage) {
+    return { canView: true, canWrite: true, canCreate: true, canEdit: true, canDelete: true };
+  }
+  if (BASIC_MODULES.includes(key)) {
+    return { canView: true, canWrite: false, canCreate: false, canEdit: false, canDelete: false };
+  }
+  return { canView: false, canWrite: false, canCreate: false, canEdit: false, canDelete: false };
+}
+
+export function defaultPermRows(companyRoleId: number, canManage: boolean) {
+  return MODULE_KEYS.map((key) => ({
+    companyRoleId,
+    moduleKey: key,
+    ...defaultModulePerms(canManage, key as ModuleKey),
+  }));
+}
 
 export async function seedCompanyRoles(companyId: number): Promise<void> {
   for (const g of DEFAULT_GRADES) {
@@ -25,18 +46,12 @@ export async function seedCompanyRoles(companyId: number): Promise<void> {
       .insert(companyRoles)
       .values({ companyId, name: g.name, rank: g.rank, isDefault: true, canManage: g.canManage });
     const roleId = inserted[0].insertId;
-    await db.insert(rolePermissions).values(
-      MODULE_KEYS.map((key) => ({
-        companyRoleId: roleId,
-        moduleKey: key,
-        canView: g.canView,
-        canWrite: g.canWrite,
-        canCreate: g.canWrite,
-        canEdit: g.canWrite,
-        canDelete: g.canWrite,
-      })),
-    );
+    await db.insert(rolePermissions).values(defaultPermRows(roleId, g.canManage));
   }
+}
+
+export async function seedGradePermissions(companyRoleId: number, canManage: boolean): Promise<void> {
+  await db.insert(rolePermissions).values(defaultPermRows(companyRoleId, canManage));
 }
 
 export async function ensureCompanyRoles(companyId: number): Promise<void> {

@@ -1,13 +1,14 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { and, asc, eq } from 'drizzle-orm';
-import { EMPLOYEE_POSITION_KEYS, CONTRACT_TYPE_KEYS } from '@rp-compta/shared';
+import { CONTRACT_TYPE_KEYS } from '@rp-compta/shared';
 import { db } from '../db';
 import { companyEmployees, memberships, companyRoles, users } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
+import { recordAudit } from '../services/audit';
 
 function methodAction(method: string): PermAction {
   return method === 'POST' ? 'create' : method === 'PUT' ? 'edit' : method === 'DELETE' ? 'delete' : 'view';
@@ -18,16 +19,18 @@ function parseId(value: string | undefined): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-function serialize(e: typeof companyEmployees.$inferSelect) {
+function serialize(e: typeof companyEmployees.$inferSelect, gradeName: string | null = null) {
   return {
     id: e.id,
     companyId: e.companyId,
     userId: e.userId,
     name: e.name,
     phone: e.phone,
+    iban: e.iban,
     dateOfBirth: e.dateOfBirth,
     hireDate: e.hireDate,
-    position: e.position,
+    companyRoleId: e.companyRoleId,
+    gradeName,
     contractType: e.contractType,
     contractSigned: e.contractSigned,
     hourlyRate: Number(e.hourlyRate),
@@ -54,9 +57,10 @@ const bodySchema = z.object({
   userId: z.number().int().positive().optional(),
   name: z.string().trim().min(1).max(120),
   phone: z.string().trim().max(50).nullish().or(z.literal('')),
+  iban: z.string().trim().max(40).nullish().or(z.literal('')),
   dateOfBirth: optionalDate,
   hireDate: optionalDate,
-  position: z.enum(EMPLOYEE_POSITION_KEYS as [string, ...string[]]),
+  companyRoleId: z.number().int().positive().nullish(),
   contractType: z.enum(CONTRACT_TYPE_KEYS as [string, ...string[]]),
   contractSigned: z.boolean().optional(),
   hourlyRate: z.number().nonnegative().finite().max(99_999_999.99),
@@ -75,12 +79,13 @@ function toRow(d: z.infer<typeof bodySchema>) {
   return {
     name: d.name,
     phone: blank(d.phone),
+    iban: blank(d.iban),
     dateOfBirth: blank(d.dateOfBirth),
     hireDate: blank(d.hireDate),
-    position: d.position as (typeof companyEmployees.$inferInsert)['position'],
+    companyRoleId: d.companyRoleId ?? null,
     contractType: d.contractType as (typeof companyEmployees.$inferInsert)['contractType'],
     contractSigned: d.contractSigned ?? false,
-    hourlyRate: String(Math.round(d.hourlyRate * 100) / 100),
+    hourlyRate: String(Math.round(d.hourlyRate)),
     commissionRate: String(Math.round(d.commissionRate * 100) / 100),
     warnings: d.warnings,
     terminationReason: blank(d.terminationReason),
@@ -114,6 +119,16 @@ async function companyMembers(companyId: number) {
     .where(and(eq(memberships.companyId, companyId), eq(memberships.active, true)));
 }
 
+async function roleBelongs(companyId: number, companyRoleId: number | null | undefined): Promise<boolean> {
+  if (companyRoleId == null) return true;
+  const r = await db
+    .select({ id: companyRoles.id })
+    .from(companyRoles)
+    .where(and(eq(companyRoles.id, companyRoleId), eq(companyRoles.companyId, companyId)))
+    .limit(1);
+  return !!r[0];
+}
+
 meEmployeesRouter.get(
   '/',
   asyncHandler(async (req, res) => {
@@ -124,21 +139,23 @@ meEmployeesRouter.get(
 
     const [rows, members] = await Promise.all([
       db
-        .select()
+        .select({ e: companyEmployees, gradeName: companyRoles.name })
         .from(companyEmployees)
+        .leftJoin(companyRoles, eq(companyEmployees.companyRoleId, companyRoles.id))
         .where(eq(companyEmployees.companyId, companyId))
         .orderBy(asc(companyEmployees.name)),
       companyMembers(companyId),
     ]);
 
     const memberByUser = new Map(members.map((m) => [m.userId, m]));
-    const employees = rows.map((e) => {
+    const employees = rows.map((row) => {
+      const e = row.e;
       const m = e.userId ? memberByUser.get(e.userId) : undefined;
-      return { ...serialize(e), gradeName: m?.gradeName ?? null, linkedName: m?.name ?? null };
+      return { ...serialize(e, row.gradeName ?? m?.gradeName ?? null), linkedName: m?.name ?? null };
     });
     const memberIds = new Set(members.map((m) => m.userId));
     const linked = new Set(
-      rows.filter((e) => e.userId !== null && memberIds.has(e.userId)).map((e) => e.userId),
+      rows.filter((row) => row.e.userId !== null && memberIds.has(row.e.userId)).map((row) => row.e.userId),
     );
     const unlinked = members.filter((m) => !linked.has(m.userId));
 
@@ -155,6 +172,7 @@ meEmployeesRouter.post(
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const parsed = bodySchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    if (!(await roleBelongs(companyId, parsed.data.companyRoleId))) return res.status(400).json({ error: 'invalid_grade' });
     const linkUserId = parsed.data.userId ?? null;
     if (linkUserId !== null) {
       const members = await companyMembers(companyId);
@@ -191,6 +209,7 @@ meEmployeesRouter.put(
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const parsed = bodySchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    if (!(await roleBelongs(companyId, parsed.data.companyRoleId))) return res.status(400).json({ error: 'invalid_grade' });
     const result = await db
       .update(companyEmployees)
       .set(toRow(parsed.data))
@@ -213,6 +232,14 @@ meEmployeesRouter.delete(
       .delete(companyEmployees)
       .where(and(eq(companyEmployees.id, id), eq(companyEmployees.companyId, companyId)));
     if (!result[0].affectedRows) return res.status(404).json({ error: 'not_found' });
+    await recordAudit({
+      actorUserId: req.user!.id,
+      actorName: req.user!.displayName,
+      action: 'employee_delete',
+      targetType: 'employee',
+      targetLabel: `#${id}`,
+      detail: `entreprise ${companyId}`,
+    });
     emitInvalidate(['irs', `company:${companyId}`], [['employees', companyId]]);
     res.json({ ok: true });
   }),

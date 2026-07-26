@@ -27,7 +27,7 @@ import {
   CartesianGrid,
   Tooltip,
 } from 'recharts';
-import { fmtMoney } from '@/lib/declarations';
+import { fmtMoney, fmtInt } from '@/lib/declarations';
 import { getCompanyStats } from '@/lib/stats';
 
 const CAT_LABEL: Record<string, string> = Object.fromEntries(
@@ -107,13 +107,27 @@ function Card({
 
 export default function Stats() {
   const { companyId } = useCompany();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['stats', companyId],
     queryFn: () => getCompanyStats(companyId),
   });
 
-  if (isLoading || !data) {
+  if (isLoading) {
     return <div className="text-sm text-muted-foreground">Chargement des statistiques…</div>;
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="grid place-items-center gap-3 py-12 text-sm text-muted-foreground">
+        <div>Impossible de charger les statistiques.</div>
+        <button
+          onClick={() => refetch()}
+          className="rounded-lg border px-3 py-1.5 text-sm font-medium hover:bg-accent"
+        >
+          Réessayer
+        </button>
+      </div>
+    );
   }
 
   const { fiscal, expenses, subventions, hr, sales } = data;
@@ -246,7 +260,7 @@ export default function Stats() {
             </BarChart>
           </ResponsiveContainer>
           <div className="mt-2 text-xs text-muted-foreground">
-            {hr.active} actifs sur {hr.count} · masse horaire {money(hr.hourlyTotal)}/h
+            {hr.active} actifs sur {hr.count} · masse horaire {fmtInt(hr.hourlyTotal)} $/h
           </div>
         </Card>
       </div>

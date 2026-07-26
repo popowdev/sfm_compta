@@ -8,6 +8,7 @@ import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
+import { recordAudit } from '../services/audit';
 
 function methodAction(method: string): PermAction {
   return method === 'POST' ? 'create' : method === 'PUT' ? 'edit' : method === 'DELETE' ? 'delete' : 'view';
@@ -146,6 +147,14 @@ meExpensesRouter.delete(
       .delete(companyExpenses)
       .where(and(eq(companyExpenses.id, id), eq(companyExpenses.companyId, companyId)));
     if (!result[0].affectedRows) return res.status(404).json({ error: 'not_found' });
+    await recordAudit({
+      actorUserId: req.user!.id,
+      actorName: req.user!.displayName,
+      action: 'expense_delete',
+      targetType: 'expense',
+      targetLabel: `#${id}`,
+      detail: `entreprise ${companyId}`,
+    });
     emitInvalidate(['irs', `company:${companyId}`], [['expenses', companyId]]);
     res.json({ ok: true });
   }),

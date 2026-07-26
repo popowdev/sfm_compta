@@ -29,6 +29,10 @@ export const MODULE_KEYS = [
   'tickets',
   'stats',
   'documents',
+  'garage',
+  'immobilier',
+  'immo_carte',
+  'taxi',
 ] as const;
 export type ModuleKey = (typeof MODULE_KEYS)[number];
 
@@ -54,10 +58,11 @@ export const MODULES: ModuleDef[] = [
   { key: 'exercices', label: 'Exercices comptables', group: 'Comptabilité', defaultEnabled: true, companyPage: true },
   { key: 'depenses', label: 'Dépenses', group: 'Comptabilité', defaultEnabled: true, companyPage: true },
   { key: 'caisse', label: 'Caisse / ventes', group: 'Commerce', defaultEnabled: false, companyPage: true },
+  { key: 'garage', label: 'Garage / réparations', group: 'Commerce', defaultEnabled: false, companyPage: true },
   { key: 'clients', label: 'Clients & fidélité', group: 'Commerce', defaultEnabled: false, companyPage: true },
   { key: 'stocks', label: 'Stocks', group: 'Commerce', defaultEnabled: false, companyPage: true },
   { key: 'locations', label: 'Locations / événements', group: 'Commerce', defaultEnabled: false, companyPage: true },
-  { key: 'rh', label: 'RH / employés', group: 'Ressources humaines', defaultEnabled: false, companyPage: true },
+  { key: 'rh', label: 'RH / employés', group: 'Ressources humaines', defaultEnabled: true, companyPage: true },
   { key: 'badgeuse', label: 'Badgeuse', group: 'Ressources humaines', defaultEnabled: false, companyPage: true },
   { key: 'tickets', label: 'Tickets / support', group: 'Communication', defaultEnabled: false, companyPage: true },
   { key: 'messagerie', label: 'Messagerie', group: 'Communication', defaultEnabled: true, companyPage: true },
@@ -66,6 +71,9 @@ export const MODULES: ModuleDef[] = [
   { key: 'bareme', label: 'Barème fiscal', group: 'Fiscalité', defaultEnabled: true, companyPage: false },
   { key: 'dividendes', label: 'Dividendes', group: 'Fiscalité', defaultEnabled: false, companyPage: true },
   { key: 'actionnaires', label: 'Actionnaires', group: 'Actionnariat', defaultEnabled: true, companyPage: true },
+  { key: 'immobilier', label: 'Gestion propriétés', group: 'Immobilier', defaultEnabled: false, companyPage: true },
+  { key: 'immo_carte', label: 'Carte interactive', group: 'Immobilier', defaultEnabled: false, companyPage: true },
+  { key: 'taxi', label: 'Taxi', group: 'Taxi', defaultEnabled: false, companyPage: true },
 ];
 
 export interface ModuleConfigField {
@@ -253,6 +261,53 @@ export const ASSOCIATION_TX_TYPES = [
 export type AssociationTxType = (typeof ASSOCIATION_TX_TYPES)[number]['key'];
 export const ASSOCIATION_TX_TYPE_KEYS = ASSOCIATION_TX_TYPES.map((t) => t.key) as AssociationTxType[];
 
+export const TICKET_TYPES = [
+  { key: 'bug', label: 'Bug', hint: 'Quelque chose ne marche pas' },
+  { key: 'question', label: 'Question', hint: 'Je ne comprends pas comment faire' },
+  { key: 'suggestion', label: 'Suggestion', hint: 'Une idée pour améliorer le site' },
+] as const;
+export type TicketType = (typeof TICKET_TYPES)[number]['key'];
+export const TICKET_TYPE_KEYS = TICKET_TYPES.map((t) => t.key) as TicketType[];
+
+export const TICKET_PRIORITIES = [
+  { key: 'high', label: 'Haute', hint: 'Bloquant : perte d’argent, impossible de travailler' },
+  { key: 'normal', label: 'Normale', hint: 'Gênant mais contournable' },
+  { key: 'low', label: 'Basse', hint: 'Question, suggestion, détail' },
+] as const;
+export type TicketPriority = (typeof TICKET_PRIORITIES)[number]['key'];
+export const TICKET_PRIORITY_KEYS = TICKET_PRIORITIES.map((p) => p.key) as TicketPriority[];
+
+export const TICKET_STATUSES = [
+  { key: 'waiting_staff', label: 'Attente réponse staff' },
+  { key: 'waiting_user', label: 'Attente réponse joueur' },
+  { key: 'resolved', label: 'Résolu' },
+  { key: 'closed', label: 'Fermé' },
+] as const;
+export type TicketStatus = (typeof TICKET_STATUSES)[number]['key'];
+export const TICKET_STATUS_KEYS = TICKET_STATUSES.map((s) => s.key) as TicketStatus[];
+
+export const IMMO_RENTAL_STATUSES = [
+  { key: 'active', label: 'Active' },
+  { key: 'terminee', label: 'Terminée' },
+  { key: 'resiliee', label: 'Résiliée' },
+] as const;
+export type ImmoRentalStatus = (typeof IMMO_RENTAL_STATUSES)[number]['key'];
+export const IMMO_RENTAL_STATUS_KEYS = IMMO_RENTAL_STATUSES.map((s) => s.key) as ImmoRentalStatus[];
+
+export const IMMO_SALE_STATUSES = [
+  { key: 'disponible', label: 'Disponible' },
+  { key: 'vendu', label: 'Vendu' },
+] as const;
+export type ImmoSaleStatus = (typeof IMMO_SALE_STATUSES)[number]['key'];
+export const IMMO_SALE_STATUS_KEYS = IMMO_SALE_STATUSES.map((s) => s.key) as ImmoSaleStatus[];
+
+export const ASSOCIATION_PARTY_TYPES = [
+  { key: 'entreprise', label: 'Entreprise' },
+  { key: 'particulier', label: 'Particulier' },
+] as const;
+export type AssociationPartyType = (typeof ASSOCIATION_PARTY_TYPES)[number]['key'];
+export const ASSOCIATION_PARTY_TYPE_KEYS = ASSOCIATION_PARTY_TYPES.map((p) => p.key) as AssociationPartyType[];
+
 export const SUBVENTION_TYPES = [
   { key: 'evenement', label: 'Événement' },
   { key: 'contrat', label: 'Contrat' },
@@ -312,6 +367,8 @@ export const sessionUserSchema = z.object({
   avatarUrl: z.string().url().nullable(),
   appRoles: z.array(z.enum(APP_ROLES)),
   whitelisted: z.boolean(),
+  staffMode: z.boolean(),
+  isDev: z.boolean(),
 });
 export type SessionUser = z.infer<typeof sessionUserSchema>;
 

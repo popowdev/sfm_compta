@@ -83,7 +83,40 @@ export function GradesPanelModal({
       key: ModuleKey;
       perm: { canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean };
     }) => setMyGradePermission(companyId, v.rid, v.key, v.perm),
-    onSuccess: refresh,
+    onMutate: async (v) => {
+      await queryClient.cancelQueries({ queryKey: ['my-grades', companyId] });
+      const prev = queryClient.getQueryData<NonNullable<typeof q.data>>(['my-grades', companyId]);
+      queryClient.setQueryData<NonNullable<typeof q.data>>(['my-grades', companyId], (old) =>
+        old
+          ? {
+              ...old,
+              grades: old.grades.map((g) =>
+                g.id === v.rid
+                  ? {
+                      ...g,
+                      permissions: {
+                        ...g.permissions,
+                        [v.key]: {
+                          ...v.perm,
+                          canWrite: v.perm.canCreate || v.perm.canEdit || v.perm.canDelete,
+                        },
+                      },
+                    }
+                  : g,
+              ),
+            }
+          : old,
+      );
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['my-grades', companyId], ctx.prev);
+      alert('Échec de la modification des permissions.');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-grades', companyId] });
+      queryClient.invalidateQueries({ queryKey: ['my-companies'] });
+    },
   });
   const setSpecial = useMutation({
     mutationFn: (v: { rid: number; moduleKey: string; actionKey: string; granted: boolean }) =>
@@ -112,7 +145,7 @@ export function GradesPanelModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
       <div
         className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-xl border bg-card shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -211,6 +244,19 @@ export function GradesPanelModal({
                     )}
                   </div>
 
+                  {grade.canManage ? (
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
+                      <div className="flex items-center gap-2 font-semibold text-primary">
+                        <ShieldCheck className="h-4 w-4" />
+                        Grade gérant — accès complet
+                      </div>
+                      <p className="mt-1 text-muted-foreground">
+                        Un patron / co-patron voit et gère automatiquement tous les modules. Décoche
+                        « gérant » ci-dessus pour lui définir des permissions détaillées.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
                   <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
                       <thead>
@@ -240,7 +286,6 @@ export function GradesPanelModal({
                                     type="checkbox"
                                     className="h-4 w-4 rounded border-input accent-primary"
                                     checked={perm[a.key]}
-                                    disabled={setPerm.isPending}
                                     onChange={() => toggle(m.key, a.key)}
                                   />
                                 </td>
@@ -252,9 +297,12 @@ export function GradesPanelModal({
                     </table>
                   </div>
                   <p className="mt-3 text-xs text-muted-foreground">
-                    Créer / Modifier / Supprimer activent automatiquement « Voir ». Le Staff et les
-                    grades « gérant » ont accès complet.
+                    Par défaut un employé ne voit que Caisse, Garage et Badgeuse. Coche pour lui
+                    ouvrir d'autres modules. Créer / Modifier / Supprimer activent « Voir »
+                    automatiquement.
                   </p>
+                    </>
+                  )}
 
                   {(() => {
                     const specials = modules

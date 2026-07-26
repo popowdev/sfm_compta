@@ -16,8 +16,11 @@ import {
   companyModules,
   rolePermissions,
   roleSpecialPermissions,
+  users,
+  fivemPlayers,
+  fivemCharacters,
 } from '../db/schema';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getEffectiveModules, isModuleBlocked } from '../services/modules';
 import { isStaff, canManageCompany } from '../services/access';
@@ -27,6 +30,20 @@ import { emitInvalidate } from '../realtime/socket';
 export const meRouter = Router();
 
 meRouter.use(requireAuth);
+
+const staffModeSchema = z.object({ enabled: z.boolean() });
+
+meRouter.put(
+  '/staff-mode',
+  requireAppRole('staff'),
+  asyncHandler(async (req, res) => {
+    const parsed = staffModeSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    await db.update(users).set({ staffMode: parsed.data.enabled }).where(eq(users.id, req.user!.id));
+    emitInvalidate(`user:${req.user!.id}`, [['my-companies'], ['me']]);
+    res.json({ ok: true, staffMode: parsed.data.enabled });
+  }),
+);
 
 function parseId(value: string | undefined): number | null {
   const n = Number(value);
@@ -41,6 +58,7 @@ interface CompanyEntry {
   gradeId: number | null;
   gradeName: string | null;
   canManage: boolean;
+  fivemJob: string | null;
 }
 
 meRouter.get(
@@ -62,7 +80,7 @@ meRouter.get(
         .from(companies)
         .where(isNull(companies.deletedAt))
         .orderBy(companies.name);
-      entries = all.map((c) => ({ ...c, gradeId: null, gradeName: null, canManage: true }));
+      entries = all.map((c) => ({ ...c, gradeId: null, gradeName: null, canManage: true, fivemJob: null }));
     } else {
       const rows = await db
         .select({
@@ -73,6 +91,7 @@ meRouter.get(
           gradeId: companyRoles.id,
           gradeName: companyRoles.name,
           canManage: companyRoles.canManage,
+          fivemJob: companies.fivemJob,
         })
         .from(memberships)
         .innerJoin(companies, eq(memberships.companyId, companies.id))
@@ -85,6 +104,24 @@ meRouter.get(
           ),
         );
       entries = rows.map((r) => ({ ...r, canManage: r.canManage ?? false }));
+    }
+
+    // Perso sélectionné (affichage) → son job décide quelle entreprise FiveM est "active".
+    let selectedJob: string | null = null;
+    if (!staff) {
+      const sel = await db
+        .select({ job: fivemCharacters.jobId })
+        .from(fivemPlayers)
+        .innerJoin(
+          fivemCharacters,
+          and(
+            eq(fivemCharacters.discordId, fivemPlayers.discordId),
+            eq(fivemCharacters.name, fivemPlayers.selectedChar),
+          ),
+        )
+        .where(eq(fivemPlayers.discordId, req.user!.discordId))
+        .limit(1);
+      selectedJob = sel[0]?.job ?? null;
     }
 
     const result = [];
@@ -135,11 +172,11 @@ meRouter.get(
           group: m.group,
           enabled: enabledMap.get(m.key) ?? m.defaultEnabled,
           blocked: m.blocked,
-          canView: staff ? true : (p?.canView ?? false),
-          canWrite: staff ? true : (p?.canWrite ?? false),
-          canCreate: staff ? true : (p?.canCreate ?? false),
-          canEdit: staff ? true : (p?.canEdit ?? false),
-          canDelete: staff ? true : (p?.canDelete ?? false),
+          canView: staff || e.canManage ? true : (p?.canView ?? false),
+          canWrite: staff || e.canManage ? true : (p?.canWrite ?? false),
+          canCreate: staff || e.canManage ? true : (p?.canCreate ?? false),
+          canEdit: staff || e.canManage ? true : (p?.canEdit ?? false),
+          canDelete: staff || e.canManage ? true : (p?.canDelete ?? false),
           special,
           config: (configMap.get(m.key) as Record<string, unknown> | null) ?? {},
         };
@@ -149,6 +186,7 @@ meRouter.get(
         company: { id: e.companyId, name: e.name, slug: e.slug, logoUrl: e.logoUrl },
         grade: e.gradeId ? { id: e.gradeId, name: e.gradeName } : null,
         canManage: e.canManage,
+        fivemActive: staff || !selectedJob || e.fivemJob === null || e.fivemJob === selectedJob,
         modules,
       });
     }

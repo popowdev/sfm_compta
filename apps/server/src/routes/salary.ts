@@ -1,17 +1,12 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
-import { EMPLOYEE_POSITION_KEYS, type EmployeePosition } from '@rp-compta/shared';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db';
-import { salaryGrid } from '../db/schema';
+import { salaryGrid, companyRoles } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
-import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
+import { getModuleAccess } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
-
-function methodAction(method: string): PermAction {
-  return method === 'POST' ? 'create' : method === 'PUT' ? 'edit' : method === 'DELETE' ? 'delete' : 'view';
-}
 
 function parseId(value: string | undefined): number | null {
   const n = Number(value);
@@ -23,7 +18,7 @@ async function gate(req: Request, companyId: number) {
   if (!acc) return { ok: false as const, status: 404, error: 'not_member' };
   if (!acc.enabled || acc.blocked) return { ok: false as const, status: 403, error: 'module_unavailable' };
   if (!acc.canView) return { ok: false as const, status: 403, error: 'forbidden' };
-  if (actionDenied(acc, methodAction(req.method))) return { ok: false as const, status: 403, error: 'forbidden' };
+  if (req.method !== 'GET' && !acc.canWrite) return { ok: false as const, status: 403, error: 'forbidden' };
   return { ok: true as const, canWrite: acc.canWrite, canCreate: acc.canCreate, canEdit: acc.canEdit, canDelete: acc.canDelete };
 }
 
@@ -39,12 +34,17 @@ meSalaryRouter.get(
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
-    const rows = await db.select().from(salaryGrid).where(eq(salaryGrid.companyId, companyId));
-    const byPos = new Map(rows.map((r) => [r.position, r]));
-    const grid = EMPLOYEE_POSITION_KEYS.map((position) => {
-      const r = byPos.get(position);
+    const [grades, rows] = await Promise.all([
+      db.select().from(companyRoles).where(eq(companyRoles.companyId, companyId)).orderBy(companyRoles.rank),
+      db.select().from(salaryGrid).where(eq(salaryGrid.companyId, companyId)),
+    ]);
+    const byRole = new Map(rows.map((r) => [r.companyRoleId, r]));
+    const grid = grades.map((role) => {
+      const r = byRole.get(role.id);
       return {
-        position,
+        companyRoleId: role.id,
+        gradeName: role.name,
+        rank: role.rank,
         hourlyRate: r ? Number(r.hourlyRate) : 0,
         baseSalary: r ? Number(r.baseSalary) : 0,
       };
@@ -57,13 +57,13 @@ const putSchema = z.object({
   grid: z
     .array(
       z.object({
-        position: z.enum(EMPLOYEE_POSITION_KEYS as [string, ...string[]]),
-        hourlyRate: z.number().nonnegative().finite().max(99_999_999.99),
-        baseSalary: z.number().nonnegative().finite().max(9_999_999_999.99),
+        companyRoleId: z.number().int().positive(),
+        hourlyRate: z.number().nonnegative().finite().max(99_999_999),
+        baseSalary: z.number().nonnegative().finite().max(9_999_999_999),
       }),
     )
-    .max(EMPLOYEE_POSITION_KEYS.length)
-    .refine((g) => new Set(g.map((r) => r.position)).size === g.length, 'duplicate_position'),
+    .max(200)
+    .refine((g) => new Set(g.map((r) => r.companyRoleId)).size === g.length, 'duplicate_role'),
 });
 
 meSalaryRouter.put(
@@ -76,19 +76,28 @@ meSalaryRouter.put(
     const parsed = putSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
 
+    const roleIds = parsed.data.grid.map((r) => r.companyRoleId);
+    if (roleIds.length) {
+      const valid = await db
+        .select({ id: companyRoles.id })
+        .from(companyRoles)
+        .where(and(eq(companyRoles.companyId, companyId), inArray(companyRoles.id, roleIds)));
+      const validSet = new Set(valid.map((v) => v.id));
+      if (roleIds.some((id) => !validSet.has(id))) return res.status(400).json({ error: 'invalid_grade' });
+    }
     for (const row of parsed.data.grid) {
       await db
         .insert(salaryGrid)
         .values({
           companyId,
-          position: row.position as EmployeePosition,
-          hourlyRate: String(round2(row.hourlyRate)),
-          baseSalary: String(round2(row.baseSalary)),
+          companyRoleId: row.companyRoleId,
+          hourlyRate: String(Math.round(row.hourlyRate)),
+          baseSalary: String(Math.round(row.baseSalary)),
         })
         .onDuplicateKeyUpdate({
           set: {
-            hourlyRate: String(round2(row.hourlyRate)),
-            baseSalary: String(round2(row.baseSalary)),
+            hourlyRate: String(Math.round(row.hourlyRate)),
+            baseSalary: String(Math.round(row.baseSalary)),
           },
         });
     }

@@ -25,8 +25,8 @@ export interface CreateEventInput {
   category?: string;
   ownerType: 'company' | 'association';
   ownerId: number;
-  startAt: string;
-  endAt: string;
+  date: string; // "YYYY-MM-DD"
+  slot: 1 | 2;
 }
 
 export const getCalendar = (from: string, to: string) =>

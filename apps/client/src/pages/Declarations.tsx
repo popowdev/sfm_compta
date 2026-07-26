@@ -48,6 +48,7 @@ export default function Declarations() {
   const decls = useQuery({
     queryKey: ['declarations', companyId],
     queryFn: () => getMyDeclarations(companyId),
+    enabled: companyId > 0,
   });
   const fiscal = useQuery({ queryKey: ['fiscal'], queryFn: getFiscalConfig });
 
@@ -76,6 +77,15 @@ export default function Declarations() {
       close();
       queryClient.invalidateQueries({ queryKey: ['declarations', companyId] });
     },
+    onError: (err) => {
+      const code = err instanceof Error ? err.message : '';
+      toast(
+        code === 'week_exists'
+          ? 'Une déclaration existe déjà pour cette semaine.'
+          : "Échec de l'envoi de la déclaration.",
+        'error',
+      );
+    },
   });
 
   const prefill = useMutation({
@@ -103,14 +113,17 @@ export default function Declarations() {
   const total = Math.round((corpTax + divTax) * 100) / 100;
 
   const list = decls.data?.declarations ?? [];
+  const sumCorpTax = list.reduce((s, d) => s + d.corporateTax, 0);
+  const sumDivTax = list.reduce((s, d) => s + d.dividendTax, 0);
+  const sumTotalTax = list.reduce((s, d) => s + d.totalTax, 0);
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-3">
-          <Kpi icon={Landmark} label="Impôt société (barème)" value={`${fmtMoney(corpTax)} $`} accent="text-sky-400" />
-          <Kpi icon={Coins} label={`Impôt dividendes (${divRate}%)`} value={`${fmtMoney(divTax)} $`} accent="text-amber-400" />
-          <Kpi icon={Receipt} label="Total impôt" value={`${fmtMoney(total)} $`} accent="text-primary" />
+          <Kpi icon={Landmark} label="Impôt société (barème)" value={`${fmtMoney(sumCorpTax)} $`} accent="text-sky-400" />
+          <Kpi icon={Coins} label={`Impôt dividendes (${divRate}%)`} value={`${fmtMoney(sumDivTax)} $`} accent="text-amber-400" />
+          <Kpi icon={Receipt} label="Total impôt" value={`${fmtMoney(sumTotalTax)} $`} accent="text-primary" />
         </div>
         {canCreate && (
           <Button onClick={() => setOpen(true)}>
@@ -125,6 +138,13 @@ export default function Declarations() {
           <Skeleton className="h-16 rounded-xl" />
           <Skeleton className="h-16 rounded-xl" />
           <Skeleton className="h-16 rounded-xl" />
+        </div>
+      ) : decls.isError ? (
+        <div className="grid place-items-center gap-3 rounded-xl border bg-card py-12 text-center">
+          <p className="text-sm text-muted-foreground">Impossible de charger les déclarations.</p>
+          <Button variant="outline" onClick={() => decls.refetch()}>
+            Réessayer
+          </Button>
         </div>
       ) : list.length === 0 ? (
         <EmptyState
@@ -174,7 +194,7 @@ export default function Declarations() {
       )}
 
       {open && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={close}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
           <div
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card shadow-xl"
             onClick={(e) => e.stopPropagation()}

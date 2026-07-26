@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, Trash2, Wallet, TrendingUp, TrendingDown, Coins } from 'lucide-react';
-import { ASSOCIATION_TX_TYPES, type AssociationTxType } from '@rp-compta/shared';
+import { Plus, X, Trash2, Wallet, TrendingUp, TrendingDown, Coins, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { ASSOCIATION_PARTY_TYPES, type AssociationPartyType } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { Kpi } from '@/components/ui/kpi';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -14,10 +14,10 @@ import {
   getAssociationTransactions,
   addAssociationTransaction,
   deleteAssociationTransaction,
+  type AssociationTxDirection,
 } from '@/lib/associations';
 
-const TX_LABEL: Record<string, string> = Object.fromEntries(ASSOCIATION_TX_TYPES.map((t) => [t.key, t.label]));
-const TX_DIR: Record<string, 'in' | 'out'> = Object.fromEntries(ASSOCIATION_TX_TYPES.map((t) => [t.key, t.dir]));
+const PARTY_LABEL: Record<string, string> = Object.fromEntries(ASSOCIATION_PARTY_TYPES.map((p) => [p.key, p.label]));
 const inputCls =
   'h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
 
@@ -40,17 +40,35 @@ function TreasuryBody({ associationId, initialBalance }: { associationId: number
   };
 
   const [open, setOpen] = useState(false);
-  const [type, setType] = useState<AssociationTxType>('cotisation');
+  const [direction, setDirection] = useState<AssociationTxDirection>('in');
+  const [partyType, setPartyType] = useState<AssociationPartyType>('entreprise');
+  const [fromName, setFromName] = useState('');
+  const [toName, setToName] = useState('');
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
 
+  const reset = () => {
+    setDirection('in');
+    setPartyType('entreprise');
+    setFromName('');
+    setToName('');
+    setLabel('');
+    setAmount('');
+  };
+
   const add = useMutation({
-    mutationFn: () => addAssociationTransaction(associationId, { type, label: label.trim(), amount: Number(amount) || 0 }),
+    mutationFn: () =>
+      addAssociationTransaction(associationId, {
+        direction,
+        partyType,
+        fromName: fromName.trim() || undefined,
+        toName: toName.trim() || undefined,
+        label: label.trim(),
+        amount: Number(amount) || 0,
+      }),
     onSuccess: () => {
       setOpen(false);
-      setType('cotisation');
-      setLabel('');
-      setAmount('');
+      reset();
       invalidate();
     },
     onError: () => toast('Échec de l’enregistrement.', 'error'),
@@ -66,7 +84,8 @@ function TreasuryBody({ associationId, initialBalance }: { associationId: number
   const balance = q.data?.balance ?? initialBalance;
   const credits = txs.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   const debits = txs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
-  const amountValid = label.trim().length > 0 && amount !== '' && Number(amount) > 0;
+  const counterparty = direction === 'in' ? fromName : toName;
+  const formValid = label.trim().length > 0 && counterparty.trim().length > 0 && amount !== '' && Number(amount) > 0;
 
   return (
     <div className="space-y-5">
@@ -90,7 +109,7 @@ function TreasuryBody({ associationId, initialBalance }: { associationId: number
           <Skeleton className="h-14 rounded-xl" />
         </div>
       ) : txs.length === 0 ? (
-        <EmptyState icon={Coins} title="Aucun mouvement" hint="Cotisations, dons, subventions et dépenses apparaîtront ici." />
+        <EmptyState icon={Coins} title="Aucun mouvement" hint="Les entrées et sorties d’argent de l’association apparaîtront ici." />
       ) : (
         <div className="overflow-hidden rounded-xl border bg-card">
           <div className="overflow-x-auto">
@@ -98,44 +117,61 @@ function TreasuryBody({ associationId, initialBalance }: { associationId: number
               <thead>
                 <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-4 py-3 text-left font-semibold">Date</th>
-                  <th className="px-4 py-3 text-left font-semibold">Libellé</th>
-                  <th className="px-4 py-3 text-left font-semibold">Type</th>
+                  <th className="px-4 py-3 text-left font-semibold">Sens</th>
+                  <th className="px-4 py-3 text-left font-semibold">Tiers</th>
+                  <th className="px-4 py-3 text-left font-semibold">Raison</th>
                   <th className="px-4 py-3 text-right font-semibold">Montant</th>
                   {canManage && <th className="px-4 py-3 text-right font-semibold"></th>}
                 </tr>
               </thead>
               <tbody>
-                {txs.map((t) => (
-                  <tr key={t.id} className="border-b last:border-b-0">
-                    <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{fmtDate(t.createdAt)}</td>
-                    <td className="px-4 py-3">
-                      {t.label}
-                      {t.createdByName && <div className="text-xs text-muted-foreground">{t.createdByName}</div>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-md bg-muted px-2 py-0.5 text-xs">{TX_LABEL[t.type] ?? t.type}</span>
-                    </td>
-                    <td className={`px-4 py-3 text-right font-medium ${t.amount >= 0 ? 'text-emerald-400' : 'text-destructive'}`}>
-                      {t.amount >= 0 ? '+' : ''}
-                      {fmtMoney(t.amount)} $
-                    </td>
-                    {canManage && (
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (await confirm({ title: 'Supprimer ce mouvement ?', message: t.label, destructive: true })) remove.mutate(t.id);
-                          }}
-                          title="Supprimer"
-                          aria-label={`Supprimer ${t.label}`}
-                          className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                {txs.map((t) => {
+                  const isIn = t.direction === 'in';
+                  return (
+                    <tr key={t.id} className="border-b last:border-b-0">
+                      <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{fmtDate(t.createdAt)}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${
+                            isIn ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'
+                          }`}
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                          {isIn ? <ArrowDownLeft className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}
+                          {isIn ? 'Entrée' : 'Sortie'}
+                        </span>
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td className="px-4 py-3">
+                        <div>
+                          {isIn ? t.fromName : (t.fromName ? `${t.fromName} → ${t.toName}` : t.toName)}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {t.partyType ? PARTY_LABEL[t.partyType] ?? t.partyType : ''}
+                          {t.createdByName ? ` · ${t.createdByName}` : ''}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">{t.label}</td>
+                      <td className={`px-4 py-3 text-right font-medium ${isIn ? 'text-emerald-400' : 'text-destructive'}`}>
+                        {isIn ? '+' : ''}
+                        {fmtMoney(t.amount)} $
+                      </td>
+                      {canManage && (
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (await confirm({ title: 'Supprimer ce mouvement ?', message: t.label, destructive: true })) remove.mutate(t.id);
+                            }}
+                            title="Supprimer"
+                            aria-label={`Supprimer ${t.label}`}
+                            className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -143,7 +179,7 @@ function TreasuryBody({ associationId, initialBalance }: { associationId: number
       )}
 
       {open && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h2 className="text-sm font-semibold">Nouveau mouvement</h2>
@@ -155,33 +191,75 @@ function TreasuryBody({ associationId, initialBalance }: { associationId: number
               className="space-y-3 p-5"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (amountValid && !add.isPending) add.mutate();
+                if (formValid && !add.isPending) add.mutate();
               }}
             >
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDirection('in')}
+                  className={`flex items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                    direction === 'in' ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300' : 'border-input text-muted-foreground hover:bg-accent'
+                  }`}
+                >
+                  <ArrowDownLeft className="h-4 w-4" />
+                  Entrée
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDirection('out')}
+                  className={`flex items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                    direction === 'out' ? 'border-amber-500/50 bg-amber-500/15 text-amber-300' : 'border-input text-muted-foreground hover:bg-accent'
+                  }`}
+                >
+                  <ArrowUpRight className="h-4 w-4" />
+                  Sortie
+                </button>
+              </div>
+
               <label className="block text-sm">
-                <span className="mb-1 block text-muted-foreground">Type</span>
-                <select className={inputCls} value={type} onChange={(e) => setType(e.target.value as AssociationTxType)}>
-                  {ASSOCIATION_TX_TYPES.map((t) => (
-                    <option key={t.key} value={t.key}>
-                      {t.label} {t.dir === 'out' ? '(sortie)' : '(entrée)'}
+                <span className="mb-1 block text-muted-foreground">Nature du tiers</span>
+                <select className={inputCls} value={partyType} onChange={(e) => setPartyType(e.target.value as AssociationPartyType)}>
+                  {ASSOCIATION_PARTY_TYPES.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.label}
                     </option>
                   ))}
                 </select>
               </label>
+
+              {direction === 'in' ? (
+                <label className="block text-sm">
+                  <span className="mb-1 block text-muted-foreground">De qui vient l’argent ?</span>
+                  <input className={inputCls} value={fromName} onChange={(e) => setFromName(e.target.value)} placeholder={partyType === 'entreprise' ? 'ex. LS Custom' : 'ex. John Doe'} autoFocus />
+                </label>
+              ) : (
+                <>
+                  <label className="block text-sm">
+                    <span className="mb-1 block text-muted-foreground">À qui va l’argent ?</span>
+                    <input className={inputCls} value={toName} onChange={(e) => setToName(e.target.value)} placeholder={partyType === 'entreprise' ? 'ex. LS Custom' : 'ex. John Doe'} autoFocus />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="mb-1 block text-muted-foreground">De qui <span className="text-xs">(optionnel)</span></span>
+                    <input className={inputCls} value={fromName} onChange={(e) => setFromName(e.target.value)} placeholder="par défaut : l’association" />
+                  </label>
+                </>
+              )}
+
               <label className="block text-sm">
-                <span className="mb-1 block text-muted-foreground">Libellé</span>
-                <input className={inputCls} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="ex. cotisations janvier" autoFocus />
+                <span className="mb-1 block text-muted-foreground">Raison</span>
+                <input className={inputCls} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="ex. don pour l’événement caritatif" />
               </label>
               <label className="block text-sm">
                 <span className="mb-1 block text-muted-foreground">Montant ($)</span>
-                <input type="number" step="0.01" min="0" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} />
+                <input type="number" step="1" min="0" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} />
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  {TX_DIR[type] === 'out' ? 'Sera décompté du solde.' : 'Sera ajouté au solde.'}
+                  {direction === 'out' ? 'Sera décompté du solde.' : 'Sera ajouté au solde.'}
                 </span>
               </label>
               <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>Annuler</Button>
-                <Button type="submit" disabled={!amountValid || add.isPending}>
+                <Button type="submit" disabled={!formValid || add.isPending}>
                   {add.isPending ? 'Enregistrement…' : 'Enregistrer'}
                 </Button>
               </div>

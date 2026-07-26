@@ -25,7 +25,10 @@ export default function IrsSubventions() {
   const queryClient = useQueryClient();
   const confirm = useConfirm();
   const toast = useToast();
-  const { data } = useQuery({ queryKey: ['irs-subventions'], queryFn: getAllSubventions });
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['irs-subventions'],
+    queryFn: getAllSubventions,
+  });
   const [grants, setGrants] = useState<Record<number, string>>({});
   const [search, setSearch] = useState('');
   const [companyFilter, setCompanyFilter] = useState('');
@@ -43,6 +46,7 @@ export default function IrsSubventions() {
         return next;
       });
     },
+    onError: () => toast('Échec de la décision sur la demande.', 'error'),
   });
 
   const remove = useMutation({
@@ -276,14 +280,33 @@ export default function IrsSubventions() {
                   </td>
                 </tr>
               ))}
-              {list.length === 0 && (
+              {isLoading && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-4 text-muted-foreground">
+                    Chargement…
+                  </td>
+                </tr>
+              )}
+              {isError && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-4 text-muted-foreground">
+                    <div className="flex items-center gap-3">
+                      <span>Impossible de charger les demandes de subvention.</span>
+                      <button className={actionBtn} onClick={() => refetch()}>
+                        Réessayer
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {!isLoading && !isError && list.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-4 py-4 text-muted-foreground">
                     Aucune demande de subvention.
                   </td>
                 </tr>
               )}
-              {list.length > 0 && filtered.length === 0 && (
+              {!isLoading && !isError && list.length > 0 && filtered.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-4 py-4 text-muted-foreground">
                     Aucun résultat pour ces filtres.

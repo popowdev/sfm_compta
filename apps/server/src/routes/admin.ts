@@ -1,14 +1,23 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray, like, notInArray, or, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { users, userAppRoles, memberships, companies } from '../db/schema';
+import {
+  users,
+  userAppRoles,
+  memberships,
+  companies,
+  companyRoles,
+  fivemPlayers,
+  fivemCharacters,
+} from '../db/schema';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { applyWhitelistChange } from '../services/revocation';
 import { isStaff } from '../services/access';
+import { resyncPlayer, resolveJobGradeLabels } from '../services/fivemSync';
 import { recordAudit } from '../services/audit';
-import { emitInvalidateAll } from '../realtime/socket';
+import { emitInvalidate, emitInvalidateAll } from '../realtime/socket';
 
 async function roleHolders(role: 'irs' | 'staff' | 'gouvernement'): Promise<number[]> {
   const rows = await db.select({ userId: userAppRoles.userId }).from(userAppRoles).where(eq(userAppRoles.role, role));
@@ -25,19 +34,90 @@ function parseId(value: string | undefined): number | null {
 }
 
 export const adminUsersRouter = Router();
-adminUsersRouter.use(requireAuth, requireAppRole('irs'));
+adminUsersRouter.use(requireAuth, requireAppRole('staff'));
+
+const listQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  q: z.string().trim().max(120).optional(),
+  role: z.string().trim().max(30).optional(),
+  whitelisted: z.enum(['actif', 'inactif']).optional(),
+});
 
 adminUsersRouter.get(
   '/',
-  asyncHandler(async (_req, res) => {
-    const [usersRows, roleRows, memRows] = await Promise.all([
-      db.select().from(users).orderBy(desc(users.createdAt)),
-      db.select({ userId: userAppRoles.userId, role: userAppRoles.role }).from(userAppRoles),
-      db
-        .select({ userId: memberships.userId, companyName: companies.name })
-        .from(memberships)
-        .innerJoin(companies, eq(memberships.companyId, companies.id))
-        .where(eq(memberships.active, true)),
+  asyncHandler(async (req, res) => {
+    const parsed = listQuery.safeParse(req.query);
+    if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    const { page, limit, role, whitelisted } = parsed.data;
+    const q = parsed.data.q?.trim();
+    const offset = (page - 1) * limit;
+
+    const conds = [];
+    if (q) {
+      conds.push(
+        or(
+          like(users.displayName, `%${q}%`),
+          like(users.discordId, `%${q}%`),
+          inArray(
+            users.discordId,
+            db
+              .select({ d: fivemCharacters.discordId })
+              .from(fivemCharacters)
+              .where(like(fivemCharacters.name, `%${q}%`)),
+          ),
+        ),
+      );
+    }
+    if (whitelisted === 'actif') conds.push(eq(users.whitelisted, true));
+    if (whitelisted === 'inactif') conds.push(eq(users.whitelisted, false));
+    if (role === '__none__') {
+      conds.push(notInArray(users.id, db.select({ id: userAppRoles.userId }).from(userAppRoles)));
+    } else if (role) {
+      conds.push(
+        inArray(
+          users.id,
+          db
+            .select({ id: userAppRoles.userId })
+            .from(userAppRoles)
+            .where(eq(userAppRoles.role, role as 'irs' | 'staff' | 'gouvernement')),
+        ),
+      );
+    }
+    const filter = conds.length ? and(...conds) : undefined;
+
+    const [countRows, usersRows] = await Promise.all([
+      db.select({ n: sql<number>`COUNT(*)` }).from(users).where(filter),
+      db.select().from(users).where(filter).orderBy(desc(users.createdAt)).limit(limit).offset(offset),
+    ]);
+    const total = Number(countRows[0]?.n ?? 0);
+    const ids = usersRows.map((u) => u.id);
+    const discords = usersRows.map((u) => u.discordId);
+
+    const [roleRows, memRows, charRows, rosterRows] = await Promise.all([
+      ids.length
+        ? db
+            .select({ userId: userAppRoles.userId, role: userAppRoles.role })
+            .from(userAppRoles)
+            .where(inArray(userAppRoles.userId, ids))
+        : Promise.resolve([]),
+      ids.length
+        ? db
+            .select({ userId: memberships.userId, companyName: companies.name, grade: companyRoles.name })
+            .from(memberships)
+            .innerJoin(companies, eq(memberships.companyId, companies.id))
+            .leftJoin(companyRoles, eq(memberships.companyRoleId, companyRoles.id))
+            .where(and(eq(memberships.active, true), inArray(memberships.userId, ids)))
+        : Promise.resolve([]),
+      discords.length
+        ? db.select().from(fivemCharacters).where(inArray(fivemCharacters.discordId, discords))
+        : Promise.resolve([]),
+      discords.length
+        ? db
+            .select({ discordId: fivemPlayers.discordId, selected: fivemPlayers.selectedChar })
+            .from(fivemPlayers)
+            .where(inArray(fivemPlayers.discordId, discords))
+        : Promise.resolve([]),
     ]);
     const rolesByUser = new Map<number, string[]>();
     for (const r of roleRows) {
@@ -45,11 +125,30 @@ adminUsersRouter.get(
       arr.push(r.role);
       rolesByUser.set(r.userId, arr);
     }
-    const compsByUser = new Map<number, string[]>();
+    const compsByUser = new Map<number, { name: string; grade: string | null }[]>();
     for (const m of memRows) {
       const arr = compsByUser.get(m.userId) ?? [];
-      arr.push(m.companyName);
+      arr.push({ name: m.companyName, grade: m.grade });
       compsByUser.set(m.userId, arr);
+    }
+    const selByDiscord = new Map<string, string | null>();
+    for (const r of rosterRows) selByDiscord.set(r.discordId, r.selected);
+    const charsByDiscord = new Map<
+      string,
+      { name: string; job: string | null; grade: number; gradeLabel: string | null; unemployed: boolean; selected: boolean }[]
+    >();
+    const labels = await resolveJobGradeLabels(charRows.map((c) => ({ jobId: c.jobId, grade: c.grade })));
+    for (const c of charRows) {
+      const arr = charsByDiscord.get(c.discordId) ?? [];
+      arr.push({
+        name: c.name,
+        job: c.unemployed ? null : labels.jobLabel(c.jobId, c.jobLabel),
+        grade: c.grade,
+        gradeLabel: labels.gradeLabel(c.jobId, c.grade, c.gradeLabel),
+        unemployed: c.unemployed,
+        selected: selByDiscord.get(c.discordId) === c.name,
+      });
+      charsByDiscord.set(c.discordId, arr);
     }
     res.json({
       users: usersRows.map((u) => ({
@@ -60,9 +159,31 @@ adminUsersRouter.get(
         whitelisted: u.whitelisted,
         roles: rolesByUser.get(u.id) ?? [],
         companies: compsByUser.get(u.id) ?? [],
+        characters: charsByDiscord.get(u.discordId) ?? [],
         createdAt: u.createdAt,
       })),
+      total,
+      page,
+      limit,
     });
+  }),
+);
+
+adminUsersRouter.post(
+  '/:id/fivem-resync',
+  asyncHandler(async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'bad_request' });
+    const u = await db.select({ discordId: users.discordId }).from(users).where(eq(users.id, id)).limit(1);
+    if (!u[0]) return res.status(404).json({ error: 'not_found' });
+    const out = await resyncPlayer(u[0].discordId);
+    if (!out.ok) {
+      const status = out.reason === 'not_found' ? 404 : out.reason === 'invalid' ? 400 : 502;
+      return res.status(status).json({ error: out.reason });
+    }
+    emitInvalidateAll([['admin-users']]);
+    if (out.userId) emitInvalidate(`user:${out.userId}`, [['my-companies']]);
+    res.json({ ok: true, count: out.count });
   }),
 );
 

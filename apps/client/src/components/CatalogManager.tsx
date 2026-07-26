@@ -1,18 +1,21 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, X, ChevronDown, Boxes, Wrench, Search, Check, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, ChevronDown, Boxes, Wrench, Search, Check, ArrowLeft, ArrowRight, Hammer, Minus } from 'lucide-react';
 import { CATALOG_ITEM_TYPES, type CatalogItemType } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/ui/toast';
 import { useConfirm } from '@/components/ui/confirm';
 import { fmtMoney } from '@/lib/declarations';
+import { ApiError } from '@/lib/api';
 import {
   getCatalog,
   createCatalogItem,
   updateCatalogItem,
   deleteCatalogItem,
   setCatalogRecipe,
+  craftItems,
+  adjustCatalogStock,
   type CatalogItem,
   type CatalogItemInput,
 } from '@/lib/catalog';
@@ -26,6 +29,8 @@ const TYPE_LABEL: Record<string, string> = Object.fromEntries(CATALOG_ITEM_TYPES
 interface WizForm {
   name: string;
   categoryId: number | '';
+  ownStock: boolean;
+  stockQty: string;
   type: CatalogItemType;
   price: string;
   active: boolean;
@@ -34,6 +39,8 @@ interface WizForm {
 const EMPTY_FORM: WizForm = {
   name: '',
   categoryId: '',
+  ownStock: false,
+  stockQty: '',
   type: 'product',
   price: '',
   active: true,
@@ -89,6 +96,8 @@ export function CatalogManager({
     setForm({
       name: it.name,
       categoryId: it.categoryId ?? '',
+      ownStock: it.stockItemId != null,
+      stockQty: it.stockQuantity != null ? String(it.stockQuantity) : '',
       type: it.type,
       price: String(it.price),
       active: it.active,
@@ -128,6 +137,8 @@ export function CatalogManager({
       const body: CatalogItemInput = {
         name: form.name.trim(),
         categoryId: form.categoryId === '' ? null : Number(form.categoryId),
+        ownStock: form.type === 'product' && form.ownStock,
+        stockQuantity: form.type === 'product' && form.ownStock ? Number(form.stockQty) || 0 : null,
         type: form.type,
         price: priceNum,
         active: form.active,
@@ -164,6 +175,33 @@ export function CatalogManager({
       ),
   });
 
+  const craftable = items.filter((it) => it.type === 'product' && it.stockItemId && it.recipe.length > 0);
+  const [craftOpen, setCraftOpen] = useState(false);
+  const [craftQty, setCraftQty] = useState<Record<number, number>>({});
+  const bumpCraft = (id: number, d: number) =>
+    setCraftQty((q) => ({ ...q, [id]: Math.max(0, Math.round(((q[id] ?? 0) + d) * 1000) / 1000) }));
+  const craftLines = Object.entries(craftQty)
+    .map(([id, n]) => ({ catalogItemId: Number(id), quantity: n }))
+    .filter((l) => l.quantity > 0);
+
+  const craft = useMutation({
+    mutationFn: () => craftItems(companyId, craftLines),
+    onSuccess: () => {
+      setCraftOpen(false);
+      setCraftQty({});
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ['stocks', companyId] });
+      toast('Craft effectué : stock mis à jour.', 'success');
+    },
+    onError: (e) => {
+      if (e instanceof ApiError && e.code === 'insufficient_stock') {
+        toast('Matières premières insuffisantes pour ce craft.', 'error');
+        return;
+      }
+      toast('Échec du craft.', 'error');
+    },
+  });
+
   const remove = useMutation({
     mutationFn: (id: number) => deleteCatalogItem(companyId, id),
     onSuccess: invalidate,
@@ -192,12 +230,20 @@ export function CatalogManager({
           <span className="text-sm text-muted-foreground">Articles </span>
           <span className="font-semibold">{items.length}</span>
         </div>
-        {canCreate && (
-          <Button className="ml-auto" onClick={openNew}>
-            <Plus className="h-4 w-4" />
-            Nouvel article
-          </Button>
-        )}
+        <div className="ml-auto flex flex-wrap gap-2">
+          {canEdit && craftable.length > 0 && (
+            <Button variant="outline" onClick={() => setCraftOpen(true)}>
+              <Hammer className="h-4 w-4" />
+              Craft
+            </Button>
+          )}
+          {canCreate && (
+            <Button onClick={openNew}>
+              <Plus className="h-4 w-4" />
+              Nouvel article
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -263,6 +309,9 @@ export function CatalogManager({
                   )}
                 </div>
               </div>
+              {it.type === 'product' && canEdit && (
+                <StockBar companyId={companyId} item={it} onDone={invalidate} />
+              )}
               {isOpen && hasRecipe && (
                 <div className="border-t px-4 pb-4 pt-3">
                   <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -301,7 +350,7 @@ export function CatalogManager({
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
           <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h2 className="text-sm font-semibold">{editingId !== null ? "Modifier l'article" : 'Nouvel article'}</h2>
@@ -356,6 +405,37 @@ export function CatalogManager({
                     <input type="checkbox" className="h-4 w-4 rounded border-input accent-primary" checked={form.active} onChange={() => set('active', !form.active)} />
                     <span>Actif (vendable)</span>
                   </label>
+                  {isProduct && (
+                    <div className="rounded-lg border p-3 sm:col-span-2">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-input accent-primary"
+                          checked={form.ownStock}
+                          onChange={() => set('ownStock', !form.ownStock)}
+                        />
+                        <span className="font-medium">Ce produit a son propre stock</span>
+                      </label>
+                      {form.ownStock && (
+                        <label className="mt-3 block text-sm">
+                          <span className={labelCls}>Quantité en stock</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            className={`${inputCls} sm:w-48`}
+                            value={form.stockQty}
+                            onChange={(e) => set('stockQty', e.target.value)}
+                            placeholder="0"
+                          />
+                        </label>
+                      )}
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Sa quantité baisse à chaque vente, même sans matière première. Un article de stock dédié est
+                        géré automatiquement. Combiné à une recette (étapes suivantes), le produit devient « craftable ».
+                      </p>
+                    </div>
+                  )}
                   <label className="text-sm sm:col-span-2">
                     <span className={labelCls}>Notes</span>
                     <textarea className={`${inputCls} h-16 py-2`} value={form.notes} onChange={(e) => set('notes', e.target.value)} />
@@ -420,7 +500,10 @@ export function CatalogManager({
                 <div>
                   {selected.length === 0 ? (
                     <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-                      Aucune matière sélectionnée — ce produit n'aura pas de recette (pas de décompte de stock à la vente).
+                      Aucune matière première.{' '}
+                      {form.ownStock
+                        ? 'Ce produit utilise son propre stock (défini à l’étape Article) : sa quantité baissera à chaque vente.'
+                        : 'Ce produit n’a ni recette ni stock propre — coche « stock propre » à l’étape Article si tu veux suivre son stock.'}
                     </div>
                   ) : (
                     <>
@@ -494,6 +577,135 @@ export function CatalogManager({
           </div>
         </div>
       )}
+
+      {craftOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
+          <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border bg-card shadow-xl">
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <div className="flex items-center gap-2">
+                <Hammer className="h-4 w-4 text-primary" />
+                <h2 className="text-sm font-semibold">Craft — fabriquer des produits</h2>
+              </div>
+              <button type="button" onClick={() => setCraftOpen(false)} aria-label="Fermer" className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 space-y-2 overflow-y-auto p-5">
+              <p className="mb-2 text-sm text-muted-foreground">
+                Indique combien d'unités tu fabriques. Les matières premières sont retirées du stock, le produit fini y est ajouté.
+              </p>
+              {craftable.map((it) => {
+                const n = craftQty[it.id] ?? 0;
+                return (
+                  <div key={it.id} className="flex flex-wrap items-center gap-3 rounded-lg border bg-background p-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium">{it.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Stock actuel : {it.stockQuantity ?? 0} · consomme {it.recipe.map((r) => `${r.quantity} ${r.stockName}`).join(', ')}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button type="button" onClick={() => bumpCraft(it.id, -1)} aria-label="Moins" className="grid h-8 w-8 place-items-center rounded-md border border-input text-muted-foreground hover:bg-accent">
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={n === 0 ? '' : n}
+                        onChange={(e) => setCraftQty((q) => ({ ...q, [it.id]: Math.max(0, Number(e.target.value) || 0) }))}
+                        placeholder="0"
+                        className="h-8 w-16 rounded-md border border-input bg-background px-2 text-center text-sm outline-none focus:ring-1 focus:ring-ring"
+                      />
+                      <button type="button" onClick={() => bumpCraft(it.id, 1)} aria-label="Plus" className="grid h-8 w-8 place-items-center rounded-md border border-input text-muted-foreground hover:bg-accent">
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between gap-2 border-t px-5 py-4">
+              <span className="text-xs text-muted-foreground">
+                {craftLines.length === 0 ? 'Aucune quantité saisie' : `${craftLines.length} produit(s) à fabriquer`}
+              </span>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setCraftOpen(false)}>Annuler</Button>
+                <Button onClick={() => craft.mutate()} disabled={craftLines.length === 0 || craft.isPending}>
+                  <Hammer className="h-4 w-4" />
+                  {craft.isPending ? 'Craft…' : 'Lancer le craft'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StockBar({
+  companyId,
+  item,
+  onDone,
+}: {
+  companyId: number;
+  item: CatalogItem;
+  onDone: () => void;
+}) {
+  const toast = useToast();
+  const [amount, setAmount] = useState('1');
+  const adjust = useMutation({
+    mutationFn: (delta: number) => adjustCatalogStock(companyId, item.id, delta),
+    onSuccess: onDone,
+    onError: (e) =>
+      toast(
+        e instanceof ApiError && e.code === 'insufficient_stock'
+          ? 'Stock insuffisant pour retirer autant.'
+          : 'Échec de l’ajustement du stock.',
+        'error',
+      ),
+  });
+  const n = Math.max(0, Number(amount) || 0);
+  const hasStock = item.stockItemId != null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2.5">
+      <span className="text-xs text-muted-foreground">Stock</span>
+      <span className={`text-sm font-semibold ${!hasStock ? 'text-muted-foreground' : (item.stockQuantity ?? 0) > 0 ? 'text-foreground' : 'text-destructive'}`}>
+        {hasStock ? (item.stockQuantity ?? 0) : '—'}
+      </span>
+      <div className="ml-auto flex items-center gap-1.5">
+        <input
+          type="number"
+          min="0"
+          step="1"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className="h-8 w-16 rounded-md border border-input bg-background px-2 text-center text-sm outline-none focus:ring-1 focus:ring-ring"
+          aria-label={`Quantité à ajuster pour ${item.name}`}
+        />
+        <button
+          type="button"
+          onClick={() => n > 0 && adjust.mutate(n)}
+          disabled={n <= 0 || adjust.isPending}
+          className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Ajouter
+        </button>
+        <button
+          type="button"
+          onClick={() => n > 0 && adjust.mutate(-n)}
+          disabled={n <= 0 || adjust.isPending || !hasStock}
+          className="inline-flex h-8 items-center gap-1 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20 disabled:opacity-50"
+        >
+          <Minus className="h-3.5 w-3.5" />
+          Retirer
+        </button>
+      </div>
     </div>
   );
 }

@@ -5,8 +5,7 @@ import { unlink } from 'node:fs/promises';
 import path from 'node:path';
 import {
   ASSOCIATION_MEMBER_ROLE_KEYS,
-  ASSOCIATION_TX_TYPE_KEYS,
-  ASSOCIATION_TX_TYPES,
+  ASSOCIATION_PARTY_TYPE_KEYS,
 } from '@rp-compta/shared';
 import { db } from '../db';
 import {
@@ -34,9 +33,6 @@ function isDuplicate(err: unknown): boolean {
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const money = z.number().finite().min(0).max(999_999_999.99);
 const DOC_DIR = path.join(env.UPLOAD_DIR, 'documents');
-const TX_DIR: Record<string, 'in' | 'out'> = Object.fromEntries(
-  ASSOCIATION_TX_TYPES.map((t) => [t.key, t.dir]),
-);
 
 async function cleanupReqFile(req: Request): Promise<void> {
   if (req.file) await unlink(req.file.path).catch(() => {});
@@ -235,7 +231,10 @@ meAssociationsRouter.get(
       memberCount: cnt.get(a.id) ?? 0,
       recent: recent.map((t) => ({
         id: t.id,
-        type: t.type,
+        direction: t.direction,
+        partyType: t.partyType,
+        fromName: t.fromName,
+        toName: t.toName,
         label: t.label,
         amount: Number(t.amount),
         createdAt: t.createdAt,
@@ -359,7 +358,10 @@ meAssociationsRouter.get(
     const rows = await db
       .select({
         id: associationTransactions.id,
-        type: associationTransactions.type,
+        direction: associationTransactions.direction,
+        partyType: associationTransactions.partyType,
+        fromName: associationTransactions.fromName,
+        toName: associationTransactions.toName,
         label: associationTransactions.label,
         amount: associationTransactions.amount,
         createdByName: users.displayName,
@@ -376,7 +378,10 @@ meAssociationsRouter.get(
       balance: bal.get(id) ?? 0,
       transactions: rows.map((t) => ({
         id: t.id,
-        type: t.type,
+        direction: t.direction,
+        partyType: t.partyType,
+        fromName: t.fromName,
+        toName: t.toName,
         label: t.label,
         amount: Number(t.amount),
         createdByName: t.createdByName,
@@ -386,11 +391,18 @@ meAssociationsRouter.get(
   }),
 );
 
-const txSchema = z.object({
-  type: z.enum(ASSOCIATION_TX_TYPE_KEYS as [string, ...string[]]),
-  label: z.string().trim().min(1).max(200),
-  amount: money,
-});
+const txSchema = z
+  .object({
+    direction: z.enum(['in', 'out']),
+    partyType: z.enum(ASSOCIATION_PARTY_TYPE_KEYS as [string, ...string[]]),
+    fromName: z.string().trim().max(140).optional().default(''),
+    toName: z.string().trim().max(140).optional().default(''),
+    label: z.string().trim().min(1).max(200),
+    amount: money.refine((n) => n > 0, 'montant requis'),
+  })
+  .refine((d) => (d.direction === 'in' ? d.fromName.length > 0 : d.toName.length > 0), {
+    message: 'contrepartie requise',
+  });
 
 meAssociationsRouter.post(
   '/:id/transactions',
@@ -402,10 +414,13 @@ meAssociationsRouter.post(
     if (!g.acc.canManageTreasury) return res.status(403).json({ error: 'forbidden' });
     const parsed = txSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
-    const signed = TX_DIR[parsed.data.type] === 'out' ? -round2(parsed.data.amount) : round2(parsed.data.amount);
+    const signed = parsed.data.direction === 'out' ? -round2(parsed.data.amount) : round2(parsed.data.amount);
     await db.insert(associationTransactions).values({
       associationId: id,
-      type: parsed.data.type as 'cotisation',
+      direction: parsed.data.direction,
+      partyType: parsed.data.partyType as 'entreprise',
+      fromName: parsed.data.fromName || null,
+      toName: parsed.data.toName || null,
       label: parsed.data.label,
       amount: String(signed),
       createdByUserId: req.user!.id,

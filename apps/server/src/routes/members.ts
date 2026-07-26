@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '../db';
 import { memberships, users, companyRoles, companies, companyEmployees } from '../db/schema';
-import { requireAuth, requireAppRole } from '../middleware/auth';
+import { requireAuth, requireAppRole, requireDev } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { canManageCompany } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
@@ -127,6 +127,7 @@ const createSchema = z.object({
 
 membersRouter.post(
   '/',
+  requireDev,
   asyncHandler(async (req, res) => {
     const companyId = parseId(req.params.companyId);
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
@@ -262,6 +263,7 @@ meMembersRouter.get(
 
 meMembersRouter.post(
   '/',
+  requireDev,
   asyncHandler(async (req, res) => {
     const companyId = parseId(req.params.companyId)!;
     const parsed = createSchema.safeParse(req.body);

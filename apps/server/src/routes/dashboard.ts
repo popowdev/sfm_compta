@@ -3,6 +3,8 @@ import { and, asc, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { db } from '../db';
 import {
   sales,
+  garageRepairs,
+  garageCustoms,
   saleItems,
   stockItems,
   companyEmployees,
@@ -12,7 +14,8 @@ import {
 } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
-import { isStaff } from '../services/access';
+import type { ModuleKey } from '@rp-compta/shared';
+import { getModuleAccess, isStaff } from '../services/access';
 
 function parseId(value: string | undefined): number | null {
   const n = Number(value);
@@ -45,11 +48,24 @@ meDashboardRouter.get(
       if (!mem[0]) return res.status(403).json({ error: 'forbidden' });
     }
 
+    const can = async (key: ModuleKey) => {
+      if (staff) return true;
+      const acc = await getModuleAccess(req.user!.id, companyId, key);
+      return !!acc && acc.enabled && !acc.blocked && acc.canView;
+    };
+    const [seeCaisse, seeStocks, seeRh, seeClients, seeExercices] = await Promise.all([
+      can('caisse'),
+      can('stocks'),
+      can('rh'),
+      can('clients'),
+      can('exercices'),
+    ]);
+
     const since = new Date(Date.now() - 29 * 86_400_000);
     const sinceStr = since.toISOString().slice(0, 10);
     const dayExpr = sql<string>`DATE_FORMAT(${sales.createdAt}, '%Y-%m-%d')`;
 
-    const [salesAgg, dayRows, topRows, stockRows, lowRows, empRow, clientRow, openEx] = await Promise.all([
+    const [salesAgg, dayRows, topRows, stockRows, lowRows, empRow, clientRow, openEx, garageRepDays, garageCustDays] = await Promise.all([
       db
         .select({
           total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
@@ -114,40 +130,76 @@ meDashboardRouter.get(
         .select({ count: sql<number>`COUNT(*)` })
         .from(exercices)
         .where(and(eq(exercices.companyId, companyId), eq(exercices.status, 'open'))),
+      db
+        .select({ date: sql<string>`DATE_FORMAT(${garageRepairs.createdAt}, '%Y-%m-%d')`, total: sql<string>`COALESCE(SUM(${garageRepairs.total}), 0)` })
+        .from(garageRepairs)
+        .where(and(eq(garageRepairs.companyId, companyId), gte(sql`DATE_FORMAT(${garageRepairs.createdAt}, '%Y-%m-%d')`, sinceStr)))
+        .groupBy(sql`DATE_FORMAT(${garageRepairs.createdAt}, '%Y-%m-%d')`),
+      db
+        .select({ date: sql<string>`DATE_FORMAT(${garageCustoms.createdAt}, '%Y-%m-%d')`, total: sql<string>`COALESCE(SUM(${garageCustoms.finalPrice}), 0)` })
+        .from(garageCustoms)
+        .where(and(eq(garageCustoms.companyId, companyId), gte(sql`DATE_FORMAT(${garageCustoms.createdAt}, '%Y-%m-%d')`, sinceStr)))
+        .groupBy(sql`DATE_FORMAT(${garageCustoms.createdAt}, '%Y-%m-%d')`),
     ]);
 
+    const [garageCostRep, garageCostCust] = await Promise.all([
+      db
+        .select({ c: sql<string>`COALESCE(SUM(${garageRepairs.commissionAmount}), 0)` })
+        .from(garageRepairs)
+        .where(and(eq(garageRepairs.companyId, companyId), gte(sql`DATE_FORMAT(${garageRepairs.createdAt}, '%Y-%m-%d')`, sinceStr))),
+      db
+        .select({ c: sql<string>`COALESCE(SUM(${garageCustoms.commissionAmount} + ${garageCustoms.costPrice}), 0)` })
+        .from(garageCustoms)
+        .where(and(eq(garageCustoms.companyId, companyId), gte(sql`DATE_FORMAT(${garageCustoms.createdAt}, '%Y-%m-%d')`, sinceStr))),
+    ]);
+    const garageCost = Number(garageCostRep[0]?.c ?? 0) + Number(garageCostCust[0]?.c ?? 0);
+
     const dayMap = new Map(dayRows.map((r) => [r.date, Number(r.total)]));
-    const byDay: { date: string; total: number }[] = [];
-    for (let i = 0; i < 30; i += 1) {
-      const d = new Date(since.getTime() + i * 86_400_000).toISOString().slice(0, 10);
-      byDay.push({ date: d, total: round2(dayMap.get(d) ?? 0) });
+    const slots: string[] = [];
+    for (let i = 0; i < 30; i += 1) slots.push(new Date(since.getTime() + i * 86_400_000).toISOString().slice(0, 10));
+    const slotSet = new Set(slots);
+    let garageTotal = 0;
+    for (const r of [...garageRepDays, ...garageCustDays]) {
+      if (!slotSet.has(r.date)) continue;
+      const v = Number(r.total);
+      garageTotal += v;
+      dayMap.set(r.date, (dayMap.get(r.date) ?? 0) + v);
     }
-    const salesTotal = Number(salesAgg[0]?.total ?? 0);
-    const salesCost = Number(salesAgg[0]?.cost ?? 0);
+    const byDay: { date: string; total: number }[] = slots.map((d) => ({ date: d, total: round2(dayMap.get(d) ?? 0) }));
+    const salesTotal = Number(salesAgg[0]?.total ?? 0) + garageTotal;
+    const salesCost = Number(salesAgg[0]?.cost ?? 0) + garageCost;
 
     res.json({
-      sales: {
-        total: round2(salesTotal),
-        count: Number(salesAgg[0]?.count ?? 0),
-        margin: round2(salesTotal - salesCost),
-        byDay,
-        topProducts: topRows.map((r) => ({ name: r.name, revenue: round2(Number(r.revenue)) })),
-      },
-      stock: {
-        totalValue: round2(Number(stockRows[0]?.value ?? 0)),
-        itemCount: Number(stockRows[0]?.count ?? 0),
-        lowCount: lowRows.length,
-        lowItems: lowRows.map((r) => ({
-          id: r.id,
-          name: r.name,
-          quantity: Number(r.quantity),
-          unit: r.unit,
-          threshold: Number(r.threshold),
-        })),
-      },
-      hr: { total: Number(empRow[0]?.total ?? 0), active: Number(empRow[0]?.active ?? 0) },
-      clients: { count: Number(clientRow[0]?.count ?? 0), debt: round2(Number(clientRow[0]?.debt ?? 0)) },
-      openExercices: Number(openEx[0]?.count ?? 0),
+      sales: seeCaisse
+        ? {
+            total: round2(salesTotal),
+            count: Number(salesAgg[0]?.count ?? 0),
+            margin: round2(salesTotal - salesCost),
+            byDay,
+            topProducts: topRows.map((r) => ({ name: r.name, revenue: round2(Number(r.revenue)) })),
+          }
+        : { total: 0, count: 0, margin: 0, byDay: [], topProducts: [] },
+      stock: seeStocks
+        ? {
+            totalValue: round2(Number(stockRows[0]?.value ?? 0)),
+            itemCount: Number(stockRows[0]?.count ?? 0),
+            lowCount: lowRows.length,
+            lowItems: lowRows.map((r) => ({
+              id: r.id,
+              name: r.name,
+              quantity: Number(r.quantity),
+              unit: r.unit,
+              threshold: Number(r.threshold),
+            })),
+          }
+        : { totalValue: 0, itemCount: 0, lowCount: 0, lowItems: [] },
+      hr: seeRh
+        ? { total: Number(empRow[0]?.total ?? 0), active: Number(empRow[0]?.active ?? 0) }
+        : { total: 0, active: 0 },
+      clients: seeClients
+        ? { count: Number(clientRow[0]?.count ?? 0), debt: round2(Number(clientRow[0]?.debt ?? 0)) }
+        : { count: 0, debt: 0 },
+      openExercices: seeExercices ? Number(openEx[0]?.count ?? 0) : 0,
     });
   }),
 );

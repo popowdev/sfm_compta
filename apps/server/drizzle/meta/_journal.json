@@ -295,6 +295,90 @@
       "when": 1782840072018,
       "tag": "0041_freezing_invaders",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "5",
+      "when": 1783375803111,
+      "tag": "0042_married_aaron_stack",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "5",
+      "when": 1783378503034,
+      "tag": "0043_pretty_colonel_america",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "5",
+      "when": 1783379298608,
+      "tag": "0044_tranquil_payback",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "5",
+      "when": 1783441864412,
+      "tag": "0045_fixed_pixie",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "5",
+      "when": 1783446956385,
+      "tag": "0046_pink_lady_bullseye",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "5",
+      "when": 1783447965351,
+      "tag": "0047_slow_sentinels",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "5",
+      "when": 1783448790130,
+      "tag": "0048_salty_rhino",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "5",
+      "when": 1783460572970,
+      "tag": "0049_legal_lester",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "5",
+      "when": 1783532607576,
+      "tag": "0050_optimal_emma_frost",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "5",
+      "when": 1783538104067,
+      "tag": "0051_melodic_black_bird",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "5",
+      "when": 1783612160840,
+      "tag": "0052_windy_adam_destine",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "5",
+      "when": 1783612908495,
+      "tag": "0053_pretty_brother_voodoo",
+      "breakpoints": true
     }
   ]
 }

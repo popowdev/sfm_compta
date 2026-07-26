@@ -1,6 +1,8 @@
 import { apiFetch, ApiError } from './api';
-import type { AssociationMemberRole, AssociationTxType } from '@rp-compta/shared';
+import type { AssociationMemberRole, AssociationPartyType } from '@rp-compta/shared';
 import type { DocItem } from './documents';
+
+export type AssociationTxDirection = 'in' | 'out';
 
 export type AssociationStatus = 'active' | 'dissolved';
 
@@ -32,11 +34,23 @@ export interface AssociationAccess {
 
 export interface AssociationTx {
   id: number;
-  type: AssociationTxType;
+  direction: AssociationTxDirection;
+  partyType: AssociationPartyType | null;
+  fromName: string | null;
+  toName: string | null;
   label: string;
   amount: number;
   createdByName?: string | null;
   createdAt: string;
+}
+
+export interface AssociationTxInput {
+  direction: AssociationTxDirection;
+  partyType: AssociationPartyType;
+  fromName?: string;
+  toName?: string;
+  label: string;
+  amount: number;
 }
 
 export interface AssociationDetail {
@@ -83,7 +97,7 @@ export const removeAssociationMember = (id: number, mid: number) =>
 
 export const getAssociationTransactions = (id: number) =>
   apiFetch<{ canManage: boolean; balance: number; transactions: AssociationTx[] }>(`/api/me/associations/${id}/transactions`);
-export const addAssociationTransaction = (id: number, body: { type: AssociationTxType; label: string; amount: number }) =>
+export const addAssociationTransaction = (id: number, body: AssociationTxInput) =>
   apiFetch<{ ok: boolean }>(`/api/me/associations/${id}/transactions`, { method: 'POST', body: JSON.stringify(body) });
 export const deleteAssociationTransaction = (id: number, tid: number) =>
   apiFetch<{ ok: boolean }>(`/api/me/associations/${id}/transactions/${tid}`, { method: 'DELETE' });

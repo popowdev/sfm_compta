@@ -44,6 +44,8 @@ meShareListingsRouter.get(
         l: shareListings,
         companyName: companies.name,
         sellerName: shareholders.name,
+        sellerAnonymous: shareholders.anonymous,
+        sellerPublicName: shareholders.publicName,
       })
       .from(shareListings)
       .innerJoin(companies, eq(shareListings.companyId, companies.id))
@@ -70,7 +72,10 @@ meShareListingsRouter.get(
           id: r.l.id,
           companyId: r.l.companyId,
           companyName: r.companyName,
-          sellerName: r.sellerName,
+          sellerName:
+            r.sellerAnonymous && !mine
+              ? r.sellerPublicName || 'Actionnaire anonyme'
+              : r.sellerName,
           parts: Number(r.l.parts),
           pricePerPart: Number(r.l.pricePerPart),
           note: r.l.note,

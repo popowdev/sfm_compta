@@ -1,0 +1,1 @@
+ALTER TABLE `company_employees` ADD `iban` varchar(40);

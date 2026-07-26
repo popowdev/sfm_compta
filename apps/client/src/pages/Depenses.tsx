@@ -8,6 +8,7 @@ import { Kpi, KpiSkeleton } from '@/components/ui/kpi';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useConfirm } from '@/components/ui/confirm';
+import { useToast } from '@/components/ui/toast';
 import { fmtMoney } from '@/lib/declarations';
 import {
   getExpenses,
@@ -48,6 +49,7 @@ export default function Depenses() {
   );
   const queryClient = useQueryClient();
   const confirm = useConfirm();
+  const toast = useToast();
 
   const q = useQuery({ queryKey: ['expenses', companyId], queryFn: () => getExpenses(companyId) });
 
@@ -70,14 +72,17 @@ export default function Depenses() {
   const create = useMutation({
     mutationFn: (body: ExpenseInput) => createExpense(companyId, body),
     onSuccess: invalidate,
+    onError: () => toast('Échec de l’enregistrement.', 'error'),
   });
   const update = useMutation({
     mutationFn: (v: { id: number; body: ExpenseInput }) => updateExpense(companyId, v.id, v.body),
     onSuccess: invalidate,
+    onError: () => toast('Échec de l’enregistrement.', 'error'),
   });
   const remove = useMutation({
     mutationFn: (eid: number) => deleteExpense(companyId, eid),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['expenses', companyId] }),
+    onError: () => toast('Échec de la suppression.', 'error'),
   });
 
   const openNew = () => {
@@ -99,10 +104,12 @@ export default function Depenses() {
   };
 
   const submit = () => {
+    const amount = Number(form.amount) || 0;
+    if (amount < 0) return;
     const body: ExpenseInput = {
       label: form.label.trim(),
       category: form.category,
-      amount: Number(form.amount) || 0,
+      amount,
       taxDeductible: form.taxDeductible,
       expenseDate: form.expenseDate,
       notes: form.notes.trim() || undefined,
@@ -263,7 +270,7 @@ export default function Depenses() {
       )}
 
       {open && (canCreate || canEdit) && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={close}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
           <div
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card shadow-xl"
             onClick={(ev) => ev.stopPropagation()}
@@ -316,6 +323,7 @@ export default function Depenses() {
                   <input
                     type="number"
                     step="0.01"
+                    min="0"
                     className={inputCls}
                     value={form.amount}
                     onChange={(ev) => set('amount', ev.target.value)}

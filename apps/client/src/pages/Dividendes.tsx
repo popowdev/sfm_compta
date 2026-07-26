@@ -52,11 +52,12 @@ export default function Dividendes() {
       setForm({ ...EMPTY });
       invalidate();
     },
-    onError: () => toast('Échec de la déclaration (montant invalide ?).', 'error'),
+    onError: () => toast('Échec de la déclaration.', 'error'),
   });
   const remove = useMutation({
     mutationFn: (id: number) => deleteDividend(companyId, id),
     onSuccess: invalidate,
+    onError: () => toast('Échec de la suppression.', 'error'),
   });
 
   const rate = q.data?.dividendTaxRate ?? 33;
@@ -193,7 +194,7 @@ export default function Dividendes() {
       )}
 
       {open && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
           <div className="w-full max-w-lg rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h2 className="text-sm font-semibold">Déclarer un dividende</h2>
@@ -215,11 +216,11 @@ export default function Dividendes() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="text-sm">
                   <span className={labelCls}>Actionnaire (nom prénom) <span className="text-destructive">*</span></span>
-                  <input className={inputCls} value={form.shareholderName} onChange={(e) => set('shareholderName', e.target.value)} placeholder="ex. Ryuuji Kanzaki" />
+                  <input className={inputCls} maxLength={150} value={form.shareholderName} onChange={(e) => set('shareholderName', e.target.value)} placeholder="ex. Ryuuji Kanzaki" />
                 </label>
                 <label className="text-sm">
                   <span className={labelCls}>RIB <span className="text-destructive">*</span></span>
-                  <input className={inputCls} value={form.rib} onChange={(e) => set('rib', e.target.value)} placeholder="Obligatoire" />
+                  <input className={inputCls} maxLength={40} value={form.rib} onChange={(e) => set('rib', e.target.value)} placeholder="Obligatoire" />
                 </label>
                 <label className="text-sm">
                   <span className={labelCls}>Montant brut ($)</span>
@@ -227,7 +228,7 @@ export default function Dividendes() {
                 </label>
                 <label className="text-sm">
                   <span className={labelCls}>Notes</span>
-                  <input className={inputCls} value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Optionnel" />
+                  <input className={inputCls} maxLength={300} value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Optionnel" />
                 </label>
               </div>
               <div className="mt-4 rounded-lg border bg-background/40 p-3 text-sm">

@@ -12,6 +12,7 @@ import {
   deleteEvent,
   type CalEvent,
 } from '@/lib/calendar';
+import { ApiError } from '@/lib/api';
 
 const HOUR_PX = 44;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -291,6 +292,16 @@ function ListView({ events, loading, onCancel }: { events: CalEvent[]; loading: 
   );
 }
 
+const BOOK_SLOTS = [
+  { value: 1 as const, label: '21h30 – 23h00', start: '21:30:00', end: '23:00:00', nextDay: false },
+  { value: 2 as const, label: '23h15 – 01h00', start: '23:15:00', end: '01:00:00', nextDay: true },
+];
+function bookSlotRange(date: string, slot: 1 | 2) {
+  const s = BOOK_SLOTS.find((x) => x.value === slot)!;
+  const endDate = s.nextDay ? dateKey(addDays(parseDt(`${date} 00:00:00`), 1)) : date;
+  return { startAt: `${date} ${s.start}`, endAt: `${endDate} ${s.end}` };
+}
+
 function BookingModal({
   dateKey: initialDate,
   minDate,
@@ -313,20 +324,17 @@ function BookingModal({
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
   const [date, setDate] = useState(initialDate);
-  const [start, setStart] = useState('21:00');
-  const [end, setEnd] = useState('23:00');
+  const [slot, setSlot] = useState<1 | 2>(1);
 
   useEffect(() => {
     if (!entityKey && entities[0]) setEntityKey(`${entities[0].type}:${entities[0].id}`);
   }, [entities, entityKey]);
 
-  const sameTime = end === start;
-  const crosses = end < start;
-  const startAt = `${date} ${start}:00`;
-  const endDate = crosses ? dateKey(addDays(parseDt(`${date} 00:00:00`), 1)) : date;
-  const endAt = `${endDate} ${end}:00`;
-
-  const overlap = events.some((e) => startAt < e.endAt && endAt > e.startAt);
+  const now = dtStr(new Date());
+  const todayKey = dateKey(new Date());
+  const { startAt, endAt } = bookSlotRange(date, slot);
+  const isPast = startAt <= now;
+  const taken = events.some((e) => startAt < e.endAt && endAt > e.startAt);
 
   const save = useMutation({
     mutationFn: () => {
@@ -336,18 +344,32 @@ function BookingModal({
         category: category.trim() || undefined,
         ownerType: type as 'company' | 'association',
         ownerId: Number(id),
-        startAt,
-        endAt,
+        date,
+        slot,
       });
     },
     onSuccess: onDone,
-    onError: () => toast('Échec de la réservation.', 'error'),
+    onError: (err) => {
+      const code = err instanceof ApiError ? err.code : null;
+      toast(
+        code === 'already_booked'
+          ? "Cette entité a déjà une réservation en cours — attends qu'elle soit passée."
+          : code === 'slot_taken'
+            ? 'Ce créneau est déjà réservé par une autre entité.'
+            : code === 'past_slot'
+              ? 'Ce créneau est déjà passé.'
+              : code === 'forbidden'
+                ? 'Tu ne gères pas cette entité.'
+                : 'Échec de la réservation.',
+        'error',
+      );
+    },
   });
 
-  const valid = entityKey !== '' && title.trim().length > 0 && !!date && !sameTime;
+  const valid = entityKey !== '' && title.trim().length > 0 && !!date && !isPast && !taken;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b px-5 py-4">
           <h2 className="text-sm font-semibold">Réserver un créneau</h2>
@@ -385,25 +407,27 @@ function BookingModal({
               <span className="mb-1 block text-muted-foreground">Catégorie (optionnel)</span>
               <input className={inputCls} value={category} onChange={(e) => setCategory(e.target.value)} placeholder="ex. showcase, concours…" />
             </label>
-            <div className="grid grid-cols-3 gap-2">
-              <label className="col-span-3 text-sm sm:col-span-1">
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-sm">
                 <span className="mb-1 block text-muted-foreground">Date</span>
-                <input type="date" min={minDate} max={maxDate} className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} />
+                <input type="date" min={minDate < todayKey ? todayKey : minDate} max={maxDate} className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} />
               </label>
               <label className="text-sm">
-                <span className="mb-1 block text-muted-foreground">Début</span>
-                <input type="time" className={inputCls} value={start} onChange={(e) => setStart(e.target.value)} />
-              </label>
-              <label className="text-sm">
-                <span className="mb-1 block text-muted-foreground">Fin</span>
-                <input type="time" className={inputCls} value={end} onChange={(e) => setEnd(e.target.value)} />
+                <span className="mb-1 block text-muted-foreground">Créneau</span>
+                <select className={inputCls} value={slot} onChange={(e) => setSlot(Number(e.target.value) as 1 | 2)}>
+                  {BOOK_SLOTS.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
               </label>
             </div>
-            {sameTime && <p className="text-xs text-amber-400">L'heure de fin doit être différente de l'heure de début.</p>}
-            {crosses && !sameTime && <p className="text-xs text-muted-foreground">Se termine le lendemain ({end}).</p>}
-            {overlap && (
-              <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
-                ⚠ Un autre événement est déjà prévu sur ce créneau. Tu peux réserver quand même, mais pense à te coordonner.
+            <p className="text-xs text-muted-foreground">
+              Créneaux fixes. Une entité ne peut avoir qu'une seule réservation à la fois, jusqu'à ce qu'elle soit passée.
+            </p>
+            {isPast && <p className="text-xs text-amber-400">Ce créneau est déjà passé — choisis une date à venir.</p>}
+            {taken && !isPast && (
+              <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                Ce créneau est déjà réservé par une autre entité. Choisis-en un autre.
               </p>
             )}
             <div className="flex justify-end gap-2 pt-2">

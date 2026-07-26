@@ -1,5 +1,4 @@
 import { apiFetch } from './api';
-import type { EmployeePosition } from '@rp-compta/shared';
 
 export interface TimeEntry {
   id: number;
@@ -14,7 +13,7 @@ export interface TimeEntry {
 export interface EmployeeTimesheet {
   id: number;
   name: string;
-  position: EmployeePosition;
+  grade: string | null;
   hourlyRate: number;
   active: boolean;
   entries: TimeEntry[];
@@ -49,13 +48,21 @@ export const clockResume = (companyId: number) => selfAction(companyId, 'resume'
 export const clockStop = (companyId: number) => selfAction(companyId, 'stop');
 
 export const getTimeclock = (companyId: number) =>
-  apiFetch<{ canWrite: boolean; employees: EmployeeTimesheet[] }>(
+  apiFetch<{ canWrite: boolean; canEdit: boolean; canDelete: boolean; employees: EmployeeTimesheet[] }>(
     `/api/me/companies/${companyId}/timeclock`,
   );
 
 export const addTimeEntry = (companyId: number, body: AddTimeEntryInput) =>
   apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/timeclock`, {
     method: 'POST',
+    body: JSON.stringify(body),
+  });
+
+export type EditTimeEntryInput = Omit<AddTimeEntryInput, 'employeeId'>;
+
+export const updateTimeEntry = (companyId: number, id: number, body: EditTimeEntryInput) =>
+  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/timeclock/${id}`, {
+    method: 'PATCH',
     body: JSON.stringify(body),
   });
 

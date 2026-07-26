@@ -1,0 +1,1 @@
+ALTER TABLE `declarations` ADD `archived_at` timestamp;

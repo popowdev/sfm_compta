@@ -14,6 +14,7 @@ import {
   type PermAction,
 } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
+import { recordAudit } from '../services/audit';
 
 function methodAction(method: string): PermAction {
   return method === 'POST' ? 'create' : method === 'PUT' ? 'edit' : method === 'DELETE' ? 'delete' : 'view';
@@ -160,6 +161,14 @@ meClientsRouter.delete(
       .delete(companyClients)
       .where(and(eq(companyClients.id, id), eq(companyClients.companyId, companyId)));
     if (!result[0].affectedRows) return res.status(404).json({ error: 'not_found' });
+    await recordAudit({
+      actorUserId: req.user!.id,
+      actorName: req.user!.displayName,
+      action: 'client_delete',
+      targetType: 'client',
+      targetLabel: `#${id}`,
+      detail: `entreprise ${companyId}`,
+    });
     emitInvalidate(['irs', `company:${companyId}`], [['clients', companyId]]);
     res.json({ ok: true });
   }),

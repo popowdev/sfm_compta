@@ -1,12 +1,14 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { and, desc, eq, gte, isNotNull, lte, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNotNull, isNull, lte, ne, sql } from 'drizzle-orm';
 import { db } from '../db';
 import {
   declarations,
   companies,
   sales,
   companyExpenses,
+  garageRepairs,
+  garageCustoms,
   companyEmployees,
   timeEntries,
 } from '../db/schema';
@@ -15,6 +17,7 @@ import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess } from '../services/access';
 import { computeTaxes } from '../services/declarations';
 import { emitInvalidate } from '../realtime/socket';
+import { recordAudit } from '../services/audit';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -45,6 +48,7 @@ function serialize(d: typeof declarations.$inferSelect) {
     notes: d.notes,
     createdAt: d.createdAt,
     paidAt: d.paidAt,
+    archivedAt: d.archivedAt,
   };
 }
 
@@ -63,7 +67,7 @@ meDeclarationsRouter.get(
     const rows = await db
       .select()
       .from(declarations)
-      .where(eq(declarations.companyId, companyId))
+      .where(and(eq(declarations.companyId, companyId), isNull(declarations.archivedAt)))
       .orderBy(desc(declarations.createdAt));
     res.json({ canWrite: acc.canWrite, declarations: rows.map(serialize) });
   }),
@@ -91,7 +95,7 @@ meDeclarationsRouter.get(
     const end = sunday.toISOString().slice(0, 10);
     const weekLabel = `Semaine du ${monday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })} au ${sunday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}`;
 
-    const [salesRow, expRow, payRows] = await Promise.all([
+    const [salesRow, expRow, payRows, garageRep, garageCust] = await Promise.all([
       db
         .select({ total: sql<string>`COALESCE(SUM(${sales.total}), 0)` })
         .from(sales)
@@ -129,9 +133,30 @@ meDeclarationsRouter.get(
           ),
         )
         .groupBy(companyEmployees.id),
+      db
+        .select({ total: sql<string>`COALESCE(SUM(${garageRepairs.total}), 0)` })
+        .from(garageRepairs)
+        .where(
+          and(
+            eq(garageRepairs.companyId, companyId),
+            gte(sql`DATE(${garageRepairs.createdAt})`, start),
+            lte(sql`DATE(${garageRepairs.createdAt})`, end),
+          ),
+        ),
+      db
+        .select({ total: sql<string>`COALESCE(SUM(${garageCustoms.finalPrice}), 0)` })
+        .from(garageCustoms)
+        .where(
+          and(
+            eq(garageCustoms.companyId, companyId),
+            gte(sql`DATE(${garageCustoms.createdAt})`, start),
+            lte(sql`DATE(${garageCustoms.createdAt})`, end),
+          ),
+        ),
     ]);
 
-    const caNet = round2(Number(salesRow[0]?.total ?? 0));
+    const garageCa = Number(garageRep[0]?.total ?? 0) + Number(garageCust[0]?.total ?? 0);
+    const caNet = round2(Number(salesRow[0]?.total ?? 0) + garageCa);
     const expenses = round2(Number(expRow[0]?.total ?? 0));
     const payroll = round2(
       payRows.reduce((s, r) => s + (Number(r.workedMin) / 60) * Number(r.rate), 0),
@@ -166,6 +191,18 @@ meDeclarationsRouter.post(
     const parsed = submitSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     const d = parsed.data;
+    const dup = await db
+      .select({ id: declarations.id })
+      .from(declarations)
+      .where(
+        and(
+          eq(declarations.companyId, companyId),
+          eq(declarations.weekLabel, d.weekLabel),
+          isNull(declarations.archivedAt),
+        ),
+      )
+      .limit(1);
+    if (dup[0]) return res.status(409).json({ error: 'week_exists' });
     const taxes = await computeTaxes(d.benefit, d.dividends);
     await db.insert(declarations).values({
       companyId,
@@ -182,7 +219,7 @@ meDeclarationsRouter.post(
       email: d.email ? d.email : null,
       notes: d.notes ?? null,
     });
-    emitInvalidate(['irs', `company:${companyId}`], [['declarations', companyId], ['irs-declarations']]);
+    invalidateDeclaration(companyId);
     res.status(201).json({ ok: true });
   }),
 );
@@ -192,7 +229,8 @@ irsDeclarationsRouter.use(requireAuth, requireAppRole('irs'));
 
 irsDeclarationsRouter.get(
   '/',
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const archived = req.query.archived === '1';
     const rows = await db
       .select({
         decl: declarations,
@@ -200,7 +238,8 @@ irsDeclarationsRouter.get(
       })
       .from(declarations)
       .innerJoin(companies, eq(declarations.companyId, companies.id))
-      .orderBy(desc(declarations.createdAt));
+      .where(archived ? isNotNull(declarations.archivedAt) : isNull(declarations.archivedAt))
+      .orderBy(desc(archived ? declarations.archivedAt : declarations.createdAt));
     res.json(rows.map((r) => ({ ...serialize(r.decl), companyName: r.companyName })));
   }),
 );
@@ -215,19 +254,113 @@ irsDeclarationsRouter.patch(
     const parsed = statusSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     const existing = await db
-      .select({ companyId: declarations.companyId })
+      .select({ companyId: declarations.companyId, archivedAt: declarations.archivedAt })
       .from(declarations)
       .where(eq(declarations.id, id))
       .limit(1);
     if (!existing[0]) return res.status(404).json({ error: 'not_found' });
+    if (existing[0].archivedAt) return res.status(409).json({ error: 'archived' });
     await db
       .update(declarations)
       .set({ status: parsed.data.status, paidAt: parsed.data.status === 'paid' ? new Date() : null })
       .where(eq(declarations.id, id));
-    emitInvalidate(['irs', `company:${existing[0].companyId}`], [
-      ['irs-declarations'],
-      ['declarations', existing[0].companyId],
-    ]);
+    invalidateDeclaration(existing[0].companyId);
+    res.json({ ok: true });
+  }),
+);
+
+async function loadDeclaration(id: number) {
+  const rows = await db
+    .select({
+      companyId: declarations.companyId,
+      weekLabel: declarations.weekLabel,
+      archivedAt: declarations.archivedAt,
+      companyName: companies.name,
+    })
+    .from(declarations)
+    .innerJoin(companies, eq(declarations.companyId, companies.id))
+    .where(eq(declarations.id, id))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+function invalidateDeclaration(companyId: number) {
+  emitInvalidate(['irs'], [['irs-declarations'], ['irs-declarations-archived'], ['irs-overview']]);
+  emitInvalidate([`company:${companyId}`], [['declarations', companyId], ['stats', companyId]]);
+}
+
+irsDeclarationsRouter.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'bad_request' });
+    const existing = await loadDeclaration(id);
+    if (!existing) return res.status(404).json({ error: 'not_found' });
+    if (existing.archivedAt) return res.status(409).json({ error: 'already_archived' });
+    await db.update(declarations).set({ archivedAt: new Date() }).where(eq(declarations.id, id));
+    await recordAudit({
+      actorUserId: req.user!.id,
+      actorName: req.user!.displayName,
+      action: 'declaration_archive',
+      targetType: 'declaration',
+      targetLabel: `${existing.companyName} — ${existing.weekLabel}`,
+    });
+    invalidateDeclaration(existing.companyId);
+    res.json({ ok: true });
+  }),
+);
+
+irsDeclarationsRouter.post(
+  '/:id/restore',
+  asyncHandler(async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'bad_request' });
+    const existing = await loadDeclaration(id);
+    if (!existing) return res.status(404).json({ error: 'not_found' });
+    if (!existing.archivedAt) return res.status(409).json({ error: 'not_archived' });
+    const clash = await db
+      .select({ id: declarations.id })
+      .from(declarations)
+      .where(
+        and(
+          eq(declarations.companyId, existing.companyId),
+          eq(declarations.weekLabel, existing.weekLabel),
+          isNull(declarations.archivedAt),
+          ne(declarations.id, id),
+        ),
+      )
+      .limit(1);
+    if (clash[0]) return res.status(409).json({ error: 'week_active_exists' });
+    await db.update(declarations).set({ archivedAt: null }).where(eq(declarations.id, id));
+    await recordAudit({
+      actorUserId: req.user!.id,
+      actorName: req.user!.displayName,
+      action: 'declaration_restore',
+      targetType: 'declaration',
+      targetLabel: `${existing.companyName} — ${existing.weekLabel}`,
+    });
+    invalidateDeclaration(existing.companyId);
+    res.json({ ok: true });
+  }),
+);
+
+irsDeclarationsRouter.delete(
+  '/:id/purge',
+  asyncHandler(async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'bad_request' });
+    const existing = await loadDeclaration(id);
+    if (!existing) return res.status(404).json({ error: 'not_found' });
+    if (!existing.archivedAt) return res.status(409).json({ error: 'not_archived' });
+    await db.delete(declarations).where(eq(declarations.id, id));
+    await recordAudit({
+      actorUserId: req.user!.id,
+      actorName: req.user!.displayName,
+      action: 'declaration_purge',
+      targetType: 'declaration',
+      targetLabel: `${existing.companyName} — ${existing.weekLabel}`,
+    });
+    invalidateDeclaration(existing.companyId);
     res.json({ ok: true });
   }),
 );

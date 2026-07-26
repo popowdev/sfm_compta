@@ -70,7 +70,17 @@ export default function EntrepriseIndex() {
         </p>
       </div>
 
-      {!d ? (
+      {q.isError ? (
+        <div className="grid place-items-center gap-3 py-12 text-sm text-muted-foreground">
+          <div>Impossible de charger le tableau de bord.</div>
+          <button
+            onClick={() => q.refetch()}
+            className="rounded-lg border px-3 py-1.5 text-sm font-medium hover:bg-accent"
+          >
+            Réessayer
+          </button>
+        </div>
+      ) : !d ? (
         <div className="text-sm text-muted-foreground">Chargement du tableau de bord…</div>
       ) : (
         <div className="space-y-6">

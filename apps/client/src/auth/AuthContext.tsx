@@ -26,7 +26,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw e;
       }
     },
-    retry: false,
+    retry: (count, e) => e instanceof ApiError && e.status === 429 && count < 4,
+    retryDelay: (count) => Math.min(1000 * 2 ** count, 8000),
   });
 
   useEffect(() => {

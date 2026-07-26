@@ -6,7 +6,12 @@ import { db } from '../db';
 import { companyRoles, companies, memberships } from '../db/schema';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
-import { getGradesWithPermissions, setRolePermission, setRoleSpecialPermission } from '../services/grades';
+import {
+  getGradesWithPermissions,
+  setRolePermission,
+  setRoleSpecialPermission,
+  seedGradePermissions,
+} from '../services/grades';
 import { canManageCompany, countActiveManagerMemberships } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
 
@@ -60,12 +65,13 @@ gradesRouter.post(
     if (!(await companyExists(companyId))) return res.status(404).json({ error: 'not_found' });
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
-    await db.insert(companyRoles).values({
+    const inserted = await db.insert(companyRoles).values({
       companyId,
       name: parsed.data.name,
       rank: parsed.data.rank ?? 100,
       isDefault: false,
     });
+    await seedGradePermissions(Number(inserted[0].insertId), false);
     emitInvalidate(['irs', `company:${companyId}`], [['grades', companyId]]);
     res.status(201).json({ ok: true });
   }),
@@ -146,9 +152,10 @@ meGradesRouter.post(
     const companyId = parseId(req.params.companyId)!;
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
-    await db
+    const inserted = await db
       .insert(companyRoles)
       .values({ companyId, name: parsed.data.name, rank: parsed.data.rank ?? 100, isDefault: false });
+    await seedGradePermissions(Number(inserted[0].insertId), false);
     emitInvalidate(['irs', `company:${companyId}`], [['grades', companyId], ['my-companies']]);
     res.status(201).json({ ok: true });
   }),

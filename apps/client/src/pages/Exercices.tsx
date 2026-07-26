@@ -17,6 +17,10 @@ import {
   Coins,
   Copy,
   FileDown,
+  HelpCircle,
+  Wallet,
+  Receipt,
+  Landmark,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -37,7 +41,7 @@ import {
   PAYMENT_METHODS,
 } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
-import { fmtMoney } from '@/lib/declarations';
+import { fmtMoney, fmtInt } from '@/lib/declarations';
 import { ApiError } from '@/lib/api';
 import { useModulePerms } from '@/lib/useCompany';
 import {
@@ -113,6 +117,7 @@ export default function Exercices() {
   const q = useQuery({ queryKey: ['exercices', companyId], queryFn: () => getExercices(companyId) });
 
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [helpOpen, setHelpOpen] = useState<boolean | null>(null);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [form, setForm] = useState({ ...EMPTY });
@@ -206,6 +211,7 @@ export default function Exercices() {
   };
 
   const list = q.data?.exercices ?? [];
+  const showHelp = helpOpen ?? list.length === 0;
 
   return (
     <div className="space-y-5">
@@ -214,6 +220,17 @@ export default function Exercices() {
           <span className="text-sm text-muted-foreground">Exercices </span>
           <span className="font-semibold">{list.length}</span>
         </div>
+        <button
+          type="button"
+          onClick={() => setHelpOpen(!showHelp)}
+          aria-expanded={showHelp}
+          className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors ${
+            showHelp ? 'border-primary/40 bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent'
+          }`}
+        >
+          <HelpCircle className="h-4 w-4" />
+          À quoi ça sert ?
+        </button>
         <div className="ml-auto flex flex-wrap gap-2">
           {canCreate && (
             <>
@@ -229,6 +246,51 @@ export default function Exercices() {
           )}
         </div>
       </div>
+
+      {showHelp && (
+        <div className="rounded-xl border bg-card p-5">
+          <h2 className="text-sm font-semibold">C’est quoi un exercice comptable ?</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            C’est la photo comptable de ton entreprise sur une période (souvent une semaine). Tu l’ouvres, et il
+            enregistre tout seul tes ventes, tes réparations garage, tes dépenses et les heures pointées à la badgeuse.
+            À la clôture, il te sort trois choses :
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border bg-background p-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Wallet className="h-4 w-4 text-primary" />
+                Ton bilan
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Ce que tu as encaissé, ce que tu as dépensé, et ce qui reste vraiment en caisse.
+              </p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Receipt className="h-4 w-4 text-emerald-400" />
+                Les fiches de paie
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Le salaire de chaque employé, calculé depuis ses heures de badgeuse, ses ventes et ses réparations. La
+                commission suit son grade — tu ajoutes juste une prime ou une retenue.
+              </p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Landmark className="h-4 w-4 text-sky-400" />
+                Ta déclaration fiscale
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Le montant à déclarer à l’IRS pour la période, prêt à être envoyé.
+              </p>
+            </div>
+          </div>
+          <p className="mt-4 text-sm">
+            <span className="text-muted-foreground">En résumé :</span> tu ouvres, tu bosses la semaine, tu clôtures — et
+            tu as tes salaires et tes impôts prêts, sans rien calculer à la main.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-3">
         {list.map((ex) => (
@@ -321,7 +383,10 @@ export default function Exercices() {
         ))}
         {list.length === 0 && (
           <div className="grid place-items-center gap-3 rounded-xl border border-dashed bg-card p-12 text-center">
-            <p className="text-sm text-muted-foreground">Aucun exercice comptable.</p>
+            <p className="text-sm text-muted-foreground">
+              Aucun exercice comptable. Génère celui de la semaine en cours pour commencer à suivre tes chiffres et
+              préparer les paies.
+            </p>
             {canCreate && (
               <Button variant="outline" onClick={() => genWeek.mutate(0)}>
                 <CalendarPlus className="h-4 w-4" />
@@ -333,7 +398,7 @@ export default function Exercices() {
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
           <div
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card shadow-xl"
             onClick={(e) => e.stopPropagation()}
@@ -494,22 +559,22 @@ const cellInput =
 function PayrollRow({
   p,
   editable,
+  showGarage,
   onSave,
 }: {
   p: PayrollLine;
   editable: boolean;
-  onSave: (employeeId: number, body: { commission: number; bonus: number; deductions: number }) => void;
+  showGarage: boolean;
+  onSave: (employeeId: number, body: { bonus: number; deductions: number }) => void;
 }) {
-  const [commission, setCommission] = useState(p.commission ? String(p.commission) : '');
   const [bonus, setBonus] = useState(p.bonus ? String(p.bonus) : '');
   const [deductions, setDeductions] = useState(p.deductions ? String(p.deductions) : '');
   const [focused, setFocused] = useState<string | null>(null);
 
   useEffect(() => {
-    if (focused !== 'commission') setCommission(p.commission ? String(p.commission) : '');
     if (focused !== 'bonus') setBonus(p.bonus ? String(p.bonus) : '');
     if (focused !== 'deductions') setDeductions(p.deductions ? String(p.deductions) : '');
-  }, [p.commission, p.bonus, p.deductions, focused]);
+  }, [p.bonus, p.deductions, focused]);
 
   const num = (v: string) => {
     const n = Number(v.replace(',', '.'));
@@ -517,11 +582,10 @@ function PayrollRow({
   };
   const commit = () => {
     setFocused(null);
-    const c = num(commission);
     const b = num(bonus);
     const d = num(deductions);
-    if (c === p.commission && b === p.bonus && d === p.deductions) return;
-    onSave(p.employeeId, { commission: c, bonus: b, deductions: d });
+    if (b === p.bonus && d === p.deductions) return;
+    onSave(p.employeeId, { bonus: b, deductions: d });
   };
   const capped = p.paid < p.theoretical;
 
@@ -529,7 +593,7 @@ function PayrollRow({
     <tr className="border-t align-middle">
       <td className="px-2 py-1.5">
         <div className="font-medium">{p.name}</div>
-        <div className="text-[11px] text-muted-foreground">{POSITION_LABEL[p.position] ?? p.position}</div>
+        <div className="text-[11px] text-muted-foreground">{p.gradeName ?? '—'}</div>
       </td>
       <td className="px-2 py-1.5 text-right">
         {p.cappedHours.toLocaleString('fr-FR')} h
@@ -537,24 +601,15 @@ function PayrollRow({
           <div className="text-[10px] text-amber-400">/ {p.hours.toLocaleString('fr-FR')} h</div>
         )}
       </td>
-      <td className="px-2 py-1.5 text-right text-muted-foreground">{fmtMoney(p.base)} $</td>
-      <td className="px-2 py-1.5 text-right">
-        {editable ? (
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            className={cellInput}
-            value={commission}
-            onChange={(e) => setCommission(e.target.value)}
-            onFocus={() => setFocused('commission')}
-            onBlur={commit}
-            placeholder="0"
-          />
-        ) : (
-          `${fmtMoney(p.commission)} $`
-        )}
+      <td className="px-2 py-1.5 text-right text-muted-foreground">{fmtInt(p.base)} $</td>
+      <td className="px-2 py-1.5 text-right text-muted-foreground" title="Commission automatique — définie par le grade (module RH)">
+        {fmtInt(p.commission)} $
       </td>
+      {showGarage && (
+        <td className="px-2 py-1.5 text-right text-emerald-400/80">
+          {p.garageCommission ? `${fmtInt(p.garageCommission)} $` : '—'}
+        </td>
+      )}
       <td className="px-2 py-1.5 text-right">
         {editable ? (
           <input
@@ -569,7 +624,7 @@ function PayrollRow({
             placeholder="0"
           />
         ) : (
-          `${fmtMoney(p.bonus)} $`
+          `${fmtInt(p.bonus)} $`
         )}
       </td>
       <td className="px-2 py-1.5 text-right">
@@ -586,11 +641,11 @@ function PayrollRow({
             placeholder="0"
           />
         ) : (
-          `${fmtMoney(p.deductions)} $`
+          `${fmtInt(p.deductions)} $`
         )}
       </td>
       <td className="px-2 py-1.5 text-right font-medium">
-        {fmtMoney(p.paid)} $
+        {fmtInt(p.paid)} $
         {capped && <div className="text-[10px] text-amber-400">plafonné</div>}
       </td>
     </tr>
@@ -733,7 +788,7 @@ function ExerciceDetailView({
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['exercice', companyId, id] });
   const savePay = useMutation({
-    mutationFn: (v: { employeeId: number; body: { commission: number; bonus: number; deductions: number } }) =>
+    mutationFn: (v: { employeeId: number; body: { bonus: number; deductions: number } }) =>
       setExercicePayroll(companyId, id, v.employeeId, v.body),
     onSuccess: refresh,
     onError: () => {
@@ -770,8 +825,9 @@ function ExerciceDetailView({
 
   if (q.isLoading) return <div className="text-xs text-muted-foreground">Chargement…</div>;
   if (!q.data) return <div className="text-xs text-muted-foreground">Indisponible.</div>;
-  const { summary: s, payroll, payrollVisible, canEdit, salesByDay, salesByPayment, perfByEmployee, topProducts, salesList } = q.data;
+  const { summary: s, payroll, payrollVisible, canEdit, stocksEnabled, salesByDay, salesByPayment, perfByEmployee, topProducts, salesList } = q.data;
 
+  const showGarage = s.garageRevenue > 0 || payroll.some((p) => p.garageCommission > 0);
   const totalCa = perfByEmployee.reduce((a, p) => a + p.ca, 0);
   const payData = salesByPayment.map((p) => ({ name: PAY_LABEL[p.method] ?? p.method, value: p.total }));
   const filteredSales = salesList.filter(
@@ -787,7 +843,7 @@ function ExerciceDetailView({
       `CA brut: ${fmtMoney(s.caGross)} $`,
       `Remises: ${fmtMoney(s.salesDiscount)} $`,
       `CA net: ${fmtMoney(s.caNet)} $`,
-      `Charges: ${fmtMoney(s.charges)} $ (salaires ${fmtMoney(s.payrollTotal)} + dépenses ${fmtMoney(s.expensesTotal)})`,
+      `Charges: ${fmtMoney(s.charges)} $ (salaires ${fmtInt(s.payrollTotal)} + dépenses ${fmtMoney(s.expensesTotal)})`,
       `Bénéfice: ${fmtMoney(s.benefit)} $`,
       `Base imposable: ${fmtMoney(s.taxableBenefit)} $`,
       `Impôt société: ${fmtMoney(s.corporateTax)} $`,
@@ -797,7 +853,7 @@ function ExerciceDetailView({
     navigator.clipboard?.writeText(t).then(() => alert('Déclaration copiée.'));
   };
   const copyPayroll = () => {
-    const t = [`Paies — ${q.data!.label}`, ...payroll.map((p) => `${p.name}: ${fmtMoney(p.paid)} $`), `Total: ${fmtMoney(s.payrollTotal)} $`].join('\n');
+    const t = [`Paies — ${q.data!.label}`, ...payroll.map((p) => `${p.name}: ${fmtInt(p.paid)} $`), `Total: ${fmtInt(s.payrollTotal)} $`].join('\n');
     navigator.clipboard?.writeText(t).then(() => alert('Paies copiées.'));
   };
 
@@ -806,9 +862,13 @@ function ExerciceDetailView({
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
         <Kpi icon={ShoppingCart} label="Chiffre d'affaires" value={`${fmtMoney(s.caNet)} $`} accent="text-primary" />
         <Kpi icon={ShoppingCart} label="Nombre de ventes" value={`${s.salesCount}`} />
-        <Kpi icon={TrendingUp} label="Marge brute" value={`${fmtMoney(s.grossMargin)} $`} accent="text-sky-400" />
-        <Kpi icon={Package} label="Coût production" value={`${fmtMoney(s.productionCost)} $`} accent="text-amber-400" />
-        <Kpi icon={Boxes} label="Achats composants" value={`${fmtMoney(s.componentPurchases)} $`} accent="text-destructive" />
+        {stocksEnabled && (
+          <>
+            <Kpi icon={TrendingUp} label="Marge brute" value={`${fmtMoney(s.grossMargin)} $`} accent="text-sky-400" />
+            <Kpi icon={Package} label="Coût production" value={`${fmtMoney(s.productionCost)} $`} accent="text-amber-400" />
+            <Kpi icon={Boxes} label="Achats composants" value={`${fmtMoney(s.componentPurchases)} $`} accent="text-destructive" />
+          </>
+        )}
         <Kpi icon={Percent} label="Remises accordées" value={`${fmtMoney(s.salesDiscount)} $`} accent="text-violet-400" />
         <Kpi icon={Coins} label="Bénéfice net" value={`${fmtMoney(s.benefit)} $`} accent="text-emerald-400" />
         <Kpi icon={Coins} label="Résultat après impôts" value={`${fmtMoney(s.netAfterTax)} $`} accent={s.netAfterTax >= 0 ? 'text-emerald-400' : 'text-destructive'} />
@@ -828,7 +888,7 @@ function ExerciceDetailView({
             <Row label="CA Brut (avant remises)" value={`${fmtMoney(s.caGross)} $`} />
             <Row label="Remises accordées" value={`− ${fmtMoney(s.salesDiscount)} $`} accent="text-violet-400" indent />
             <Row label="CA Net" value={`${fmtMoney(s.caNet)} $`} strong accent="text-emerald-400" />
-            <Row label="Salaires versés" value={`− ${fmtMoney(s.payrollTotal)} $`} accent="text-destructive" indent />
+            <Row label="Salaires versés" value={`− ${fmtInt(s.payrollTotal)} $`} accent="text-destructive" indent />
             <Row label="Dépenses autres" value={`− ${fmtMoney(s.expensesTotal)} $`} accent="text-destructive" indent />
             <Row label="Total charges" value={`− ${fmtMoney(s.charges)} $`} strong accent="text-destructive" />
             <Row label="Réduction fiscale (dépenses déductibles)" value={`${fmtMoney(s.expensesDeductible)} $`} accent="text-sky-400" />
@@ -980,7 +1040,7 @@ function ExerciceDetailView({
 
       <div className="rounded-xl border bg-card p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">Paies employés — {fmtMoney(s.payrollTotal)} $ versés</h3>
+          <h3 className="text-sm font-semibold">Paies employés — {fmtInt(s.payrollTotal)} $ versés</h3>
           {q.data.hoursCap > 0 || q.data.salaryCap > 0 ? (
             <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
               Plafonds {q.data.salaryCap > 0 ? `${fmtMoney(q.data.salaryCap)} $` : '∞'} / {q.data.hoursCap > 0 ? `${q.data.hoursCap}h` : '∞'}
@@ -1000,6 +1060,9 @@ function ExerciceDetailView({
                   <th className="px-2 py-1.5 text-right font-semibold">Heures</th>
                   <th className="px-2 py-1.5 text-right font-semibold">Base</th>
                   <th className="px-2 py-1.5 text-right font-semibold">Commission</th>
+                  {showGarage && (
+                    <th className="px-2 py-1.5 text-right font-semibold">Garage</th>
+                  )}
                   <th className="px-2 py-1.5 text-right font-semibold">Prime</th>
                   <th className="px-2 py-1.5 text-right font-semibold">Retenue</th>
                   <th className="px-2 py-1.5 text-right font-semibold">Total paie</th>
@@ -1007,16 +1070,21 @@ function ExerciceDetailView({
               </thead>
               <tbody>
                 {payroll.map((p) => (
-                  <PayrollRow key={p.employeeId} p={p} editable={canEdit} onSave={(employeeId, body) => savePay.mutate({ employeeId, body })} />
+                  <PayrollRow key={p.employeeId} p={p} editable={canEdit} showGarage={showGarage} onSave={(employeeId, body) => savePay.mutate({ employeeId, body })} />
                 ))}
                 <tr className="border-t-2 font-semibold">
                   <td className="px-2 py-2">TOTAL</td>
                   <td className="px-2 py-2 text-right text-sky-400">{Math.round(payroll.reduce((a, p) => a + p.hours, 0) * 60)}min</td>
-                  <td className="px-2 py-2 text-right">{fmtMoney(payroll.reduce((a, p) => a + p.base, 0))} $</td>
-                  <td className="px-2 py-2 text-right">{fmtMoney(payroll.reduce((a, p) => a + p.commission, 0))} $</td>
-                  <td className="px-2 py-2 text-right">{fmtMoney(payroll.reduce((a, p) => a + p.bonus, 0))} $</td>
-                  <td className="px-2 py-2 text-right text-destructive">{fmtMoney(payroll.reduce((a, p) => a + p.deductions, 0))} $</td>
-                  <td className="px-2 py-2 text-right">{fmtMoney(s.payrollTotal)} $</td>
+                  <td className="px-2 py-2 text-right">{fmtInt(payroll.reduce((a, p) => a + p.base, 0))} $</td>
+                  <td className="px-2 py-2 text-right">{fmtInt(payroll.reduce((a, p) => a + p.commission, 0))} $</td>
+                  {showGarage && (
+                    <td className="px-2 py-2 text-right text-emerald-400/80">
+                      {fmtInt(payroll.reduce((a, p) => a + p.garageCommission, 0))} $
+                    </td>
+                  )}
+                  <td className="px-2 py-2 text-right">{fmtInt(payroll.reduce((a, p) => a + p.bonus, 0))} $</td>
+                  <td className="px-2 py-2 text-right text-destructive">{fmtInt(payroll.reduce((a, p) => a + p.deductions, 0))} $</td>
+                  <td className="px-2 py-2 text-right">{fmtInt(s.payrollTotal)} $</td>
                 </tr>
               </tbody>
             </table>

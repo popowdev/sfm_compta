@@ -4,7 +4,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { MODULE_KEYS, MODULES, type ModuleKey } from '@rp-compta/shared';
 import { db } from '../db';
 import { companies, companyModules, type Company } from '../db/schema';
-import { requireAuth, requireAppRole } from '../middleware/auth';
+import { requireAuth, requireAppRole, requireDev } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { slugify, uniqueSlug } from '../services/companies';
 import { getEffectiveModules, isModuleBlocked } from '../services/modules';
@@ -51,6 +51,7 @@ const createSchema = z.object({
 
 companiesRouter.post(
   '/',
+  requireDev,
   asyncHandler(async (req, res) => {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });

@@ -20,6 +20,7 @@ import {
   type StockMovementType,
 } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 import { fmtMoney } from '@/lib/declarations';
 import { ApiError } from '@/lib/api';
 import { useModulePerms } from '@/lib/useCompany';
@@ -151,6 +152,7 @@ function ItemsManager({
   const showThreshold = moduleConfigBool(cfg, 'stocks', 'threshold');
   const showSupplier = moduleConfigBool(cfg, 'stocks', 'supplier');
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const q = useQuery({ queryKey: ['stocks', companyId], queryFn: () => getStocks(companyId) });
   const cats = useQuery({ queryKey: ['stock-categories', companyId], queryFn: () => getStockCategories(companyId) });
@@ -184,6 +186,7 @@ function ItemsManager({
       setOpen(false);
       invalidate();
     },
+    onError: () => toast('Échec de la création de la matière.', 'error'),
   });
   const update = useMutation({
     mutationFn: (v: { id: number; body: StockItemInput }) => updateStock(companyId, v.id, v.body),
@@ -191,10 +194,12 @@ function ItemsManager({
       setOpen(false);
       invalidate();
     },
+    onError: () => toast('Échec de la modification de la matière.', 'error'),
   });
   const remove = useMutation({
     mutationFn: (id: number) => deleteStock(companyId, id),
     onSuccess: invalidate,
+    onError: () => toast('Échec de la suppression de la matière.', 'error'),
   });
   const move = useMutation({
     mutationFn: (v: { id: number; body: StockMovementInput }) => addStockMovement(companyId, v.id, v.body),
@@ -253,8 +258,9 @@ function ItemsManager({
       categoryId: form.categoryId === '' ? null : Number(form.categoryId),
       unit: form.unit,
       quantity: editing !== null ? Number(form.quantity) || 0 : qtyNum,
-      unitCost: showValuation ? Number(form.unitCost) || 0 : 0,
-      lowStockThreshold: showThreshold ? Number(form.lowStockThreshold) || 0 : 0,
+      unitCost: editing !== null ? Number(form.unitCost) || 0 : showValuation ? Number(form.unitCost) || 0 : 0,
+      lowStockThreshold:
+        editing !== null ? Number(form.lowStockThreshold) || 0 : showThreshold ? Number(form.lowStockThreshold) || 0 : 0,
       notes: form.notes.trim() || undefined,
     };
     if (editing !== null) update.mutate({ id: editing, body });
@@ -417,7 +423,7 @@ function ItemsManager({
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h2 className="text-sm font-semibold">{editing !== null ? 'Modifier la matière' : 'Nouvelle matière'}</h2>
@@ -492,7 +498,7 @@ function ItemsManager({
       )}
 
       {movItem && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => setMovItem(null)}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h2 className="text-sm font-semibold">{MOV_BADGE[movType].label} · {movItem.name}</h2>
@@ -550,6 +556,7 @@ function CategoriesManager({
   canDelete: boolean;
 }) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const q = useQuery({ queryKey: ['stock-categories', companyId], queryFn: () => getStockCategories(companyId) });
   const [name, setName] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -582,6 +589,7 @@ function CategoriesManager({
   const remove = useMutation({
     mutationFn: (id: number) => deleteStockCategory(companyId, id),
     onSuccess: invalidate,
+    onError: () => toast('Échec de la suppression de la catégorie.', 'error'),
   });
 
   const categories = q.data?.categories ?? [];

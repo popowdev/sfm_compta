@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Shield, ShieldOff, UserX, Power } from 'lucide-react';
+import { Shield, ShieldOff, UserX, Power, RefreshCw, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { SearchInput, FilterSelect, distinctOptions } from '@/components/ui/filters';
+import { SearchInput, FilterSelect } from '@/components/ui/filters';
+import { Pagination } from '@/components/ui/pagination';
+import { useToast } from '@/components/ui/toast';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/auth/AuthContext';
 import {
@@ -10,6 +12,7 @@ import {
   setUserIrs,
   setUserWhitelist,
   deleteAdminUser,
+  resyncFivemUser,
   type AdminUser,
 } from '@/lib/admin';
 
@@ -24,19 +27,42 @@ const ROLE_LABEL: Record<string, string> = {
   gouvernement: 'Gouvernement',
 };
 
-function fmtDate(d: string): string {
-  const dt = new Date(d);
-  return Number.isNaN(dt.getTime()) ? d : dt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+const PAGE_SIZE = 25;
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
 }
 
 export default function IrsUsers() {
   const { user } = useAuth();
   const isStaff = (user?.appRoles ?? []).includes('staff');
   const queryClient = useQueryClient();
-  const q = useQuery({ queryKey: ['admin-users'], queryFn: getAdminUsers });
+  const toast = useToast();
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [whitelistFilter, setWhitelistFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const term = useDebounced(search, 300);
+  useEffect(() => {
+    setPage(1);
+  }, [term, roleFilter, whitelistFilter]);
+  const q = useQuery({
+    queryKey: ['admin-users', page, term, roleFilter, whitelistFilter],
+    queryFn: () =>
+      getAdminUsers({
+        page,
+        limit: PAGE_SIZE,
+        q: term || undefined,
+        role: roleFilter || undefined,
+        whitelisted: whitelistFilter || undefined,
+      }),
+    placeholderData: (prev) => prev,
+  });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-users'] });
   const irs = useMutation({
@@ -65,41 +91,45 @@ export default function IrsUsers() {
       const code = e instanceof ApiError ? e.code : null;
       alert(
         code === 'last_staff' || code === 'last_irs'
-          ? 'Impossible : c\'est le dernier compte avec ce rôle.'
+          ? "Impossible : c'est le dernier compte avec ce rôle."
           : 'Suppression refusée (Staff requis).',
       );
     },
   });
-
-  const allUsers = q.data?.users ?? [];
-  const roleOptions = distinctOptions(allUsers.flatMap((u) => u.roles)).map((o) => ({
-    value: o.value,
-    label: ROLE_LABEL[o.value] ?? o.label,
-  }));
-  roleOptions.push({ value: '__none__', label: 'Sans rôle' });
-
-  const term = search.trim().toLowerCase();
-  const filtered = allUsers.filter((u) => {
-    if (term && !`${u.displayName} ${u.discordId} ${u.companies.join(' ')}`.toLowerCase().includes(term)) return false;
-    if (roleFilter) {
-      if (roleFilter === '__none__') {
-        if (u.roles.length > 0) return false;
-      } else if (!u.roles.includes(roleFilter)) {
-        return false;
-      }
-    }
-    if (whitelistFilter === 'actif' && !u.whitelisted) return false;
-    if (whitelistFilter === 'inactif' && u.whitelisted) return false;
-    return true;
+  const resync = useMutation({
+    mutationFn: (id: number) => resyncFivemUser(id),
+    onSuccess: (r) => {
+      invalidate();
+      toast(`Synchronisé — ${r.count} personnage(s) récupéré(s).`, 'success');
+    },
+    onError: (e) => {
+      const code = e instanceof ApiError ? e.code : null;
+      toast(
+        code === 'not_found'
+          ? 'Joueur introuvable sur le serveur de jeu.'
+          : code === 'unconfigured'
+            ? 'API du serveur de jeu non configurée.'
+            : 'Serveur de jeu injoignable.',
+        'error',
+      );
+    },
   });
+
+  const rows = q.data?.users ?? [];
+  const total = q.data?.total ?? 0;
+  const roleOptions = [
+    ...Object.entries(ROLE_LABEL).map(([value, label]) => ({ value, label })),
+    { value: '__none__', label: 'Sans rôle' },
+  ];
 
   return (
     <div className="space-y-6 p-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Administration des comptes</h1>
+        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Staff</div>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight">Comptes joueurs</h1>
         <p className="text-sm text-muted-foreground">
-          Joueurs reliés par Discord. Activation / désactivation de l'accès, attribution du rôle IRS
-          (Staff). La synchro automatique FiveM/Discord viendra alimenter cette liste.
+          Un compte Discord par ligne : ses personnages synchronisés, les entreprises auxquelles il a
+          accès, ses rôles. Attribution automatique via la synchro FiveM.
         </p>
       </div>
 
@@ -107,8 +137,8 @@ export default function IrsUsers() {
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Rechercher (nom, Discord, entreprise)…"
-          className="flex-1 min-w-[12rem] sm:w-64 sm:flex-none"
+          placeholder="Rechercher (nom, Discord, personnage, entreprise)…"
+          className="flex-1 min-w-[12rem] sm:w-72 sm:flex-none"
         />
         <FilterSelect
           value={roleFilter}
@@ -127,35 +157,35 @@ export default function IrsUsers() {
           allLabel="Tous les accès"
           ariaLabel="Filtrer par accès"
         />
-        <span className="ml-auto text-sm text-muted-foreground">{filtered.length} résultat(s)</span>
+        <span className="ml-auto text-sm text-muted-foreground">{total} compte(s)</span>
       </div>
 
       <div className="overflow-x-auto rounded-xl border bg-card">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="px-4 py-2 text-left font-semibold">Utilisateur</th>
+              <th className="px-4 py-2 text-left font-semibold">Compte Discord</th>
+              <th className="px-4 py-2 text-left font-semibold">Personnages (nom / prénom)</th>
+              <th className="px-4 py-2 text-left font-semibold">Entreprises &amp; grade</th>
               <th className="px-4 py-2 text-left font-semibold">Rôles</th>
-              <th className="px-4 py-2 text-left font-semibold">Entreprises</th>
               <th className="px-4 py-2 text-left font-semibold">Accès</th>
-              <th className="px-4 py-2 text-left font-semibold">Créé le</th>
               <th className="px-4 py-2 text-right font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody>
             {q.isLoading ? (
               <tr><td colSpan={6} className="px-4 py-6 text-sm text-muted-foreground">Chargement…</td></tr>
-            ) : allUsers.length === 0 ? (
-              <tr><td colSpan={6} className="px-4 py-6 text-sm text-muted-foreground">Aucun utilisateur.</td></tr>
-            ) : filtered.length === 0 ? (
+            ) : q.isError ? (
+              <tr><td colSpan={6} className="px-4 py-6 text-sm text-destructive">Impossible de charger les comptes.</td></tr>
+            ) : rows.length === 0 ? (
               <tr><td colSpan={6} className="px-4 py-6 text-sm text-muted-foreground">Aucun résultat pour ces filtres.</td></tr>
             ) : (
-              filtered.map((u: AdminUser) => {
+              rows.map((u: AdminUser) => {
                 const hasIrs = u.roles.includes('irs');
                 const isSelf = u.discordId === user?.discordId;
                 return (
-                  <tr key={u.id} className="border-t align-middle">
-                    <td className="px-4 py-2.5">
+                  <tr key={u.id} className="border-t align-top">
+                    <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         {u.avatarUrl ? (
                           <img src={u.avatarUrl} alt="" className="h-8 w-8 rounded-full" />
@@ -166,11 +196,50 @@ export default function IrsUsers() {
                         )}
                         <div className="leading-tight">
                           <div className="font-medium">{u.displayName}</div>
-                          <div className="text-xs text-muted-foreground">{u.discordId}</div>
+                          <div className="font-mono text-xs text-muted-foreground">{u.discordId}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-4 py-3">
+                      {u.characters.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          {u.characters.map((c) => (
+                            <div key={c.name} className="flex items-center gap-1.5 text-xs">
+                              {c.selected && (
+                                <span title="Personnage actif" className="text-primary">
+                                  <Check className="h-3 w-3" />
+                                </span>
+                              )}
+                              <span className={c.selected ? 'font-semibold text-foreground' : 'text-foreground'}>
+                                {c.name || '—'}
+                              </span>
+                              <span className="text-muted-foreground">
+                                {c.unemployed
+                                  ? '· Chômage'
+                                  : `· ${c.job}${c.gradeLabel ? ` (${c.gradeLabel})` : ''}`}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {u.companies.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          {u.companies.map((c, i) => (
+                            <div key={i} className="text-xs">
+                              <span className="font-medium text-foreground">{c.name}</span>
+                              {c.grade && <span className="text-muted-foreground"> · {c.grade}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         {u.roles.length === 0 ? (
                           <span className="text-xs text-muted-foreground">—</span>
@@ -183,24 +252,27 @@ export default function IrsUsers() {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-2.5">
-                      {u.companies.length === 0 ? (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      ) : (
-                        <span className="text-xs">{u.companies.join(', ')}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-4 py-3">
                       <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${u.whitelisted ? 'bg-emerald-500/15 text-emerald-300' : 'bg-muted text-muted-foreground'}`}>
                         {u.whitelisted ? 'actif' : 'désactivé'}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-xs text-muted-foreground">{fmtDate(u.createdAt)}</td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center justify-end gap-1.5">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => resync.mutate(u.id)}
+                          disabled={resync.isPending}
+                          title="Re-synchroniser depuis le serveur de jeu"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${resync.isPending && resync.variables === u.id ? 'animate-spin' : ''}`} />
+                          Sync
+                        </Button>
                         {!isSelf && (
                           <Button
                             variant="outline"
+                            size="sm"
                             onClick={() => wl.mutate({ id: u.id, whitelisted: !u.whitelisted })}
                             disabled={wl.isPending}
                           >
@@ -211,6 +283,7 @@ export default function IrsUsers() {
                         {isStaff && (
                           <Button
                             variant="outline"
+                            size="sm"
                             onClick={() => irs.mutate({ id: u.id, grant: !hasIrs })}
                             disabled={irs.isPending}
                           >
@@ -238,6 +311,7 @@ export default function IrsUsers() {
             )}
           </tbody>
         </table>
+        <Pagination page={page} limit={PAGE_SIZE} total={total} onPage={setPage} />
       </div>
     </div>
   );
