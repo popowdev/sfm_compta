@@ -69,3 +69,35 @@ export const deleteEmployee = (companyId: number, id: number) =>
   apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/employees/${id}`, {
     method: 'DELETE',
   });
+
+const eBase = (companyId: number) => `/api/me/companies/${companyId}/employees`;
+
+export interface Warning { id: number; reason: string; createdAt: string }
+export interface PersonnelRow {
+  id: number;
+  name: string;
+  active: boolean;
+  roleName: string | null;
+  contractSigned: boolean;
+  medicalVisit: boolean;
+  warnings: Warning[];
+  vehicles: { id: number; plate: string; perf: boolean }[];
+}
+export const getPersonnel = (companyId: number) =>
+  apiFetch<{ canWrite: boolean; rows: PersonnelRow[] }>(`${eBase(companyId)}/personnel`);
+export const updatePersonnel = (companyId: number, employeeId: number, body: Partial<{ contractSigned: boolean; medicalVisit: boolean }>) =>
+  apiFetch<{ ok: boolean }>(`${eBase(companyId)}/personnel/${employeeId}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const addWarning = (companyId: number, employeeId: number, reason: string) =>
+  apiFetch<{ ok: boolean; id: number }>(`${eBase(companyId)}/personnel/${employeeId}/warnings`, { method: 'POST', body: JSON.stringify({ reason }) });
+export const deleteWarning = (companyId: number, employeeId: number, id: number) =>
+  apiFetch<{ ok: boolean }>(`${eBase(companyId)}/personnel/${employeeId}/warnings/${id}`, { method: 'DELETE' });
+
+export interface Vehicle { id: number; plate: string; perf: boolean; assignedEmployeeId: number | null; assignedName: string | null; notes: string | null; createdAt: string }
+export const getVehicles = (companyId: number) =>
+  apiFetch<{ canWrite: boolean; employees: { id: number; name: string }[]; stats: { total: number; perf: number; assigned: number; available: number }; rows: Vehicle[] }>(`${eBase(companyId)}/vehicles`);
+export const createVehicle = (companyId: number, body: { plate: string; perf?: boolean; assignedEmployeeId?: number | null; notes?: string | null }) =>
+  apiFetch<{ ok: boolean; id: number }>(`${eBase(companyId)}/vehicles`, { method: 'POST', body: JSON.stringify(body) });
+export const updateVehicle = (companyId: number, id: number, body: Partial<{ plate: string; perf: boolean; assignedEmployeeId: number | null; notes: string | null }>) =>
+  apiFetch<{ ok: boolean }>(`${eBase(companyId)}/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const deleteVehicle = (companyId: number, id: number) =>
+  apiFetch<{ ok: boolean }>(`${eBase(companyId)}/vehicles/${id}`, { method: 'DELETE' });

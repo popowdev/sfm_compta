@@ -4,7 +4,7 @@ export interface GarageType { id: number; name: string; price: number; active: b
 export interface GaragePack { id: number; name: string; price: number; active: boolean }
 export interface GarageSettings { depannagePerKm: number; depannageMultiplier: number; customMarginPct: number; commissionPct: number }
 export interface GarageConfig { canWrite: boolean; settings: GarageSettings; types: GarageType[]; packs: GaragePack[] }
-export interface GarageMember { userId: number; name: string; gradeName: string | null }
+export interface GarageMember { userId: number; name: string; gradeName: string | null; commissionRate: number | null }
 export interface GarageEarning { name: string; commission: number; revenue: number; count: number }
 export interface GarageContractPrice { typeId: number | null; packId: number | null; price: number }
 export interface GarageContract { id: number; companyId: number; name: string; description: string | null; active: boolean; prices: GarageContractPrice[] }
@@ -31,11 +31,20 @@ export const getGarageConfig = (c: number) => apiFetch<GarageConfig>(`${base(c)}
 export const getGarageMembers = (c: number) => apiFetch<{ members: GarageMember[] }>(`${base(c)}/members`);
 export interface VehicleModel { id: number; name: string; manufacturer: string | null; category: string | null }
 export const getGarageModels = (c: number, q = '') =>
-  apiFetch<{ canWrite: boolean; models: VehicleModel[] }>(`${base(c)}/models${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+  apiFetch<{ canWrite: boolean; canManageCatalog: boolean; models: VehicleModel[] }>(`${base(c)}/models${q ? `?q=${encodeURIComponent(q)}` : ''}`);
 export const addGarageModel = (c: number, b: { name: string; manufacturer?: string; category?: string }) => post(`${base(c)}/models`, b);
 export const updateGarageModel = (c: number, id: number, b: { name: string; manufacturer?: string; category?: string }) => patch(`${base(c)}/models/${id}`, b);
 export const deleteGarageModel = (c: number, id: number) => del(`${base(c)}/models/${id}`);
 export const getGarageEarnings = (c: number) => apiFetch<{ earnings: GarageEarning[] }>(`${base(c)}/earnings`);
+
+export interface GarageBillingRow { contractId: number; name: string; active: boolean; repairsCount: number; repairsTotal: number; customsCount: number; customsTotal: number; total: number }
+export const getGarageBilling = (c: number, from?: string, to?: string) => {
+  const p = new URLSearchParams();
+  if (from) p.set('from', from);
+  if (to) p.set('to', to);
+  const qs = p.toString();
+  return apiFetch<{ from: string; to: string; rows: GarageBillingRow[]; grandTotal: number }>(`${base(c)}/billing${qs ? `?${qs}` : ''}`);
+};
 export const saveGarageSettings = (c: number, b: GarageSettings) => apiFetch<{ ok: boolean }>(`${base(c)}/settings`, { method: 'PUT', body: JSON.stringify(b) });
 export const addGarageType = (c: number, b: { name: string; price: number }) => post(`${base(c)}/types`, b);
 export const updateGarageType = (c: number, id: number, b: { name?: string; price?: number }) => patch(`${base(c)}/types/${id}`, b);

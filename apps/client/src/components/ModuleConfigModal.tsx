@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import { MODULE_CONFIG, moduleConfigBool } from '@rp-compta/shared';
+import { MODULE_CONFIG, moduleConfigBool, moduleConfigNumber } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { setModuleConfig, type MyModule } from '@/lib/me';
@@ -17,7 +17,7 @@ export function ModuleConfigModal({
 }) {
   const queryClient = useQueryClient();
   const fields = module ? (MODULE_CONFIG[module.key] ?? []) : [];
-  const [values, setValues] = useState<Record<string, boolean>>({});
+  const [values, setValues] = useState<Record<string, boolean | number>>({});
   const seeded = useRef(false);
 
   useEffect(() => {
@@ -27,9 +27,11 @@ export function ModuleConfigModal({
     }
     if (!seeded.current) {
       seeded.current = true;
-      const v: Record<string, boolean> = {};
+      const v: Record<string, boolean | number> = {};
       for (const f of MODULE_CONFIG[module.key] ?? []) {
-        v[f.key] = moduleConfigBool(module.config, module.key, f.key);
+        v[f.key] = f.type === 'number'
+          ? moduleConfigNumber(module.config, module.key, f.key)
+          : moduleConfigBool(module.config, module.key, f.key);
       }
       setValues(v);
     }
@@ -65,10 +67,28 @@ export function ModuleConfigModal({
                 <div className="text-sm font-medium">{f.label}</div>
                 {f.help && <div className="text-xs text-muted-foreground">{f.help}</div>}
               </div>
-              <Switch
-                checked={values[f.key] ?? f.default}
-                onChange={() => setValues((s) => ({ ...s, [f.key]: !(s[f.key] ?? f.default) }))}
-              />
+              {f.type === 'number' ? (
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={f.min}
+                    max={f.max}
+                    step={f.step ?? 1}
+                    value={typeof values[f.key] === 'number' ? (values[f.key] as number) : f.default}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setValues((s) => ({ ...s, [f.key]: Number.isFinite(n) ? n : f.default }));
+                    }}
+                    className="h-9 w-24 rounded-md border border-input bg-background px-2 text-right text-sm"
+                  />
+                  {f.suffix && <span className="text-sm text-muted-foreground">{f.suffix}</span>}
+                </div>
+              ) : (
+                <Switch
+                  checked={typeof values[f.key] === 'boolean' ? (values[f.key] as boolean) : f.default}
+                  onChange={() => setValues((s) => ({ ...s, [f.key]: !(typeof s[f.key] === 'boolean' ? (s[f.key] as boolean) : f.default) }))}
+                />
+              )}
             </div>
           ))}
         </div>

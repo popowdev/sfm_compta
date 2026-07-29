@@ -248,9 +248,18 @@ meRouter.put(
     const fields = MODULE_CONFIG[moduleKey] ?? [];
     if (fields.length === 0) return res.status(400).json({ error: 'no_config' });
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const config: Record<string, boolean> = {};
+    const config: Record<string, boolean | number> = {};
     for (const f of fields) {
-      config[f.key] = typeof body[f.key] === 'boolean' ? (body[f.key] as boolean) : f.default;
+      if (f.type === 'number') {
+        const raw = body[f.key];
+        let n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
+        if (!Number.isFinite(n)) n = f.default;
+        if (f.min !== undefined) n = Math.max(f.min, n);
+        if (f.max !== undefined) n = Math.min(f.max, n);
+        config[f.key] = n;
+      } else {
+        config[f.key] = typeof body[f.key] === 'boolean' ? (body[f.key] as boolean) : f.default;
+      }
     }
     const defaultEnabled = MODULES.find((m) => m.key === moduleKey)?.defaultEnabled ?? false;
     await db

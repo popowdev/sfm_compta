@@ -116,7 +116,7 @@ export default function ImmoCarte() {
     map.fitBounds(bounds);
     map.setMaxBounds(bounds.pad(0.2));
     if (meta.hasTiles) {
-      L.tileLayer('/immo-tiles/{z}/{x}/{y}.png', { tileSize: 256, minZoom: 0, maxNativeZoom: mz, maxZoom: mz + EXTRA_ZOOM, noWrap: true, bounds }).addTo(map);
+      L.tileLayer(`/immo-tiles/{z}/{x}/{y}.png?v=${meta.w}_${meta.h}_${mz}`, { tileSize: 256, minZoom: 0, maxNativeZoom: mz, maxZoom: mz + EXTRA_ZOOM, noWrap: true, bounds }).addTo(map);
     }
     const layer = new L.FeatureGroup().addTo(map);
     mapRef.current = map;

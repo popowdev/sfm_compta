@@ -33,6 +33,7 @@ export const MODULE_KEYS = [
   'immobilier',
   'immo_carte',
   'taxi',
+  'pawnshop',
 ] as const;
 export type ModuleKey = (typeof MODULE_KEYS)[number];
 
@@ -74,15 +75,28 @@ export const MODULES: ModuleDef[] = [
   { key: 'immobilier', label: 'Gestion propriétés', group: 'Immobilier', defaultEnabled: false, companyPage: true },
   { key: 'immo_carte', label: 'Carte interactive', group: 'Immobilier', defaultEnabled: false, companyPage: true },
   { key: 'taxi', label: 'Taxi', group: 'Taxi', defaultEnabled: false, companyPage: true },
+  { key: 'pawnshop', label: 'Prêteur sur gages', group: 'Commerce', defaultEnabled: false, companyPage: true },
 ];
 
-export interface ModuleConfigField {
+export interface ModuleConfigBoolField {
   key: string;
   label: string;
   type: 'boolean';
   default: boolean;
   help?: string;
 }
+export interface ModuleConfigNumberField {
+  key: string;
+  label: string;
+  type: 'number';
+  default: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  suffix?: string;
+  help?: string;
+}
+export type ModuleConfigField = ModuleConfigBoolField | ModuleConfigNumberField;
 
 export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
   locations: [
@@ -99,6 +113,35 @@ export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
   ],
   badgeuse: [
     { key: 'pauses', label: 'Autoriser les pauses', type: 'boolean', default: true },
+    {
+      key: 'weeklyHoursCap',
+      label: 'Plafond d’heures / semaine',
+      type: 'number',
+      default: 0,
+      min: 0,
+      max: 168,
+      step: 1,
+      suffix: 'h',
+      help: 'Au-delà, les heures ne sont plus comptées en paie et la prise de service est bloquée. 0 = pas de plafond.',
+    },
+    {
+      key: 'heuresPointe',
+      label: 'Heures de pointe (prime 21h→00h)',
+      type: 'boolean',
+      default: false,
+      help: 'Les heures faites entre 21h et 00h sont majorées dans la paie.',
+    },
+    {
+      key: 'pointeMultiplier',
+      label: 'Multiplicateur heures de pointe',
+      type: 'number',
+      default: 1.5,
+      min: 1,
+      max: 5,
+      step: 0.1,
+      suffix: '×',
+      help: 'Ex : ×1,5 = les heures de pointe sont payées 1,5× le taux normal. Nécessite « Heures de pointe » activé.',
+    },
   ],
   clients: [
     { key: 'loyalty', label: 'Gérer la fidélité (points & paliers)', type: 'boolean', default: true },
@@ -111,6 +154,13 @@ export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
       type: 'boolean',
       default: true,
       help: 'Distribution de dividendes + impôt sur dividendes dans le résultat.',
+    },
+    {
+      key: 'autoWeek',
+      label: 'Semaines automatiques',
+      type: 'boolean',
+      default: false,
+      help: 'Crée l’exercice de la semaine en cours et gèle automatiquement les semaines terminées (salaires non modifiables une fois gelés).',
     },
   ],
   caisse: [
@@ -134,6 +184,44 @@ export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
       type: 'boolean',
       default: true,
     },
+    {
+      key: 'commissionCustom',
+      label: 'Commission : taux personnalisé',
+      type: 'boolean',
+      default: false,
+      help: 'Décoché = taux de commission du grade (fiche RH). Coché = taux fixe ci-dessous pour ce module.',
+    },
+    {
+      key: 'commissionRate',
+      label: 'Taux de commission ventes (%)',
+      type: 'number',
+      default: 0,
+      min: 0,
+      max: 100,
+      step: 1,
+      suffix: '%',
+      help: 'Appliqué au CA des ventes uniquement si « taux personnalisé » est activé.',
+    },
+  ],
+  garage: [
+    {
+      key: 'commissionCustom',
+      label: 'Commission : taux personnalisé (exercice)',
+      type: 'boolean',
+      default: false,
+      help: 'Décoché = commission par mécanicien (réglages du garage). Coché = taux fixe ci-dessous appliqué au CA garage dans la paie.',
+    },
+    {
+      key: 'commissionRate',
+      label: 'Taux de commission garage (%)',
+      type: 'number',
+      default: 0,
+      min: 0,
+      max: 100,
+      step: 1,
+      suffix: '%',
+      help: 'Appliqué au CA garage de chaque employé uniquement si « taux personnalisé » est activé.',
+    },
   ],
   stocks: [
     {
@@ -156,6 +244,46 @@ export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
       type: 'boolean',
       default: true,
       help: 'Champ fournisseur sur les entrées de stock.',
+    },
+  ],
+  taxi: [
+    {
+      key: 'commissionCustom',
+      label: 'Commission : taux personnalisé',
+      type: 'boolean',
+      default: false,
+      help: 'Décoché = taux de commission du grade (fiche RH). Coché = taux fixe ci-dessous pour ce module.',
+    },
+    {
+      key: 'commissionRate',
+      label: 'Taux de commission taxi (%)',
+      type: 'number',
+      default: 0,
+      min: 0,
+      max: 100,
+      step: 1,
+      suffix: '%',
+      help: 'Appliqué au CA des courses uniquement si « taux personnalisé » est activé.',
+    },
+  ],
+  pawnshop: [
+    {
+      key: 'commissionCustom',
+      label: 'Commission : taux personnalisé',
+      type: 'boolean',
+      default: false,
+      help: 'Décoché = taux de commission du grade (fiche RH). Coché = taux fixe ci-dessous pour ce module.',
+    },
+    {
+      key: 'commissionRate',
+      label: 'Taux de commission pawnshop (%)',
+      type: 'number',
+      default: 0,
+      min: 0,
+      max: 100,
+      step: 1,
+      suffix: '%',
+      help: 'Appliqué au CA des reventes grossiste uniquement si « taux personnalisé » est activé.',
     },
   ],
 };
@@ -228,7 +356,19 @@ export function moduleConfigBool(
   const v = config?.[fieldKey];
   if (typeof v === 'boolean') return v;
   const field = MODULE_CONFIG[moduleKey]?.find((f) => f.key === fieldKey);
-  return field ? field.default : true;
+  return field && field.type === 'boolean' ? field.default : true;
+}
+
+export function moduleConfigNumber(
+  config: Record<string, unknown> | null | undefined,
+  moduleKey: ModuleKey,
+  fieldKey: string,
+): number {
+  const v = config?.[fieldKey];
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v);
+  const field = MODULE_CONFIG[moduleKey]?.find((f) => f.key === fieldKey);
+  return field && field.type === 'number' ? field.default : 0;
 }
 
 export const EXPENSE_CATEGORIES = [

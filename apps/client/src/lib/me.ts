@@ -35,7 +35,7 @@ export const toggleMyModule = (companyId: number, key: ModuleKey, enabled: boole
 export const setModuleConfig = (
   companyId: number,
   key: ModuleKey,
-  config: Record<string, boolean>,
+  config: Record<string, boolean | number>,
 ) =>
   apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/modules/${key}/config`, {
     method: 'PUT',

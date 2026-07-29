@@ -1,9 +1,9 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { CONTRACT_TYPE_KEYS } from '@rp-compta/shared';
 import { db } from '../db';
-import { companyEmployees, memberships, companyRoles, users } from '../db/schema';
+import { companyEmployees, companyVehicles, employeeWarnings, memberships, companyRoles, users } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
@@ -241,6 +241,220 @@ meEmployeesRouter.delete(
       detail: `entreprise ${companyId}`,
     });
     emitInvalidate(['irs', `company:${companyId}`], [['employees', companyId]]);
+    res.json({ ok: true });
+  }),
+);
+
+async function syncWarningCount(employeeId: number) {
+  const [c] = await db.select({ n: sql<number>`COUNT(*)` }).from(employeeWarnings).where(eq(employeeWarnings.employeeId, employeeId));
+  await db.update(companyEmployees).set({ warnings: Number(c?.n ?? 0) }).where(eq(companyEmployees.id, employeeId));
+}
+
+meEmployeesRouter.get(
+  '/personnel',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    const emps = await db
+      .select({
+        id: companyEmployees.id,
+        name: companyEmployees.name,
+        active: companyEmployees.active,
+        contractSigned: companyEmployees.contractSigned,
+        medicalVisit: companyEmployees.medicalVisit,
+        roleName: companyRoles.name,
+      })
+      .from(companyEmployees)
+      .leftJoin(companyRoles, eq(companyEmployees.companyRoleId, companyRoles.id))
+      .where(eq(companyEmployees.companyId, companyId))
+      .orderBy(desc(companyEmployees.active), asc(companyEmployees.name));
+    const warns = await db
+      .select({ id: employeeWarnings.id, employeeId: employeeWarnings.employeeId, reason: employeeWarnings.reason, createdAt: employeeWarnings.createdAt })
+      .from(employeeWarnings)
+      .where(eq(employeeWarnings.companyId, companyId))
+      .orderBy(desc(employeeWarnings.createdAt));
+    const vehs = await db
+      .select({ id: companyVehicles.id, plate: companyVehicles.plate, perf: companyVehicles.perf, assignedEmployeeId: companyVehicles.assignedEmployeeId })
+      .from(companyVehicles)
+      .where(eq(companyVehicles.companyId, companyId));
+    res.json({
+      canWrite: g.canWrite,
+      rows: emps.map((e) => ({
+        id: e.id,
+        name: e.name,
+        active: e.active,
+        roleName: e.roleName,
+        contractSigned: e.contractSigned,
+        medicalVisit: e.medicalVisit,
+        warnings: warns.filter((w) => w.employeeId === e.id).map((w) => ({ id: w.id, reason: w.reason, createdAt: w.createdAt })),
+        vehicles: vehs.filter((v) => v.assignedEmployeeId === e.id).map((v) => ({ id: v.id, plate: v.plate, perf: v.perf })),
+      })),
+    });
+  }),
+);
+
+const personnelPatch = z.object({ contractSigned: z.boolean().optional(), medicalVisit: z.boolean().optional() });
+meEmployeesRouter.patch(
+  '/personnel/:employeeId',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const employeeId = parseId(req.params.employeeId);
+    if (!companyId || !employeeId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    const p = personnelPatch.safeParse(req.body);
+    if (!p.success || (p.data.contractSigned === undefined && p.data.medicalVisit === undefined)) return res.status(400).json({ error: 'bad_request' });
+    const patch: Record<string, unknown> = {};
+    if (p.data.contractSigned !== undefined) patch.contractSigned = p.data.contractSigned;
+    if (p.data.medicalVisit !== undefined) patch.medicalVisit = p.data.medicalVisit;
+    const r = await db.update(companyEmployees).set(patch).where(and(eq(companyEmployees.id, employeeId), eq(companyEmployees.companyId, companyId)));
+    if (!r[0].affectedRows) return res.status(404).json({ error: 'not_found' });
+    emitInvalidate(['irs', `company:${companyId}`], [['personnel', companyId], ['employees', companyId]]);
+    res.json({ ok: true });
+  }),
+);
+
+const warningSchema = z.object({ reason: z.string().trim().min(1).max(500) });
+meEmployeesRouter.post(
+  '/personnel/:employeeId/warnings',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const employeeId = parseId(req.params.employeeId);
+    if (!companyId || !employeeId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    const p = warningSchema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: 'bad_request' });
+    const [emp] = await db.select({ id: companyEmployees.id }).from(companyEmployees).where(and(eq(companyEmployees.id, employeeId), eq(companyEmployees.companyId, companyId))).limit(1);
+    if (!emp) return res.status(404).json({ error: 'not_found' });
+    const ins = await db.insert(employeeWarnings).values({ companyId, employeeId, reason: p.data.reason, createdByUserId: req.user!.id });
+    await syncWarningCount(employeeId);
+    emitInvalidate(['irs', `company:${companyId}`], [['personnel', companyId], ['employees', companyId]]);
+    res.status(201).json({ ok: true, id: Number(ins[0].insertId) });
+  }),
+);
+meEmployeesRouter.delete(
+  '/personnel/:employeeId/warnings/:id',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const employeeId = parseId(req.params.employeeId);
+    const id = parseId(req.params.id);
+    if (!companyId || !employeeId || !id) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    const r = await db.delete(employeeWarnings).where(and(eq(employeeWarnings.id, id), eq(employeeWarnings.employeeId, employeeId), eq(employeeWarnings.companyId, companyId)));
+    if (!r[0].affectedRows) return res.status(404).json({ error: 'not_found' });
+    await syncWarningCount(employeeId);
+    emitInvalidate(['irs', `company:${companyId}`], [['personnel', companyId], ['employees', companyId]]);
+    res.json({ ok: true });
+  }),
+);
+
+meEmployeesRouter.get(
+  '/vehicles',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    const rows = await db
+      .select({
+        id: companyVehicles.id,
+        plate: companyVehicles.plate,
+        perf: companyVehicles.perf,
+        assignedEmployeeId: companyVehicles.assignedEmployeeId,
+        assignedName: companyEmployees.name,
+        notes: companyVehicles.notes,
+        createdAt: companyVehicles.createdAt,
+      })
+      .from(companyVehicles)
+      .leftJoin(companyEmployees, eq(companyVehicles.assignedEmployeeId, companyEmployees.id))
+      .where(eq(companyVehicles.companyId, companyId))
+      .orderBy(asc(companyVehicles.plate));
+    const employees = await db
+      .select({ id: companyEmployees.id, name: companyEmployees.name })
+      .from(companyEmployees)
+      .where(and(eq(companyEmployees.companyId, companyId), eq(companyEmployees.active, true)))
+      .orderBy(asc(companyEmployees.name));
+    res.json({
+      canWrite: g.canWrite,
+      employees,
+      stats: { total: rows.length, perf: rows.filter((r) => r.perf).length, assigned: rows.filter((r) => r.assignedEmployeeId).length, available: rows.filter((r) => !r.assignedEmployeeId).length },
+      rows,
+    });
+  }),
+);
+
+const vehicleSchema = z.object({
+  plate: z.string().trim().min(1).max(20),
+  perf: z.boolean().optional().default(false),
+  assignedEmployeeId: z.coerce.number().int().positive().nullish(),
+  notes: z.string().max(2000).nullish(),
+});
+async function employeeInCompany(companyId: number, employeeId: number | null | undefined) {
+  if (employeeId == null) return true;
+  const [e] = await db.select({ id: companyEmployees.id }).from(companyEmployees).where(and(eq(companyEmployees.id, employeeId), eq(companyEmployees.companyId, companyId))).limit(1);
+  return !!e;
+}
+meEmployeesRouter.post(
+  '/vehicles',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    const p = vehicleSchema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: 'bad_request' });
+    if (!(await employeeInCompany(companyId, p.data.assignedEmployeeId))) return res.status(400).json({ error: 'invalid_employee' });
+    const ins = await db.insert(companyVehicles).values({ companyId, plate: p.data.plate, perf: p.data.perf, assignedEmployeeId: p.data.assignedEmployeeId ?? null, notes: p.data.notes || null });
+    emitInvalidate(['irs', `company:${companyId}`], [['vehicles', companyId]]);
+    res.status(201).json({ ok: true, id: Number(ins[0].insertId) });
+  }),
+);
+meEmployeesRouter.patch(
+  '/vehicles/:id',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const id = parseId(req.params.id);
+    if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    const p = vehicleSchema.partial().safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: 'bad_request' });
+    const patch: Record<string, unknown> = {};
+    if (p.data.plate !== undefined) patch.plate = p.data.plate;
+    if (p.data.perf !== undefined) patch.perf = p.data.perf;
+    if (p.data.assignedEmployeeId !== undefined) {
+      if (!(await employeeInCompany(companyId, p.data.assignedEmployeeId))) return res.status(400).json({ error: 'invalid_employee' });
+      patch.assignedEmployeeId = p.data.assignedEmployeeId ?? null;
+    }
+    if (p.data.notes !== undefined) patch.notes = p.data.notes || null;
+    if (!Object.keys(patch).length) return res.status(400).json({ error: 'bad_request' });
+    const r = await db.update(companyVehicles).set(patch).where(and(eq(companyVehicles.id, id), eq(companyVehicles.companyId, companyId)));
+    if (!r[0].affectedRows) return res.status(404).json({ error: 'not_found' });
+    emitInvalidate(['irs', `company:${companyId}`], [['vehicles', companyId]]);
+    res.json({ ok: true });
+  }),
+);
+meEmployeesRouter.delete(
+  '/vehicles/:id',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const id = parseId(req.params.id);
+    if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    const r = await db.delete(companyVehicles).where(and(eq(companyVehicles.id, id), eq(companyVehicles.companyId, companyId)));
+    if (!r[0].affectedRows) return res.status(404).json({ error: 'not_found' });
+    emitInvalidate(['irs', `company:${companyId}`], [['vehicles', companyId]]);
     res.json({ ok: true });
   }),
 );

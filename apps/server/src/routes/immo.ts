@@ -7,17 +7,26 @@ import {
   type ModuleKey,
 } from '@rp-compta/shared';
 import { db } from '../db';
-import { immoRentals, immoRentInvoices, immoSales, immoParcels, companyClients } from '../db/schema';
+import { immoRentals, immoRentInvoices, immoSales, immoParcels, companyClients, companies, immoPriceTypes, immoOptions, immoDiscounts } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
+import {
+  DEFAULT_LOCATION_TYPES, DEFAULT_VENTE_TYPES,
+  DEFAULT_LOCATION_OPTIONS, DEFAULT_VENTE_OPTIONS, DEFAULT_DISCOUNTS,
+} from '../data/immoDefaults';
 
 function parseId(value: string | undefined): number | null {
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 const round2 = (n: number) => Math.round(n * 100) / 100;
+const pd = (v: unknown): string | null => (v == null ? null : JSON.stringify(v));
+const parsePd = (v: string | null): unknown => {
+  if (!v) return null;
+  try { return JSON.parse(v); } catch { return null; }
+};
 const money = z.coerce.number().nonnegative().finite().max(999_999_999.99);
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -71,6 +80,7 @@ const rentalSchema = z.object({
   reminderEnabled: z.boolean().optional(),
   tenantDiscordId: z.string().trim().regex(/^\d{5,25}$/).nullish().or(z.literal('')),
   notes: z.string().max(2000).nullish(),
+  pricingDetail: z.unknown().nullish(),
 });
 
 const listQuery = z.object({
@@ -119,6 +129,7 @@ meImmoRentalsRouter.get(
           reminderEnabled: immoRentals.reminderEnabled,
           tenantDiscordId: immoRentals.tenantDiscordId,
           notes: immoRentals.notes,
+          pricingDetail: immoRentals.pricingDetail,
           createdAt: immoRentals.createdAt,
         })
         .from(immoRentals)
@@ -170,6 +181,7 @@ meImmoRentalsRouter.get(
         reminderEnabled: !!r.reminderEnabled,
         tenantDiscordId: r.tenantDiscordId,
         notes: r.notes,
+        pricingDetail: parsePd(r.pricingDetail),
         createdAt: r.createdAt,
         unpaidCount: unpaidById.get(r.id) ?? 0,
         onMap: onMap.has(r.propertyRef),
@@ -241,6 +253,7 @@ meImmoRentalsRouter.post(
       reminderEnabled: parsed.data.reminderEnabled ?? false,
       tenantDiscordId: parsed.data.tenantDiscordId || null,
       notes: parsed.data.notes || null,
+      pricingDetail: pd(parsed.data.pricingDetail),
       createdByUserId: req.user!.id,
     });
     emitInvalidate(['irs', `company:${companyId}`], [['immo-rentals', companyId]]);
@@ -274,6 +287,7 @@ meImmoRentalsRouter.patch(
     if (d.reminderEnabled !== undefined) patch.reminderEnabled = d.reminderEnabled;
     if (d.tenantDiscordId !== undefined) patch.tenantDiscordId = d.tenantDiscordId || null;
     if (d.notes !== undefined) patch.notes = d.notes || null;
+    if (d.pricingDetail !== undefined) patch.pricingDetail = pd(d.pricingDetail);
     if (!Object.keys(patch).length) return res.status(400).json({ error: 'bad_request' });
     const result = await db
       .update(immoRentals)
@@ -426,6 +440,7 @@ const saleSchema = z.object({
   saleDate: dateStr.nullish(),
   status: z.enum(IMMO_SALE_STATUS_KEYS as [string, ...string[]]).optional(),
   notes: z.string().max(2000).nullish(),
+  pricingDetail: z.unknown().nullish(),
 });
 
 meImmoSalesRouter.get(
@@ -462,6 +477,7 @@ meImmoSalesRouter.get(
           status: immoSales.status,
           saleDate: immoSales.saleDate,
           notes: immoSales.notes,
+          pricingDetail: immoSales.pricingDetail,
           createdAt: immoSales.createdAt,
         })
         .from(immoSales)
@@ -500,6 +516,7 @@ meImmoSalesRouter.get(
         status: r.status,
         saleDate: r.saleDate,
         notes: r.notes,
+        pricingDetail: parsePd(r.pricingDetail),
         createdAt: r.createdAt,
         onMap: onMap.has(r.propertyRef),
       })),
@@ -529,6 +546,7 @@ meImmoSalesRouter.post(
       status: (parsed.data.status ?? 'disponible') as 'disponible',
       saleDate: parsed.data.saleDate ?? null,
       notes: parsed.data.notes || null,
+      pricingDetail: pd(parsed.data.pricingDetail),
       createdByUserId: req.user!.id,
     });
     emitInvalidate(['irs', `company:${companyId}`], [['immo-sales', companyId]]);
@@ -559,6 +577,7 @@ meImmoSalesRouter.patch(
     if (d.saleDate !== undefined) patch.saleDate = d.saleDate ?? null;
     if (d.status !== undefined) patch.status = d.status;
     if (d.notes !== undefined) patch.notes = d.notes || null;
+    if (d.pricingDetail !== undefined) patch.pricingDetail = pd(d.pricingDetail);
     if (!Object.keys(patch).length) return res.status(400).json({ error: 'bad_request' });
     const result = await db
       .update(immoSales)
@@ -727,6 +746,145 @@ meImmoParcelsRouter.delete(
       .where(and(eq(immoParcels.id, id), eq(immoParcels.companyId, companyId)));
     if (!result[0].affectedRows) return res.status(404).json({ error: 'not_found' });
     emitInvalidate(['irs', `company:${companyId}`], [['immo-parcels', companyId]]);
+    res.json({ ok: true });
+  }),
+);
+
+export const meImmoSettingsRouter = Router({ mergeParams: true });
+meImmoSettingsRouter.use(requireAuth);
+
+async function seedDefaultsIfEmpty(companyId: number) {
+  const co = await db.select({ seeded: companies.immoSeeded }).from(companies).where(eq(companies.id, companyId)).limit(1);
+  if (co[0]?.seeded) return;
+
+  const [pt, opt, disc] = await Promise.all([
+    db.select({ id: immoPriceTypes.id }).from(immoPriceTypes).where(eq(immoPriceTypes.companyId, companyId)).limit(1),
+    db.select({ id: immoOptions.id }).from(immoOptions).where(eq(immoOptions.companyId, companyId)).limit(1),
+    db.select({ id: immoDiscounts.id }).from(immoDiscounts).where(eq(immoDiscounts.companyId, companyId)).limit(1),
+  ]);
+  if (pt[0] || opt[0] || disc[0]) {
+    await db.update(companies).set({ immoSeeded: true }).where(eq(companies.id, companyId));
+    return;
+  }
+
+  const ptRows = [
+    ...DEFAULT_LOCATION_TYPES.map((t, i) => ({ companyId, kind: 'location' as const, key: t.key, label: t.label, basePrice: String(t.basePrice), sortOrder: i })),
+    ...DEFAULT_VENTE_TYPES.map((t, i) => ({ companyId, kind: 'vente' as const, key: t.key, label: t.label, basePrice: String(t.basePrice), sortOrder: i })),
+  ];
+  const optRows = [
+    ...DEFAULT_LOCATION_OPTIONS.map((o, i) => ({ companyId, kind: 'location' as const, name: o.name, pct: String(o.pct), sortOrder: i })),
+    ...DEFAULT_VENTE_OPTIONS.map((o, i) => ({ companyId, kind: 'vente' as const, name: o.name, pct: String(o.pct), sortOrder: i })),
+  ];
+  const discRows = DEFAULT_DISCOUNTS.map((d, i) => ({ companyId, name: d.name, pct: String(d.pct), sortOrder: i }));
+  await db.insert(immoPriceTypes).values(ptRows);
+  await db.insert(immoOptions).values(optRows);
+  await db.insert(immoDiscounts).values(discRows);
+  await db.update(companies).set({ immoSeeded: true }).where(eq(companies.id, companyId));
+}
+
+async function loadSettings(companyId: number) {
+  const [pt, opt, disc] = await Promise.all([
+    db.select().from(immoPriceTypes).where(eq(immoPriceTypes.companyId, companyId)).orderBy(immoPriceTypes.sortOrder, immoPriceTypes.id),
+    db.select().from(immoOptions).where(eq(immoOptions.companyId, companyId)).orderBy(immoOptions.sortOrder, immoOptions.id),
+    db.select().from(immoDiscounts).where(eq(immoDiscounts.companyId, companyId)).orderBy(immoDiscounts.sortOrder, immoDiscounts.id),
+  ]);
+  const mapType = (r: typeof immoPriceTypes.$inferSelect) => ({ id: r.id, key: r.key, label: r.label, basePrice: Math.round(Number(r.basePrice)) });
+  const mapOpt = (r: typeof immoOptions.$inferSelect) => ({ id: r.id, name: r.name, pct: Number(r.pct) });
+  return {
+    locationTypes: pt.filter((r) => r.kind === 'location').map(mapType),
+    venteTypes: pt.filter((r) => r.kind === 'vente').map(mapType),
+    locationOptions: opt.filter((r) => r.kind === 'location').map(mapOpt),
+    venteOptions: opt.filter((r) => r.kind === 'vente').map(mapOpt),
+    discounts: disc.map((r) => ({ id: r.id, name: r.name, pct: Number(r.pct) })),
+  };
+}
+
+meImmoSettingsRouter.get(
+  '/',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId, 'immobilier');
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    await seedDefaultsIfEmpty(companyId);
+    res.json({ canWrite: g.canWrite, ...(await loadSettings(companyId)) });
+  }),
+);
+
+const priceTypesSchema = z.object({
+  items: z.array(z.object({
+    key: z.string().trim().min(1).max(120),
+    label: z.string().trim().min(1).max(120),
+    basePrice: z.coerce.number().int().min(0).max(999_999_999),
+  })).max(500),
+});
+meImmoSettingsRouter.put(
+  '/price-types/:kind',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const kind: 'location' | 'vente' | null = req.params.kind === 'vente' ? 'vente' : req.params.kind === 'location' ? 'location' : null;
+    if (!companyId || !kind) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId, 'immobilier');
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    const p = priceTypesSchema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: 'bad_request' });
+    await db.delete(immoPriceTypes).where(and(eq(immoPriceTypes.companyId, companyId), eq(immoPriceTypes.kind, kind)));
+    if (p.data.items.length) {
+      await db.insert(immoPriceTypes).values(p.data.items.map((it, i) => ({ companyId, kind, key: it.key, label: it.label, basePrice: String(it.basePrice), sortOrder: i })));
+    }
+    emitInvalidate(['irs', `company:${companyId}`], [['immo-settings', companyId]]);
+    res.json({ ok: true });
+  }),
+);
+
+const optionsSchema = z.object({
+  items: z.array(z.object({
+    name: z.string().trim().min(1).max(120),
+    pct: z.coerce.number().min(0).max(1000),
+  })).max(200),
+});
+meImmoSettingsRouter.put(
+  '/options/:kind',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const kind: 'location' | 'vente' | null = req.params.kind === 'vente' ? 'vente' : req.params.kind === 'location' ? 'location' : null;
+    if (!companyId || !kind) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId, 'immobilier');
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    const p = optionsSchema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: 'bad_request' });
+    await db.delete(immoOptions).where(and(eq(immoOptions.companyId, companyId), eq(immoOptions.kind, kind)));
+    if (p.data.items.length) {
+      await db.insert(immoOptions).values(p.data.items.map((it, i) => ({ companyId, kind, name: it.name, pct: String(round2(it.pct)), sortOrder: i })));
+    }
+    emitInvalidate(['irs', `company:${companyId}`], [['immo-settings', companyId]]);
+    res.json({ ok: true });
+  }),
+);
+
+const discountsSchema = z.object({
+  items: z.array(z.object({
+    name: z.string().trim().min(1).max(150),
+    pct: z.coerce.number().min(0).max(1000),
+  })).max(200),
+});
+meImmoSettingsRouter.put(
+  '/discounts',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId, 'immobilier');
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    const p = discountsSchema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: 'bad_request' });
+    await db.delete(immoDiscounts).where(eq(immoDiscounts.companyId, companyId));
+    if (p.data.items.length) {
+      await db.insert(immoDiscounts).values(p.data.items.map((it, i) => ({ companyId, name: it.name, pct: String(round2(it.pct)), sortOrder: i })));
+    }
+    emitInvalidate(['irs', `company:${companyId}`], [['immo-settings', companyId]]);
     res.json({ ok: true });
   }),
 );

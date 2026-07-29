@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
-import { and, desc, eq, gte, isNotNull, lte, ne, sql } from 'drizzle-orm';
-import { moduleConfigBool } from '@rp-compta/shared';
+import { and, desc, eq, gte, inArray, isNotNull, lte, ne, sql } from 'drizzle-orm';
+import { moduleConfigBool, moduleConfigNumber } from '@rp-compta/shared';
 import { db } from '../db';
 import {
   exercices,
@@ -18,6 +18,10 @@ import {
   companyRoles,
   garageRepairs,
   garageCustoms,
+  taxiCitoyens,
+  taxiConcitoyens,
+  taxiVip,
+  pawnshopTransactions,
 } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
@@ -37,6 +41,31 @@ function parseId(value: string | undefined): number | null {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const blank = (v: string | null | undefined) => (v ? v : null);
+
+const PEAK_START_HOUR = 21;
+function entryToMs(s: string): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):?(\d{2})?/.exec(s);
+  if (!m) return NaN;
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6] ?? 0));
+}
+function peakMinutes(inStr: string, outStr: string): number {
+  const start = entryToMs(inStr);
+  const end = entryToMs(outStr);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+  const DAY = 86_400_000;
+  const HOUR = 3_600_000;
+  const d = new Date(start);
+  let day = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  let total = 0;
+  for (; day < end; day += DAY) {
+    const winStart = day + PEAK_START_HOUR * HOUR;
+    const winEnd = day + DAY;
+    const s = Math.max(start, winStart);
+    const e = Math.min(end, winEnd);
+    if (e > s) total += (e - s) / 60_000;
+  }
+  return total;
+}
 const isDate = (v: string) => {
   const d = new Date(`${v}T00:00:00Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
@@ -303,6 +332,37 @@ meExercicesRouter.get(
     const dividendsEnabled = moduleConfigBool(exConfig, 'exercices', 'dividends');
     const effectiveDividends = dividendsEnabled ? ex.dividends : 0;
 
+    const bmRows = await db
+      .select({ config: companyModules.config })
+      .from(companyModules)
+      .where(and(eq(companyModules.companyId, companyId), eq(companyModules.moduleKey, 'badgeuse')))
+      .limit(1);
+    const rawBadgeuseConfig = bmRows[0]?.config;
+    const badgeuseConfig = (
+      typeof rawBadgeuseConfig === 'string' ? JSON.parse(rawBadgeuseConfig) : rawBadgeuseConfig
+    ) as Record<string, unknown> | null;
+    const weeklyHoursCap = moduleConfigNumber(badgeuseConfig, 'badgeuse', 'weeklyHoursCap');
+    const peakEnabled = moduleConfigBool(badgeuseConfig, 'badgeuse', 'heuresPointe');
+    const peakMultiplier = moduleConfigNumber(badgeuseConfig, 'badgeuse', 'pointeMultiplier');
+
+    const modConfigRows = await db
+      .select({ moduleKey: companyModules.moduleKey, config: companyModules.config })
+      .from(companyModules)
+      .where(and(eq(companyModules.companyId, companyId), inArray(companyModules.moduleKey, ['taxi', 'pawnshop', 'caisse', 'garage'])));
+    const parseCfg = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v) as Record<string, unknown> | null;
+    const taxiCfg = parseCfg(modConfigRows.find((r) => r.moduleKey === 'taxi')?.config ?? null);
+    const pawnCfg = parseCfg(modConfigRows.find((r) => r.moduleKey === 'pawnshop')?.config ?? null);
+    const caisseCfg = parseCfg(modConfigRows.find((r) => r.moduleKey === 'caisse')?.config ?? null);
+    const garageCfg = parseCfg(modConfigRows.find((r) => r.moduleKey === 'garage')?.config ?? null);
+    const taxiCommCustom = moduleConfigBool(taxiCfg, 'taxi', 'commissionCustom');
+    const taxiCommRate = moduleConfigNumber(taxiCfg, 'taxi', 'commissionRate');
+    const pawnCommCustom = moduleConfigBool(pawnCfg, 'pawnshop', 'commissionCustom');
+    const pawnCommRate = moduleConfigNumber(pawnCfg, 'pawnshop', 'commissionRate');
+    const caisseCommCustom = moduleConfigBool(caisseCfg, 'caisse', 'commissionCustom');
+    const caisseCommRate = moduleConfigNumber(caisseCfg, 'caisse', 'commissionRate');
+    const garageCommCustom = moduleConfigBool(garageCfg, 'garage', 'commissionCustom');
+    const garageCommRate = moduleConfigNumber(garageCfg, 'garage', 'commissionRate');
+
     const catRows = await db
       .select({
         category: companyExpenses.category,
@@ -360,12 +420,27 @@ meExercicesRouter.get(
     const gridRows = await db.select().from(salaryGrid).where(eq(salaryGrid.companyId, companyId));
     const gridByRole = new Map(gridRows.map((g) => [g.companyRoleId, g]));
 
-    const badgeuseAcc = await getModuleAccess(req.user!.id, companyId, 'badgeuse');
-    const payrollVisible =
-      !!badgeuseAcc && badgeuseAcc.enabled && !badgeuseAcc.blocked && badgeuseAcc.canView;
+    const peakMinByEmp = new Map<number, number>();
+    if (peakEnabled && peakMultiplier > 1) {
+      const rawEntries = await db
+        .select({ employeeId: timeEntries.employeeId, clockIn: timeEntries.clockIn, clockOut: timeEntries.clockOut })
+        .from(timeEntries)
+        .where(
+          and(
+            eq(timeEntries.companyId, companyId),
+            isNotNull(timeEntries.clockOut),
+            gte(sql`DATE(${timeEntries.clockIn})`, ex.startDate),
+            lte(sql`DATE(${timeEntries.clockIn})`, ex.endDate),
+          ),
+        );
+      for (const e of rawEntries) {
+        if (!e.clockOut) continue;
+        const pm = peakMinutes(e.clockIn, e.clockOut);
+        if (pm > 0) peakMinByEmp.set(e.employeeId, (peakMinByEmp.get(e.employeeId) ?? 0) + pm);
+      }
+    }
 
-    const garageAcc = await getModuleAccess(req.user!.id, companyId, 'garage');
-    const garageEnabled = !!garageAcc && garageAcc.enabled && !garageAcc.blocked;
+    const garageEnabled = true;
 
     const stocksAcc = await getModuleAccess(req.user!.id, companyId, 'stocks');
     const stocksEnabled = !!stocksAcc && stocksAcc.enabled && !stocksAcc.blocked && stocksAcc.canView;
@@ -542,23 +617,62 @@ meExercicesRouter.get(
       garagePartsCost = round2(Number(custTot[0]?.cost ?? 0));
     }
 
+    const taxiRevByEmp = new Map<number, number>();
+    const pawnshopRevByEmp = new Map<number, number>();
+    {
+      const empRows = await db
+        .select({ id: companyEmployees.id, userId: companyEmployees.userId })
+        .from(companyEmployees)
+        .where(eq(companyEmployees.companyId, companyId));
+      const empByUser = new Map<number, number>();
+      for (const e of empRows) if (e.userId != null) empByUser.set(e.userId, e.id);
+      const [txCit, txCon, txVip, pawnSell] = await Promise.all([
+        db.select({ userId: taxiCitoyens.driverUserId, total: sql<string>`COALESCE(SUM(${taxiCitoyens.total}),0)` }).from(taxiCitoyens).where(and(eq(taxiCitoyens.companyId, companyId), gte(sql`DATE(${taxiCitoyens.createdAt})`, ex.startDate), lte(sql`DATE(${taxiCitoyens.createdAt})`, ex.endDate))).groupBy(taxiCitoyens.driverUserId),
+        db.select({ userId: taxiConcitoyens.driverUserId, total: sql<string>`COALESCE(SUM(${taxiConcitoyens.total}),0)` }).from(taxiConcitoyens).where(and(eq(taxiConcitoyens.companyId, companyId), gte(sql`DATE(${taxiConcitoyens.createdAt})`, ex.startDate), lte(sql`DATE(${taxiConcitoyens.createdAt})`, ex.endDate))).groupBy(taxiConcitoyens.driverUserId),
+        db.select({ userId: taxiVip.driverUserId, total: sql<string>`COALESCE(SUM(${taxiVip.total}),0)` }).from(taxiVip).where(and(eq(taxiVip.companyId, companyId), gte(sql`DATE(${taxiVip.createdAt})`, ex.startDate), lte(sql`DATE(${taxiVip.createdAt})`, ex.endDate))).groupBy(taxiVip.driverUserId),
+        db.select({ userId: pawnshopTransactions.createdByUserId, total: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.type, 'sell'), gte(sql`DATE(${pawnshopTransactions.createdAt})`, ex.startDate), lte(sql`DATE(${pawnshopTransactions.createdAt})`, ex.endDate))).groupBy(pawnshopTransactions.createdByUserId),
+      ]);
+      const addRev = (map: Map<number, number>, userId: number | null, total: number) => {
+        if (userId == null) return;
+        const empId = empByUser.get(userId);
+        if (empId == null) return;
+        map.set(empId, (map.get(empId) ?? 0) + total);
+      };
+      for (const r of txCit) addRev(taxiRevByEmp, r.userId, Number(r.total));
+      for (const r of txCon) addRev(taxiRevByEmp, r.userId, Number(r.total));
+      for (const r of txVip) addRev(taxiRevByEmp, r.userId, Number(r.total));
+      for (const r of pawnSell) addRev(pawnshopRevByEmp, r.userId, Number(r.total));
+    }
+
     const caByEmp = new Map(perfRows.map((r) => [r.employeeId, Number(r.ca)]));
     const payroll = payRows.map((r) => {
       const rawHours = Number(r.workedMin) / 60;
       const hours = round2(rawHours);
-      const cappedHours = ex.hoursCap > 0 ? Math.min(rawHours, ex.hoursCap) : rawHours;
+      const caps = [ex.hoursCap, weeklyHoursCap].filter((c) => c > 0);
+      const cappedHours = caps.length ? Math.min(rawHours, ...caps) : rawHours;
       const g = r.companyRoleId != null ? gridByRole.get(r.companyRoleId) : undefined;
       const rate = g && Number(g.hourlyRate) > 0 ? Number(g.hourlyRate) : Number(r.hourlyRate);
       const baseSalary = g ? Number(g.baseSalary) : 0;
       const base = Math.round(baseSalary + cappedHours * rate);
+      const gradeRate = Number(r.commissionRate);
       const ca = caByEmp.get(r.employeeId) ?? 0;
-      const autoCommission = Math.round((Number(r.commissionRate) / 100) * ca);
+      const autoCommission = Math.round(((caisseCommCustom ? caisseCommRate : gradeRate) / 100) * ca);
       const o = overrides.get(r.employeeId);
       const commission = autoCommission;
-      const garageCommission = Math.round(garageCommByEmp.get(r.employeeId) ?? 0);
+      const garageCommission = garageCommCustom
+        ? Math.round((garageCommRate / 100) * (garageRevByEmp.get(r.employeeId) ?? 0))
+        : Math.round(garageCommByEmp.get(r.employeeId) ?? 0);
+      const taxiRate = (taxiCommCustom ? taxiCommRate : gradeRate) / 100;
+      const pawnRate = (pawnCommCustom ? pawnCommRate : gradeRate) / 100;
+      const taxiRevenue = Math.round(taxiRevByEmp.get(r.employeeId) ?? 0);
+      const pawnshopRevenue = Math.round(pawnshopRevByEmp.get(r.employeeId) ?? 0);
+      const taxiCommission = Math.round(taxiRate * taxiRevenue);
+      const pawnshopCommission = Math.round(pawnRate * pawnshopRevenue);
       const bonus = o ? Math.round(Number(o.bonus)) : 0;
       const deductions = o ? Math.round(Number(o.deductions)) : 0;
-      const theoretical = Math.max(0, base + commission + garageCommission + bonus - deductions);
+      const peakHours = peakEnabled ? Math.min((peakMinByEmp.get(r.employeeId) ?? 0) / 60, cappedHours) : 0;
+      const peakBonus = peakHours > 0 && peakMultiplier > 1 ? Math.round(peakHours * rate * (peakMultiplier - 1)) : 0;
+      const theoretical = Math.max(0, base + commission + garageCommission + taxiCommission + pawnshopCommission + bonus + peakBonus - deductions);
       const paid = ex.salaryCap > 0 ? Math.min(theoretical, Math.round(ex.salaryCap)) : theoretical;
       return {
         employeeId: r.employeeId,
@@ -567,16 +681,24 @@ meExercicesRouter.get(
         gradeName: r.gradeName,
         hours,
         cappedHours: round2(cappedHours),
+        peakHours: round2(peakHours),
+        peakBonus,
         hourlyRate: rate,
         base,
         commission,
         garageCommission,
+        taxiCommission,
+        pawnshopCommission,
+        taxiRevenue,
+        pawnshopRevenue,
         bonus,
         deductions,
         theoretical,
         paid: Math.round(paid),
         excess: Math.round(Math.max(0, theoretical - paid)),
         notes: o?.notes ?? null,
+        isPaid: o?.paid ?? false,
+        paidAt: o?.paidAt ?? null,
       };
     });
     const payrollTotal = Math.round(payroll.reduce((s, p) => s + p.paid, 0));
@@ -616,6 +738,12 @@ meExercicesRouter.get(
         salesRevenue: salesNet,
         garageRevenue,
         garageCommission: Math.round(payroll.reduce((s, p) => s + p.garageCommission, 0)),
+        taxiCommission: Math.round(payroll.reduce((s, p) => s + p.taxiCommission, 0)),
+        pawnshopCommission: Math.round(payroll.reduce((s, p) => s + p.pawnshopCommission, 0)),
+        peakBonus: Math.round(payroll.reduce((s, p) => s + p.peakBonus, 0)),
+        peakEnabled,
+        peakMultiplier,
+        weeklyHoursCap,
         caGross,
         salesDiscount,
         caNet,
@@ -690,9 +818,9 @@ meExercicesRouter.get(
       ...base,
       canWrite: g.canWrite,
       canEdit: g.canEdit,
-      payrollVisible,
+      payrollVisible: true,
       stocksEnabled,
-      payroll: payrollVisible ? (base.payroll ?? []) : [],
+      payroll: base.payroll ?? [],
       frozen,
     });
   }),
@@ -721,11 +849,12 @@ meExercicesRouter.put(
     const parsed = payrollSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     const exRow = await db
-      .select({ id: exercices.id })
+      .select({ id: exercices.id, status: exercices.status })
       .from(exercices)
       .where(and(eq(exercices.id, id), eq(exercices.companyId, companyId)))
       .limit(1);
     if (!exRow[0]) return res.status(404).json({ error: 'not_found' });
+    if (exRow[0].status === 'closed') return res.status(409).json({ error: 'exercice_closed' });
     const empRow = await db
       .select({ id: companyEmployees.id })
       .from(companyEmployees)
@@ -743,6 +872,37 @@ meExercicesRouter.put(
       .insert(exercicePayroll)
       .values({ companyId, exerciceId: id, employeeId, ...amounts, notes: blank(parsed.data.notes) })
       .onDuplicateKeyUpdate({ set: setOnUpdate });
+    emitInvalidate(['irs', `company:${companyId}`], [['exercice', companyId, id]]);
+    res.json({ ok: true });
+  }),
+);
+
+const paidSchema = z.object({ paid: z.boolean() });
+meExercicesRouter.put(
+  '/:id/payroll/:employeeId/paid',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const id = parseId(req.params.id);
+    const employeeId = parseId(req.params.employeeId);
+    if (!companyId || !id || !employeeId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    const badgeuseAcc = await getModuleAccess(req.user!.id, companyId, 'badgeuse');
+    if (!badgeuseAcc || !badgeuseAcc.enabled || badgeuseAcc.blocked || !badgeuseAcc.canView) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    const parsed = paidSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    const exRow = await db.select({ id: exercices.id, status: exercices.status }).from(exercices).where(and(eq(exercices.id, id), eq(exercices.companyId, companyId))).limit(1);
+    if (!exRow[0]) return res.status(404).json({ error: 'not_found' });
+    if (exRow[0].status === 'closed') return res.status(409).json({ error: 'exercice_closed' });
+    const empRow = await db.select({ id: companyEmployees.id }).from(companyEmployees).where(and(eq(companyEmployees.id, employeeId), eq(companyEmployees.companyId, companyId))).limit(1);
+    if (!empRow[0]) return res.status(404).json({ error: 'not_found' });
+    const paidAt = parsed.data.paid ? sql`CURRENT_TIMESTAMP` : null;
+    await db
+      .insert(exercicePayroll)
+      .values({ companyId, exerciceId: id, employeeId, paid: parsed.data.paid, paidAt })
+      .onDuplicateKeyUpdate({ set: { paid: parsed.data.paid, paidAt } });
     emitInvalidate(['irs', `company:${companyId}`], [['exercice', companyId, id]]);
     res.json({ ok: true });
   }),

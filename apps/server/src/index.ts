@@ -9,6 +9,7 @@ import multer from 'multer';
 import { env } from './env';
 import { logger } from './logger';
 import { runRentAutoGeneration, runRentReminders } from './services/rentAutoGen';
+import { runWeeklyRollover } from './services/exerciceAutoWeek';
 import { healthRouter } from './routes/health';
 import { authRouter } from './routes/auth';
 import { internalRouter } from './routes/internal';
@@ -27,8 +28,9 @@ import { refreshSelectedCharacters } from './services/fivemSync';
 import { genErrorCode, recordError } from './services/errorLog';
 import { errorsRouter, adminErrorsRouter } from './routes/errors';
 import { meTicketsRouter, supportTicketsRouter, ticketFilesRouter, devTicketLogsRouter } from './routes/tickets';
-import { meImmoRentalsRouter, meImmoSalesRouter, meImmoParcelsRouter } from './routes/immo';
+import { meImmoRentalsRouter, meImmoSalesRouter, meImmoParcelsRouter, meImmoSettingsRouter } from './routes/immo';
 import { meTaxiRouter } from './routes/taxi';
+import { mePawnshopRouter } from './routes/pawnshop';
 import { irsCompanyNotesRouter } from './routes/companyNotes';
 import { meGarageRouter } from './routes/garage';
 import { meDividendsRouter, irsDividendsRouter } from './routes/dividends';
@@ -131,7 +133,9 @@ app.use('/api/me/companies/:companyId/catalog', meCatalogRouter);
 app.use('/api/me/companies/:companyId/immo-rentals', meImmoRentalsRouter);
 app.use('/api/me/companies/:companyId/immo-sales', meImmoSalesRouter);
 app.use('/api/me/companies/:companyId/immo-parcels', meImmoParcelsRouter);
+app.use('/api/me/companies/:companyId/immo-settings', meImmoSettingsRouter);
 app.use('/api/me/companies/:companyId/taxi', meTaxiRouter);
+app.use('/api/me/companies/:companyId/pawnshop', mePawnshopRouter);
 app.use('/api/me/companies/:companyId/sales', meSalesRouter);
 app.use('/api/me/companies/:companyId/exercices', meExercicesRouter);
 app.use('/api/me/companies/:companyId/clients', meClientsRouter);
@@ -233,7 +237,8 @@ if (env.FIVEM_PLAYER_API_URL) {
     rentGenRunning = true;
     void runRentAutoGeneration()
       .then(() => runRentReminders())
-      .catch((err) => logger.error({ err }, 'auto-génération / relance loyers échouée'))
+      .then(() => runWeeklyRollover())
+      .catch((err) => logger.error({ err }, 'auto-génération / relance loyers ou semaines échouée'))
       .finally(() => { rentGenRunning = false; });
   };
   setTimeout(tick, 30 * 1000); // un passage peu après le démarrage

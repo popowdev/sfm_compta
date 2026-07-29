@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, X, Pencil, Trash2, Eye, Key, KeyRound, Home, BadgeCheck, Receipt, CheckCircle2,
-  CalendarPlus, Search, RotateCcw, ChevronLeft, ChevronRight, MapPin,
+  CalendarPlus, Search, RotateCcw, ChevronLeft, ChevronRight, MapPin, SlidersHorizontal,
 } from 'lucide-react';
 import { IMMO_RENTAL_STATUSES, IMMO_SALE_STATUSES, type ImmoRentalStatus, type ImmoSaleStatus } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,9 @@ import {
   getSales, createSale, updateSale, deleteSale,
   type Rental, type Sale, type ListParams,
 } from '@/lib/immo';
+import { ImmoSettingsPanel } from '@/components/ImmoSettings';
+import { PricingCalculator } from '@/components/ImmoPricing';
+import type { PricingDetail } from '@/lib/immo';
 
 const inputCls = 'h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
 const labelCls = 'mb-1 block text-xs font-medium text-muted-foreground';
@@ -51,7 +54,7 @@ function mondayOf(date: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-type Tab = 'locations' | 'ventes';
+type Tab = 'locations' | 'ventes' | 'parametres';
 
 export default function Immobilier() {
   const { companyId, canCreate, canEdit, canDelete } = useModulePerms('immobilier');
@@ -171,8 +174,12 @@ export default function Immobilier() {
         <div className="flex gap-1 border-b p-1.5">
           <TabBtn active={tab === 'locations'} onClick={() => switchTab('locations')} icon={KeyRound} label="Locations" count={rentalStats?.total} />
           <TabBtn active={tab === 'ventes'} onClick={() => switchTab('ventes')} icon={Home} label="Ventes" count={saleStats?.total} />
+          {canEdit && <TabBtn active={tab === 'parametres'} onClick={() => switchTab('parametres')} icon={SlidersHorizontal} label="Paramètres" />}
         </div>
 
+        {tab === 'parametres' ? (
+          <ImmoSettingsPanel companyId={companyId} canEdit={canEdit} />
+        ) : (<>
         <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
           <label className="text-sm">
             <span className={labelCls}>Numéro de propriété</span>
@@ -272,6 +279,7 @@ export default function Immobilier() {
             </div>
           </div>
         )}
+        </>)}
       </div>
 
       {rentalModal.open && <RentalModal companyId={companyId} edit={rentalModal.edit} onClose={() => setRentalModal({ open: false, edit: null })} onSaved={invalidateAll} />}
@@ -327,9 +335,10 @@ function RentalModal({ companyId, edit, onClose, onSaved }: { companyId: number;
     tenantDiscordId: edit?.tenantDiscordId ?? '',
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((s) => ({ ...s, [k]: v }));
+  const [pricing, setPricing] = useState<PricingDetail | null>(edit?.pricingDetail ?? null);
   const save = useMutation({
     mutationFn: () => {
-      const body = { propertyRef: f.propertyRef.trim(), tenantName: f.tenantName.trim() || null, agent: f.agent.trim() || null, weeklyRent: Number(f.weeklyRent) || 0, startDate: f.startDate || null, status: f.status, autoGenerate: f.autoGenerate, reminderEnabled: f.reminderEnabled, tenantDiscordId: f.tenantDiscordId.trim() || null, notes: f.notes.trim() || null };
+      const body = { propertyRef: f.propertyRef.trim(), tenantName: f.tenantName.trim() || null, agent: f.agent.trim() || null, weeklyRent: pricing?.finalPrice ?? (Number(f.weeklyRent) || 0), startDate: f.startDate || null, status: f.status, autoGenerate: f.autoGenerate, reminderEnabled: f.reminderEnabled, tenantDiscordId: f.tenantDiscordId.trim() || null, notes: f.notes.trim() || null, pricingDetail: pricing };
       return edit ? updateRental(companyId, edit.id, body) : createRental(companyId, body);
     },
     onSuccess: () => { onSaved(); onClose(); },
@@ -340,9 +349,9 @@ function RentalModal({ companyId, edit, onClose, onSaved }: { companyId: number;
     <ModalShell title={edit ? 'Modifier la location' : 'Nouvelle location'} onClose={onClose}>
       <form className="grid grid-cols-2 gap-3 p-5" onSubmit={(e) => { e.preventDefault(); if (valid && !save.isPending) save.mutate(); }}>
         <label className="col-span-2 text-sm"><span className={labelCls}>N° / Réf. du bien</span><input className={inputCls} value={f.propertyRef} onChange={(e) => set('propertyRef', e.target.value)} placeholder="ex. 7031A" autoFocus /></label>
+        <PricingCalculator companyId={companyId} kind="location" initial={edit?.pricingDetail ?? null} onChange={setPricing} />
         <label className="text-sm"><span className={labelCls}>Locataire</span><input className={inputCls} value={f.tenantName} onChange={(e) => set('tenantName', e.target.value)} placeholder="ex. John Doe" /></label>
         <label className="text-sm"><span className={labelCls}>Agent</span><input className={inputCls} value={f.agent} onChange={(e) => set('agent', e.target.value)} placeholder="Agent" /></label>
-        <label className="text-sm"><span className={labelCls}>Loyer / sem. ($)</span><input type="number" min="0" step="1" className={inputCls} value={f.weeklyRent} onChange={(e) => set('weeklyRent', e.target.value)} /></label>
         <label className="text-sm"><span className={labelCls}>Début</span><input type="date" className={inputCls} value={f.startDate} onChange={(e) => set('startDate', e.target.value)} /></label>
         <label className="col-span-2 text-sm"><span className={labelCls}>Statut</span><select className={inputCls} value={f.status} onChange={(e) => set('status', e.target.value as ImmoRentalStatus)}>{IMMO_RENTAL_STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</select></label>
 
@@ -379,9 +388,10 @@ function SaleModal({ companyId, edit, onClose, onSaved }: { companyId: number; e
     status: (edit?.status ?? 'disponible') as ImmoSaleStatus, notes: edit?.notes ?? '',
   });
   const set = (k: keyof typeof f, v: string) => setF((s) => ({ ...s, [k]: v }));
+  const [pricing, setPricing] = useState<PricingDetail | null>(edit?.pricingDetail ?? null);
   const save = useMutation({
     mutationFn: () => {
-      const body = { propertyRef: f.propertyRef.trim(), buyerName: f.buyerName.trim() || null, agent: f.agent.trim() || null, price: Number(f.price) || 0, saleDate: f.saleDate || null, status: f.status, notes: f.notes.trim() || null };
+      const body = { propertyRef: f.propertyRef.trim(), buyerName: f.buyerName.trim() || null, agent: f.agent.trim() || null, price: pricing?.finalPrice ?? (Number(f.price) || 0), saleDate: f.saleDate || null, status: f.status, notes: f.notes.trim() || null, pricingDetail: pricing };
       return edit ? updateSale(companyId, edit.id, body) : createSale(companyId, body);
     },
     onSuccess: () => { onSaved(); onClose(); },
@@ -392,7 +402,7 @@ function SaleModal({ companyId, edit, onClose, onSaved }: { companyId: number; e
     <ModalShell title={edit ? 'Modifier la vente' : 'Nouvelle vente'} onClose={onClose}>
       <form className="grid grid-cols-2 gap-3 p-5" onSubmit={(e) => { e.preventDefault(); if (valid && !save.isPending) save.mutate(); }}>
         <label className="col-span-2 text-sm"><span className={labelCls}>N° / Réf. du bien</span><input className={inputCls} value={f.propertyRef} onChange={(e) => set('propertyRef', e.target.value)} placeholder="ex. 8207" autoFocus /></label>
-        <label className="text-sm"><span className={labelCls}>Prix ($)</span><input type="number" min="0" step="1" className={inputCls} value={f.price} onChange={(e) => set('price', e.target.value)} /></label>
+        <PricingCalculator companyId={companyId} kind="vente" initial={edit?.pricingDetail ?? null} onChange={setPricing} />
         <label className="text-sm"><span className={labelCls}>Statut</span><select className={inputCls} value={f.status} onChange={(e) => set('status', e.target.value)}>{IMMO_SALE_STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</select></label>
         <label className="text-sm"><span className={labelCls}>Acheteur</span><input className={inputCls} value={f.buyerName} onChange={(e) => set('buyerName', e.target.value)} placeholder="ex. John Doe" /></label>
         <label className="text-sm"><span className={labelCls}>Agent</span><input className={inputCls} value={f.agent} onChange={(e) => set('agent', e.target.value)} placeholder="Agent" /></label>

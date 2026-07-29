@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { LifeBuoy, ArrowLeft, Send, Lock, UserCheck, Search, CheckCircle2, X, RotateCcw } from 'lucide-react';
@@ -61,6 +61,12 @@ function TicketDetailView({ refId }: { refId: string }) {
     onError: () => toast('Échec.', 'error'),
   });
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [q.data?.messages.length]);
+
   if (q.isLoading) return <Skeleton className="h-64 rounded-xl" />;
   if (q.isError || !q.data) return <EmptyState icon={LifeBuoy} title="Ticket introuvable" />;
 
@@ -69,7 +75,9 @@ function TicketDetailView({ refId }: { refId: string }) {
   const assignedToMe = meId !== null && ticket.assignedUserId === meId;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4 p-8">
+    <div className="flex h-screen flex-col overflow-hidden">
+      <div className="shrink-0 border-b bg-card/20">
+        <div className="mx-auto w-full max-w-4xl space-y-4 px-8 pt-6 pb-4">
       <button
         type="button"
         onClick={() => navigate('/staff/support')}
@@ -143,9 +151,17 @@ function TicketDetailView({ refId }: { refId: string }) {
           </div>
         )}
       </div>
+        </div>
+      </div>
 
-      <Thread messages={messages} meId={meId} onReact={ticket.status === 'closed' ? undefined : (messageId, emoji) => react.mutate({ messageId, emoji })} />
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-4xl px-8 py-4">
+          <Thread messages={messages} meId={meId} onReact={ticket.status === 'closed' ? undefined : (messageId, emoji) => react.mutate({ messageId, emoji })} />
+        </div>
+      </div>
 
+      <div className="shrink-0 border-t bg-card/20">
+        <div className="mx-auto w-full max-w-4xl px-8 py-4">
       {ticket.status === 'closed' ? (
         <div className="rounded-xl border border-dashed bg-card p-4 text-center text-sm text-muted-foreground">
           Ticket fermé. Utilise « Réouvrir » pour reprendre la conversation.
@@ -185,6 +201,8 @@ function TicketDetailView({ refId }: { refId: string }) {
         </div>
       </form>
       )}
+        </div>
+      </div>
     </div>
   );
 }

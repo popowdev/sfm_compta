@@ -1,4 +1,4 @@
-import { useState, type ComponentType, type ReactNode } from 'react';
+import { useState, useEffect, type ComponentType, type ReactNode } from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -28,6 +28,7 @@ import {
   PanelLeftClose,
   PanelLeft,
   LogOut,
+  HelpCircle,
   Search,
 } from 'lucide-react';
 import { hasAppAccess, MODULES, moduleConfigBool } from '@rp-compta/shared';
@@ -39,6 +40,26 @@ import { getSupportTickets } from '@/lib/tickets';
 import { moduleIcon } from '@/lib/moduleIcons';
 import { QuickClock } from '@/components/QuickClock';
 import { NotificationBell } from '@/components/NotificationBell';
+import { GuidedTour, type TourStep } from '@/components/GuidedTour';
+
+function buildCompanyTour(slug: string | null | undefined): TourStep[] {
+  const dash = slug ? `[data-tour="nav:/entreprise/${slug}"]` : undefined;
+  return [
+    { title: 'Bienvenue 👋', body: 'Ta nouvelle entreprise est prête ! Petit tour rapide de l’essentiel — tu peux passer et relancer plus tard.' },
+    { target: '[data-tour="menu"]', title: 'Ton menu', body: 'Tes modules sont ici. Une entreprise neuve démarre avec les modules de base — tu en actives d’autres selon tes besoins (on y revient à la fin).' },
+    { target: dash, title: 'Tableau de bord', body: 'Ta vue d’ensemble : chiffres clés, alertes et activité récente de l’entreprise.' },
+    { target: '[data-tour$="/m/exercices"]', title: 'Comptabilité', body: 'Le cœur du système : résultat, charges, paies et impôts, calculés semaine par semaine (les exercices).' },
+    { target: '[data-tour$="/m/depenses"]', title: 'Dépenses', body: 'Enregistre les charges de l’entreprise (loyer, matériel, carburant…). Elles pèsent dans le résultat de la compta.' },
+    { target: '[data-tour$="/m/rh"]', title: 'RH / employés', body: 'Tes employés : contrats, grille salariale, avertissements. La grille salariale alimente les paies de la compta.' },
+    { target: '[data-tour$="/m/declarations"]', title: 'Déclarations fiscales', body: 'Déclare tes résultats à l’IRS directement depuis ici.' },
+    { target: '[data-tour$="/m/subventions"]', title: 'Subventions', body: 'Suis tes demandes de subventions — dont le remboursement des salaires (heures badgeuse) par l’État.' },
+    { target: '[data-tour$="/parametres"]', title: 'Paramètres de l’entreprise', body: 'Configure ton entreprise : informations, logo, grades et réglages propres à chaque module.' },
+    { title: 'Activer plus de modules', body: 'Ton entreprise démarre avec les modules de base (compta, dépenses, RH, fiscalité…). Beaucoup d’autres existent — Caisse, Badgeuse (pointage → paies), Gestion Propriétés, Garage, Taxi… — à activer côté staff via « Modules », entreprise par entreprise.' },
+    { title: 'Les permissions', body: 'Chaque grade a ses droits, module par module : voir, créer, modifier, supprimer. Un employé ne voit que ce que son grade autorise — la compta et les paies restent réservées aux gérants.' },
+    { title: 'C’est parti ! 🚀', body: 'Tu connais l’essentiel. Tu peux relancer ce tutoriel quand tu veux via le bouton « ? » en bas à droite.' },
+  ];
+}
+const TOUR_FLAG = 'rp_compta_tour_v1';
 
 const COMPANY_PAGE_KEYS = new Set<string>(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
@@ -265,6 +286,22 @@ export function AppLayout({ children }: { children: ReactNode }) {
     immersive && !!badgeuseMod && badgeuseMod.enabled && !badgeuseMod.blocked && badgeuseMod.canView;
   const pausesEnabled = moduleConfigBool(badgeuseMod?.config, 'badgeuse', 'pauses');
 
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourSteps, setTourSteps] = useState<TourStep[]>([]);
+  const openTour = () => {
+    setTourSteps(buildCompanyTour(activeSlug).filter((s) => !s.target || document.querySelector(s.target)));
+    setTourOpen(true);
+  };
+  const startTour = openTour;
+  const closeTour = () => { setTourOpen(false); localStorage.setItem(TOUR_FLAG, '1'); };
+  const inCompany = immersive && !immersiveAssoc && !!currentCompany;
+  const companyId = currentCompany?.company.id;
+  useEffect(() => {
+    if (!inCompany || localStorage.getItem(TOUR_FLAG)) return;
+    const t = window.setTimeout(openTour, 900);
+    return () => window.clearTimeout(t);
+  }, [inCompany, companyId]);
+
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <aside
@@ -312,7 +349,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </button>
         </div>
 
-        <nav className="flex-1 overflow-auto px-2 py-2">
+        <nav data-tour="menu" className="flex-1 overflow-auto px-2 py-2">
           {!immersive && isIrs && !collapsed && (
             <div className="relative mb-2 px-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -365,6 +402,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                           key={it.to}
                           to={it.to}
                           end={it.end}
+                          data-tour={`nav:${it.to}`}
                           title={collapsed ? it.label : undefined}
                           className={({ isActive }) => navClass(isActive, collapsed)}
                         >
@@ -374,6 +412,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                         <Link
                           key={it.to}
                           to={it.to}
+                          data-tour={`nav:${it.to}`}
                           title={collapsed ? it.label : undefined}
                           aria-current={it.active ? 'page' : undefined}
                           className={navClass(it.active, collapsed)}
@@ -466,6 +505,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="min-w-0 flex-1 overflow-auto">{children}</main>
+
+      {inCompany && !location.pathname.includes('/m/') && (
+        <button
+          type="button"
+          onClick={startTour}
+          title="Revoir le tutoriel"
+          className="fixed bottom-4 right-4 z-[2500] grid h-11 w-11 place-items-center rounded-full border border-primary/40 bg-primary/15 text-primary shadow-lg backdrop-blur transition-colors hover:bg-primary/25"
+        >
+          <HelpCircle className="h-5 w-5" />
+        </button>
+      )}
+      <GuidedTour steps={tourSteps} open={tourOpen} onClose={closeTour} />
     </div>
   );
 }

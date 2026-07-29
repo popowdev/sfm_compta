@@ -45,16 +45,24 @@ export interface PayrollLine {
   gradeName: string | null;
   hours: number;
   cappedHours: number;
+  peakHours: number;
+  peakBonus: number;
   hourlyRate: number;
   base: number;
   commission: number;
   garageCommission: number;
+  taxiCommission: number;
+  pawnshopCommission: number;
+  taxiRevenue: number;
+  pawnshopRevenue: number;
   bonus: number;
   deductions: number;
   theoretical: number;
   paid: number;
   excess: number;
   notes: string | null;
+  isPaid: boolean;
+  paidAt: string | null;
 }
 
 export interface PayrollInput {
@@ -68,6 +76,12 @@ export interface ExerciceSummary {
   salesRevenue: number;
   garageRevenue: number;
   garageCommission: number;
+  taxiCommission: number;
+  pawnshopCommission: number;
+  peakBonus: number;
+  peakEnabled: boolean;
+  peakMultiplier: number;
+  weeklyHoursCap: number;
   caGross: number;
   salesDiscount: number;
   caNet: number;
@@ -181,4 +195,10 @@ export const setExercicePayroll = (
   apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/exercices/${id}/payroll/${employeeId}`, {
     method: 'PUT',
     body: JSON.stringify(body),
+  });
+
+export const setExercicePaid = (companyId: number, id: number, employeeId: number, paid: boolean) =>
+  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/exercices/${id}/payroll/${employeeId}/paid`, {
+    method: 'PUT',
+    body: JSON.stringify({ paid }),
   });

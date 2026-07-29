@@ -11,6 +11,7 @@ import { notify, staffUserIds } from '../services/notifications';
 import { recordAudit } from '../services/audit';
 import { ticketUpload, ticketFilePath } from '../services/upload';
 import { notifyTicketCreated } from '../services/discordWebhook';
+import { createTicketChannel, mirrorToDiscord, closeTicketBridge, type BridgeFile } from '../services/ticketBridge';
 import { emitInvalidate } from '../realtime/socket';
 
 const MAX_PER_HOUR = 5;
@@ -46,6 +47,11 @@ async function logTicketEvent(e: { ticketId: number; ref: string; type: string; 
   } catch {
     return;
   }
+}
+
+function bridgeFiles(files: unknown): BridgeFile[] {
+  const list = Array.isArray(files) ? (files as Express.Multer.File[]) : [];
+  return list.map((f) => ({ path: f.path, name: (f.originalname ?? f.filename ?? 'fichier').slice(0, 200) }));
 }
 
 async function saveAttachments(ticketId: number, messageId: number, files: unknown): Promise<void> {
@@ -251,6 +257,16 @@ meTicketsRouter.post(
       attachmentCount: Array.isArray(req.files) ? req.files.length : 0,
     });
 
+    void createTicketChannel({
+      id: Number(ticketId),
+      ref,
+      type: parsed.data.type,
+      title: parsed.data.title,
+      authorName: req.user!.displayName,
+      body: parsed.data.body,
+      files: bridgeFiles(req.files),
+    });
+
     res.status(201).json({ ok: true, ref });
   }),
 );
@@ -305,6 +321,7 @@ meTicketsRouter.post(
     });
     emitInvalidate(['staff', 'irs'], [['support-tickets'], ['support-ticket', t.ref]]);
     emitInvalidate([`user:${req.user!.id}`], [['my-tickets'], ['my-ticket', t.ref]]);
+    void mirrorToDiscord(t.id, req.user!.displayName, parsed.data.body, false, bridgeFiles(req.files));
     res.status(201).json({ ok: true });
   }),
 );
@@ -322,6 +339,7 @@ meTicketsRouter.post(
     await logTicketEvent({ ticketId: t.id, ref: t.ref, type: 'closed', actorUserId: req.user!.id, actorName: req.user!.displayName, detail: 'fermé par le joueur' });
     emitInvalidate(['staff', 'irs'], [['support-tickets'], ['support-ticket', t.ref]]);
     emitInvalidate([`user:${req.user!.id}`], [['my-tickets'], ['my-ticket', t.ref]]);
+    void closeTicketBridge({ id: t.id, ref: t.ref }, req.user!.displayName);
     res.json({ ok: true });
   }),
 );
@@ -510,6 +528,7 @@ supportTicketsRouter.post(
       emitInvalidate([`user:${t.userId}`], [['my-tickets'], ['my-ticket', t.ref]]);
     }
     emitInvalidate(['staff', 'irs'], [['support-tickets'], ['support-ticket', t.ref]]);
+    void mirrorToDiscord(t.id, req.user!.displayName, parsed.data.body, parsed.data.internal, bridgeFiles(req.files));
     res.status(201).json({ ok: true });
   }),
 );
@@ -585,6 +604,9 @@ supportTicketsRouter.patch(
         link: ticketLink(t.ref),
       });
       emitInvalidate([`user:${t.userId}`], [['my-tickets'], ['my-ticket', t.ref]]);
+    }
+    if (d.status === 'closed' && t.status !== 'closed') {
+      void closeTicketBridge({ id: t.id, ref: t.ref }, req.user!.displayName);
     }
     emitInvalidate(['staff', 'irs'], [['support-tickets'], ['support-ticket', t.ref]]);
     res.json({ ok: true });

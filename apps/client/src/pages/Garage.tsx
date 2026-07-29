@@ -13,7 +13,7 @@ import {
   saveGarageSettings, addGarageType, updateGarageType,
   deleteGarageType, addGaragePack, deleteGaragePack, getGarageContracts, addGarageContract, updateGarageContract, deleteGarageContract,
   getGarageVehicles, addGarageVehicle, deleteGarageVehicle, getGarageRepairs, addGarageRepair, setRepairPaid,
-  deleteGarageRepair, getGarageCustoms, addGarageCustom, setCustomPaid, deleteGarageCustom,
+  deleteGarageRepair, getGarageCustoms, addGarageCustom, setCustomPaid, deleteGarageCustom, getGarageBilling,
   type GarageVehicle, type GarageRepair, type GarageCustom, type GarageMember, type GarageConfig, type GarageContract,
 } from '@/lib/garage';
 
@@ -214,6 +214,7 @@ function RepairsTab({ companyId, canWrite, cfg, members, form, setForm }: {
     return m;
   }, [contract]);
 
+  const kmN = Math.min(100000, Math.max(0, Math.round(Number(form.km) || 0)));
   const total = useMemo(() => {
     let base = 0;
     if (form.packId) {
@@ -225,9 +226,11 @@ function RepairsTab({ companyId, canWrite, cfg, members, form, setForm }: {
         return s + (t ? (cTypePrice.get(t.id) ?? t.price) : 0);
       }, 0);
     }
-    return Math.round((base + (Number(form.km) || 0) * perKm * mult) * 100) / 100;
-  }, [form.packId, form.typeIds, form.km, types, packs, perKm, mult, cTypePrice, cPackPrice]);
-  const commission = Math.round((total * commPct) / 100 * 100) / 100;
+    return Math.round(base + kmN * perKm * mult);
+  }, [form.packId, form.typeIds, kmN, types, packs, perKm, mult, cTypePrice, cPackPrice]);
+  const mechRate = members.find((m) => m.userId === form.mechanicUserId)?.commissionRate ?? null;
+  const effectivePct = mechRate && mechRate > 0 ? mechRate : commPct;
+  const commission = Math.round((total * effectivePct) / 100);
 
   const add = useMutation({
     mutationFn: () => addGarageRepair(companyId, {
@@ -236,7 +239,7 @@ function RepairsTab({ companyId, canWrite, cfg, members, form, setForm }: {
       contractId: form.contractId || undefined, clientName: form.clientName.trim() || undefined,
       plate: form.plate.trim() || undefined, model: form.model.trim() || undefined,
       packId: form.packId || undefined, typeIds: form.packId ? undefined : form.typeIds,
-      depannageKm: Number(form.km) || 0,
+      depannageKm: kmN,
     }),
     onSuccess: () => { toast('Réparation enregistrée.', 'success'); setForm(EMPTY_REP); queryClient.invalidateQueries({ queryKey: ['garage-repairs', companyId] }); queryClient.invalidateQueries({ queryKey: ['garage-earnings', companyId] }); },
     onError: () => toast("Échec de l'enregistrement.", 'error'),
@@ -244,7 +247,7 @@ function RepairsTab({ companyId, canWrite, cfg, members, form, setForm }: {
   const paidM = useMutation({ mutationFn: (v: { id: number; paid: boolean }) => setRepairPaid(companyId, v.id, v.paid), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['garage-repairs', companyId] }) });
   const delM = useMutation({ mutationFn: (id: number) => deleteGarageRepair(companyId, id), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['garage-repairs', companyId] }); queryClient.invalidateQueries({ queryKey: ['garage-earnings', companyId] }); } });
 
-  const valid = form.packId !== '' || form.typeIds.length > 0 || (Number(form.km) || 0) > 0;
+  const valid = form.packId !== '' || form.typeIds.length > 0 || kmN > 0;
   const repairs = list.data?.repairs ?? [];
 
   return (
@@ -288,7 +291,7 @@ function RepairsTab({ companyId, canWrite, cfg, members, form, setForm }: {
           </Field>
           <div className="flex items-center justify-between rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3">
             <div><div className="text-xs text-muted-foreground">Prix total</div><div className="text-xl font-bold text-emerald-400">{money(total)}</div></div>
-            <div className="text-right"><div className="text-xs text-muted-foreground">Commission ({commPct}%)</div><div className="text-sm font-semibold text-sky-400">{moneyInt(commission)}</div></div>
+            <div className="text-right"><div className="text-xs text-muted-foreground">Commission ({effectivePct}%)</div><div className="text-sm font-semibold text-sky-400">{moneyInt(commission)}</div></div>
           </div>
           <Button type="submit" className="w-full" disabled={!valid || add.isPending}>{add.isPending ? 'Enregistrement…' : 'Enregistrer'}</Button>
         </form>
@@ -327,10 +330,13 @@ function CustomsTab({ companyId, canWrite, cfg, members, form, setForm }: {
   const patch = (p: Partial<CustomForm>) => setForm((f) => ({ ...f, ...p }));
   const margin = cfg.settings.customMarginPct, commPct = cfg.settings.commissionPct;
 
-  const costN = Number(form.cost) || 0, discN = Number(form.discount) || 0;
-  const finalPrice = Math.round(costN * (1 + margin / 100) * (1 - discN / 100) * 100) / 100;
-  const profit = Math.round((finalPrice - costN) * 100) / 100;
-  const commission = Math.round((Math.max(0, profit) * commPct) / 100 * 100) / 100;
+  const costN = Number(form.cost) || 0;
+  const discN = Math.min(100, Math.max(0, Number(form.discount) || 0));
+  const finalPrice = Math.round(costN * (1 + margin / 100) * (1 - discN / 100));
+  const profit = Math.round(finalPrice - costN);
+  const mechRate = members.find((m) => m.userId === form.mechanicUserId)?.commissionRate ?? null;
+  const effectivePct = mechRate && mechRate > 0 ? mechRate : commPct;
+  const commission = Math.round((Math.max(0, profit) * effectivePct) / 100);
 
   const add = useMutation({
     mutationFn: () => addGarageCustom(companyId, {
@@ -368,7 +374,7 @@ function CustomsTab({ companyId, canWrite, cfg, members, form, setForm }: {
           </div>
           <div className="flex items-center justify-between rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3">
             <div><div className="text-xs text-muted-foreground">Prix final (marge +{margin}%)</div><div className="text-xl font-bold text-emerald-400">{money(finalPrice)}</div></div>
-            <div className="text-right text-xs"><div>Bénéfice : <span className="font-semibold text-emerald-400">{money(profit)}</span></div><div>Commission ({commPct}%) : <span className="font-semibold text-sky-400">{moneyInt(commission)}</span></div></div>
+            <div className="text-right text-xs"><div>Bénéfice : <span className="font-semibold text-emerald-400">{money(profit)}</span></div><div>Commission ({effectivePct}%) : <span className="font-semibold text-sky-400">{moneyInt(commission)}</span></div></div>
           </div>
           <Button type="submit" className="w-full" disabled={!valid || add.isPending}>{add.isPending ? 'Enregistrement…' : 'Enregistrer'}</Button>
         </form>
@@ -471,6 +477,71 @@ function VehiclesTab({ companyId, canWrite }: { companyId: number; canWrite: boo
   );
 }
 
+function billingWeek(offset: number): { from: string; to: string; label: string } {
+  const now = new Date();
+  now.setDate(now.getDate() + offset * 7);
+  const day = (now.getDay() + 6) % 7;
+  const mon = new Date(now); mon.setDate(now.getDate() - day);
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const fmt = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+  return { from: iso(mon), to: iso(sun), label: `${fmt(mon)} → ${fmt(sun)}` };
+}
+
+function GarageBilling({ companyId }: { companyId: number }) {
+  const [offset, setOffset] = useState(0);
+  const wk = billingWeek(offset);
+  const q = useQuery({ queryKey: ['garage-billing', companyId, wk.from, wk.to], queryFn: () => getGarageBilling(companyId, wk.from, wk.to) });
+  const rows = (q.data?.rows ?? []).filter((r) => r.repairsCount + r.customsCount > 0);
+  const grand = rows.reduce((a, r) => a + r.total, 0);
+  const nav = 'grid h-8 w-8 place-items-center rounded-md border text-sm disabled:opacity-40 hover:bg-accent';
+  return (
+    <div className="rounded-2xl border bg-card p-6">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold">Facturation partenaires</h3>
+          <p className="text-xs text-muted-foreground">Réparations + customs rattachés à chaque contrat, à facturer en fin de semaine.</p>
+        </div>
+        <div className="flex items-center gap-2 text-sm">
+          <button type="button" onClick={() => setOffset((o) => o - 1)} className={nav}>‹</button>
+          <span className="min-w-[9rem] text-center font-medium">{offset === 0 ? 'Semaine actuelle' : wk.label}</span>
+          <button type="button" onClick={() => setOffset((o) => Math.min(0, o + 1))} disabled={offset >= 0} className={nav}>›</button>
+        </div>
+      </div>
+      {rows.length === 0 ? (
+        <div className="text-xs text-muted-foreground">Aucune prestation rattachée à un contrat sur cette semaine.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="py-2 text-left font-semibold">Partenaire</th>
+                <th className="py-2 text-right font-semibold">Réparations</th>
+                <th className="py-2 text-right font-semibold">Customs</th>
+                <th className="py-2 text-right font-semibold">À facturer</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.contractId} className="border-b last:border-b-0">
+                  <td className="py-2 font-medium">{r.name}{r.active ? '' : ' (inactif)'}</td>
+                  <td className="py-2 text-right text-muted-foreground">{r.repairsCount ? `${fmtInt(r.repairsTotal)} $ · ${r.repairsCount}` : '—'}</td>
+                  <td className="py-2 text-right text-muted-foreground">{r.customsCount ? `${fmtInt(r.customsTotal)} $ · ${r.customsCount}` : '—'}</td>
+                  <td className="py-2 text-right font-semibold text-emerald-400">{fmtInt(r.total)} $</td>
+                </tr>
+              ))}
+              <tr className="border-t-2 font-semibold">
+                <td className="py-2" colSpan={3}>Total à facturer</td>
+                <td className="py-2 text-right text-emerald-400">{fmtInt(grand)} $</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ContractsTab({ companyId, canWrite }: { companyId: number; canWrite: boolean }) {
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -508,15 +579,16 @@ function ContractsTab({ companyId, canWrite }: { companyId: number; canWrite: bo
 
   const save = useMutation({
     mutationFn: () => {
+      const hasNum = (raw: string | undefined) => raw != null && raw.trim() !== '' && Number.isFinite(Number(raw));
       const prices = [
         ...types
-          .map((t) => ({ typeId: t.id, price: Number(typePrices[t.id]) || 0, std: t.price }))
-          .filter((x) => x.price !== x.std)
-          .map(({ typeId, price }) => ({ typeId, price })),
+          .map((t) => ({ typeId: t.id, raw: typePrices[t.id], std: t.price }))
+          .filter((x) => hasNum(x.raw) && Number(x.raw) >= 0 && Number(x.raw) !== x.std)
+          .map((x) => ({ typeId: x.typeId, price: Number(x.raw) })),
         ...packs
-          .map((p) => ({ packId: p.id, price: Number(packPrices[p.id]) || 0, std: p.price }))
-          .filter((x) => x.price !== x.std)
-          .map(({ packId, price }) => ({ packId, price })),
+          .map((p) => ({ packId: p.id, raw: packPrices[p.id], std: p.price }))
+          .filter((x) => hasNum(x.raw) && Number(x.raw) >= 0 && Number(x.raw) !== x.std)
+          .map((x) => ({ packId: x.packId, price: Number(x.raw) })),
       ];
       const body = { name: name.trim(), description: desc.trim() || undefined, prices };
       return editing === 'new' ? addGarageContract(companyId, body) : updateGarageContract(companyId, editing as number, body);
@@ -573,6 +645,7 @@ function ContractsTab({ companyId, canWrite }: { companyId: number; canWrite: bo
 
   return (
     <div className="space-y-4">
+      <GarageBilling companyId={companyId} />
       {canWrite && <Button onClick={openNew} disabled={!cfg.data}><Plus className="h-4 w-4" /> Nouveau contrat</Button>}
       <div className="rounded-2xl border bg-card p-6">
         {contracts.length === 0 ? <EmptyState icon={FileText} title="Aucun contrat" hint="Crée un contrat pour définir des tarifs préférentiels à une entreprise." /> : (
@@ -603,9 +676,14 @@ function SettingsTab({ companyId, canWrite }: { companyId: number; canWrite: boo
   const [tName, setTName] = useState(''); const [tPrice, setTPrice] = useState('');
   const [pName, setPName] = useState(''); const [pPrice, setPPrice] = useState('');
   const inv = () => queryClient.invalidateQueries({ queryKey: ['garage-config', companyId] });
+  const numField = (v: string, cur: number | undefined, def: number) => {
+    if (v.trim() === '') return cur ?? def;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : (cur ?? def);
+  };
 
   const saveS = useMutation({
-    mutationFn: () => saveGarageSettings(companyId, { depannagePerKm: Number(perKm || s?.depannagePerKm || 25), depannageMultiplier: Number(mult || s?.depannageMultiplier || 2), customMarginPct: Number(margin || s?.customMarginPct || 25), commissionPct: Number(comm || s?.commissionPct || 30) }),
+    mutationFn: () => saveGarageSettings(companyId, { depannagePerKm: numField(perKm, s?.depannagePerKm, 25), depannageMultiplier: numField(mult, s?.depannageMultiplier, 2), customMarginPct: numField(margin, s?.customMarginPct, 25), commissionPct: numField(comm, s?.commissionPct, 30) }),
     onSuccess: () => { toast('Paramètres enregistrés.', 'success'); inv(); },
     onError: () => toast('Échec.', 'error'),
   });
@@ -653,7 +731,7 @@ function SettingsTab({ companyId, canWrite }: { companyId: number; canWrite: boo
           {cfg.data.types.map((t) => (
             <div key={t.id} className="flex items-center gap-2 rounded-md border p-2 text-sm">
               <span className="flex-1 font-medium">{t.name}</span>
-              <input type="number" step="0.01" defaultValue={t.price} className={`${inputCls} w-24`} onBlur={(e) => { const v = Number(e.target.value); if (v !== t.price) patchT.mutate({ id: t.id, price: v }); }} />
+              <input type="number" step="0.01" defaultValue={t.price} className={`${inputCls} w-24`} onBlur={(e) => { const raw = e.target.value.trim(); if (raw === '') { e.target.value = String(t.price); return; } const v = Number(raw); if (Number.isFinite(v) && v >= 0 && v !== t.price) patchT.mutate({ id: t.id, price: v }); }} />
               <span className="text-muted-foreground">$</span>
               <button type="button" onClick={() => delT.mutate(t.id)} className="text-muted-foreground hover:text-red-400"><Trash2 className="h-4 w-4" /></button>
             </div>
@@ -678,6 +756,7 @@ function ModelsManager({ companyId }: { companyId: number }) {
   const [q, setQ] = useState('');
   const list = useQuery({ queryKey: ['garage-models-mgmt', companyId, q], queryFn: () => getGarageModels(companyId, q) });
   const models = list.data?.models ?? [];
+  const canManage = list.data?.canManageCatalog ?? false;
   const [name, setName] = useState('');
   const [man, setMan] = useState('');
   const [cat, setCat] = useState('');
@@ -687,7 +766,7 @@ function ModelsManager({ companyId }: { companyId: number }) {
     onSuccess: () => { toast('Modèle ajouté.', 'success'); setName(''); setMan(''); setCat(''); inv(); },
     onError: () => toast('Échec.', 'error'),
   });
-  const delM = useMutation({ mutationFn: (id: number) => deleteGarageModel(companyId, id), onSuccess: inv });
+  const delM = useMutation({ mutationFn: (id: number) => deleteGarageModel(companyId, id), onSuccess: inv, onError: () => toast('Suppression réservée au staff.', 'error') });
   return (
     <div className="rounded-2xl border bg-card p-6">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -705,7 +784,7 @@ function ModelsManager({ companyId }: { companyId: number }) {
           <div key={m.id} className="flex items-center gap-3 rounded-md border p-2 text-sm">
             <span className="flex-1 font-medium">{m.name}</span>
             <span className="text-xs text-muted-foreground">{m.manufacturer || '—'}{m.category ? ` · ${m.category}` : ''}</span>
-            <button type="button" onClick={async () => { if (await confirm({ title: 'Supprimer ?', message: m.name, destructive: true })) delM.mutate(m.id); }} className="text-muted-foreground hover:text-red-400"><Trash2 className="h-4 w-4" /></button>
+            {canManage && <button type="button" onClick={async () => { if (await confirm({ title: 'Supprimer ?', message: m.name, destructive: true })) delM.mutate(m.id); }} className="text-muted-foreground hover:text-red-400"><Trash2 className="h-4 w-4" /></button>}
           </div>
         ))}
         {models.length === 0 && <div className="p-4 text-center text-sm text-muted-foreground">{q ? 'Aucun résultat.' : ''}</div>}

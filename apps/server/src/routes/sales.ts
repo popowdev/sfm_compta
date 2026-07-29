@@ -95,6 +95,7 @@ const lineSchema = z.object({
 });
 const saleSchema = z.object({
   clientId: z.number().int().positive().nullish(),
+  employeeId: z.number().int().positive().nullish(),
   paymentMethod: z.enum(PAYMENT_METHOD_KEYS as [string, ...string[]]),
   discount: money.optional(),
   notes: z.string().trim().max(300).nullish().or(z.literal('')),
@@ -145,6 +146,22 @@ meSalesRouter.get(
         clientName: r.clientName,
       })),
     });
+  }),
+);
+
+meSalesRouter.get(
+  '/vendeurs',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    const rows = await db
+      .select({ id: companyEmployees.id, name: companyEmployees.name })
+      .from(companyEmployees)
+      .where(and(eq(companyEmployees.companyId, companyId), eq(companyEmployees.active, true)))
+      .orderBy(companyEmployees.name);
+    res.json({ vendeurs: rows });
   }),
 );
 
@@ -349,12 +366,23 @@ meSalesRouter.post(
     }
     const points = clientId && cfg.loyaltyEnabled ? Math.floor(total) : 0;
 
-    const seller = await db
-      .select({ id: companyEmployees.id })
-      .from(companyEmployees)
-      .where(and(eq(companyEmployees.companyId, companyId), eq(companyEmployees.userId, req.user!.id)))
-      .limit(1);
-    const employeeId = seller[0]?.id ?? null;
+    let employeeId: number | null = null;
+    if (parsed.data.employeeId) {
+      const chosen = await db
+        .select({ id: companyEmployees.id })
+        .from(companyEmployees)
+        .where(and(eq(companyEmployees.id, parsed.data.employeeId), eq(companyEmployees.companyId, companyId)))
+        .limit(1);
+      if (!chosen[0]) return res.status(400).json({ error: 'invalid_employee' });
+      employeeId = chosen[0].id;
+    } else {
+      const seller = await db
+        .select({ id: companyEmployees.id })
+        .from(companyEmployees)
+        .where(and(eq(companyEmployees.companyId, companyId), eq(companyEmployees.userId, req.user!.id)))
+        .limit(1);
+      employeeId = seller[0]?.id ?? null;
+    }
 
     const insufficient: string[] = [];
     const saleId = await db.transaction(async (tx) => {

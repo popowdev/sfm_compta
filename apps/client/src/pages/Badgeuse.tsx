@@ -23,6 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useConfirm } from '@/components/ui/confirm';
 import { useToast } from '@/components/ui/toast';
 import { fmtMoney, fmtInt } from '@/lib/declarations';
+import { ApiError } from '@/lib/api';
 import {
   getMyTimeclock,
   getTimeclock,
@@ -124,6 +125,7 @@ function EntriesTable({ entries }: { entries: TimeEntry[] }) {
 
 function MyClock({ companyId, pausesEnabled }: { companyId: number; pausesEnabled: boolean }) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const q = useQuery({ queryKey: ['timeclock-me', companyId], queryFn: () => getMyTimeclock(companyId) });
   const current = q.data?.current ?? null;
   const paused = !!current?.pauseStart;
@@ -134,7 +136,20 @@ function MyClock({ companyId, pausesEnabled }: { companyId: number; pausesEnable
     queryClient.invalidateQueries({ queryKey: ['timeclock', companyId] });
   };
 
-  const start = useMutation({ mutationFn: () => clockStart(companyId), onSuccess: invalidate });
+  const start = useMutation({
+    mutationFn: () => clockStart(companyId),
+    onSuccess: invalidate,
+    onError: (e) => {
+      const code = e instanceof ApiError ? e.code : null;
+      if (code === 'week_hours_cap') {
+        toast('Plafond d’heures de la semaine atteint : tu ne peux plus prendre le service.', 'error');
+      } else if (code === 'already_open') {
+        toast('Tu es déjà en service.', 'error');
+      } else {
+        toast('Impossible de prendre le service.', 'error');
+      }
+    },
+  });
   const pause = useMutation({ mutationFn: () => clockPause(companyId), onSuccess: invalidate });
   const resume = useMutation({ mutationFn: () => clockResume(companyId), onSuccess: invalidate });
   const stop = useMutation({ mutationFn: () => clockStop(companyId), onSuccess: invalidate });

@@ -21,6 +21,18 @@ function qs(p: ListParams = {}): string {
   return str ? `?${str}` : '';
 }
 
+export interface PricingDetail {
+  typeKey: string | null;
+  basePrice: number;
+  options: string[];
+  roleDiscounts: string[];
+  reduction: number;
+  reductionType: 'amount' | 'percent';
+  frais: number;
+  fraisType: 'amount' | 'percent';
+  finalPrice: number;
+}
+
 export interface Rental {
   id: number;
   propertyRef: string;
@@ -34,6 +46,7 @@ export interface Rental {
   reminderEnabled: boolean;
   tenantDiscordId: string | null;
   notes: string | null;
+  pricingDetail: PricingDetail | null;
   createdAt: string;
   unpaidCount: number;
   onMap: boolean;
@@ -61,6 +74,7 @@ export interface RentalInput {
   reminderEnabled?: boolean;
   tenantDiscordId?: string | null;
   notes?: string | null;
+  pricingDetail?: PricingDetail | null;
 }
 
 export const getRentals = (companyId: number, params?: ListParams) =>
@@ -125,6 +139,7 @@ export interface Sale {
   status: ImmoSaleStatus;
   saleDate: string | null;
   notes: string | null;
+  pricingDetail: PricingDetail | null;
   createdAt: string;
   onMap: boolean;
 }
@@ -141,6 +156,7 @@ export interface SaleInput {
   saleDate?: string | null;
   status?: ImmoSaleStatus;
   notes?: string | null;
+  pricingDetail?: PricingDetail | null;
 }
 
 export const getSales = (companyId: number, params?: ListParams) =>

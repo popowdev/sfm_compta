@@ -74,7 +74,7 @@ export const purgeDeclaration = (id: number) =>
   apiFetch<{ ok: boolean }>(`/api/declarations/${id}/purge`, { method: 'DELETE' });
 
 export function fmtMoney(n: number): string {
-  return n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return Math.round(n).toLocaleString('fr-FR', { maximumFractionDigits: 0 });
 }
 
 export function fmtInt(n: number): string {

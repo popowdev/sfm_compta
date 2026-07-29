@@ -16,6 +16,8 @@ import {
   FileDown,
   Users,
   UserCheck,
+  IdCard,
+  Gauge,
 } from 'lucide-react';
 import { CONTRACT_TYPES, moduleConfigBool, type ContractType } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
@@ -38,6 +40,27 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useConfirm } from '@/components/ui/confirm';
 import { useToast } from '@/components/ui/toast';
 import { ApiError } from '@/lib/api';
+import { PersonnelTab, FlotteTab } from '@/components/PersonnelFleet';
+import { useTourDemoActive } from '@/components/TourDemo';
+import { DEMO_EMPLOYEES } from '@/lib/moduleTours';
+
+type RhTab = 'employes' | 'personnel' | 'flotte';
+function RhTabBar({ tab, setTab }: { tab: RhTab; setTab: (t: RhTab) => void }) {
+  const items: { key: RhTab; label: string; icon: typeof Users }[] = [
+    { key: 'employes', label: 'Employés', icon: Users },
+    { key: 'personnel', label: 'Personnel', icon: IdCard },
+    { key: 'flotte', label: 'Flotte', icon: Gauge },
+  ];
+  return (
+    <div data-tour="rh-tabs" className="flex flex-wrap gap-1 rounded-xl border bg-card p-1.5">
+      {items.map((it) => (
+        <button key={it.key} type="button" onClick={() => setTab(it.key)} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === it.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}>
+          <it.icon className="h-4 w-4" /> {it.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const inputCls =
   'h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
@@ -139,6 +162,7 @@ export default function Employes() {
   const [linkUserId, setLinkUserId] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
   const [gridOpen, setGridOpen] = useState(false);
+  const [tab, setTab] = useState<RhTab>('employes');
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const set = <K extends keyof typeof EMPTY>(k: K, v: (typeof EMPTY)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -258,7 +282,9 @@ export default function Employes() {
     else create.mutate(body);
   };
 
-  const list = q.data?.employees ?? [];
+  const demoOn = useTourDemoActive('rh');
+  const realList = q.data?.employees ?? [];
+  const list = demoOn && realList.length === 0 ? DEMO_EMPLOYEES : realList;
   const members = q.data?.members ?? [];
   const activeCount = list.filter((e) => e.active).length;
   const warnTotal = list.reduce((s, e) => s + e.warnings, 0);
@@ -294,6 +320,11 @@ export default function Employes() {
 
   return (
     <div className="space-y-5">
+      <RhTabBar tab={tab} setTab={setTab} />
+      {tab === 'personnel' && <PersonnelTab companyId={companyId} canEdit={canEdit} />}
+      {tab === 'flotte' && <FlotteTab companyId={companyId} canEdit={canEdit} />}
+      {tab === 'employes' && (
+      <div className="space-y-5">
       {(canCreate || canEdit) && (
         <div className="flex flex-wrap justify-end gap-2">
           {canEdit && (
@@ -303,7 +334,7 @@ export default function Employes() {
             </Button>
           )}
           {canCreate && (
-            <Button onClick={openNew}>
+            <Button onClick={openNew} data-tour="rh-new">
               <Plus className="h-4 w-4" />
               Nouvel employé
             </Button>
@@ -311,7 +342,7 @@ export default function Employes() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div data-tour="rh-kpis" className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Kpi icon={Users} label="Employés" value={String(list.length)} />
         <Kpi icon={UserCheck} label="Actifs" value={String(activeCount)} accent="text-primary" />
         {showWarnings && (
@@ -358,10 +389,10 @@ export default function Employes() {
       )}
 
       <div className="space-y-3">
-        {list.map((e) => {
+        {list.map((e, ei) => {
           const isOpen = expanded.has(e.id);
           return (
-            <div key={e.id} className="rounded-xl border bg-card">
+            <div key={e.id} data-tour={ei === 0 ? 'rh-card' : undefined} className="rounded-xl border bg-card">
               <div className="flex flex-wrap items-start justify-between gap-3 p-4">
                 <button
                   type="button"
@@ -699,6 +730,8 @@ export default function Employes() {
             </form>
           </div>
         </div>
+      )}
+      </div>
       )}
     </div>
   );

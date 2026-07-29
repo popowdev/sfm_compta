@@ -39,11 +39,15 @@ export interface SaleLineInput {
 
 export interface SaleInput {
   clientId?: number | null;
+  employeeId?: number | null;
   paymentMethod: PaymentMethod;
   discount?: number;
   notes?: string;
   lines: SaleLineInput[];
 }
+
+export const getSaleVendeurs = (companyId: number) =>
+  apiFetch<{ vendeurs: { id: number; name: string }[] }>(`/api/me/companies/${companyId}/sales/vendeurs`);
 
 export const getSales = (companyId: number) =>
   apiFetch<{ canWrite: boolean; sales: SaleListItem[] }>(`/api/me/companies/${companyId}/sales`);

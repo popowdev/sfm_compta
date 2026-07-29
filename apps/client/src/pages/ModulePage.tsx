@@ -5,6 +5,8 @@ import { MODULES } from '@rp-compta/shared';
 import { type MyModule } from '@/lib/me';
 import { useCompany } from '@/lib/useCompany';
 import { moduleIcon } from '@/lib/moduleIcons';
+import { TourDemoProvider } from '@/components/TourDemo';
+import { ModuleTour } from '@/components/ModuleTour';
 
 const Declarations = lazyRetry(() => import('@/pages/Declarations'));
 const Depenses = lazyRetry(() => import('@/pages/Depenses'));
@@ -25,6 +27,7 @@ const Actionnaires = lazyRetry(() => import('@/pages/Actionnaires'));
 const Immobilier = lazyRetry(() => import('@/pages/Immobilier'));
 const ImmoCarte = lazyRetry(() => import('@/pages/ImmoCarte'));
 const Taxi = lazyRetry(() => import('@/pages/Taxi'));
+const Pawnshop = lazyRetry(() => import('@/pages/Pawnshop'));
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
@@ -48,6 +51,7 @@ const CONTENT: Partial<Record<string, LazyExoticComponent<ComponentType>>> = {
   immobilier: Immobilier,
   immo_carte: ImmoCarte,
   taxi: Taxi,
+  pawnshop: Pawnshop,
 };
 
 function Placeholder({ mod }: { mod: MyModule }) {
@@ -74,17 +78,20 @@ export default function ModulePage() {
   const Body = CONTENT[mod.key];
 
   return (
-    <div className="p-8">
-      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        {mine.company.name}
-      </div>
-      <h1 className="mt-1 text-2xl font-bold tracking-tight">{mod.label}</h1>
+    <TourDemoProvider>
+      <div className="p-8">
+        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {mine.company.name}
+        </div>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight">{mod.label}</h1>
 
-      <div className="mt-6">
-        <Suspense fallback={<div className="text-sm text-muted-foreground">Chargement…</div>}>
-          {Body ? <Body /> : <Placeholder mod={mod} />}
-        </Suspense>
+        <div className="mt-6">
+          <Suspense fallback={<div className="text-sm text-muted-foreground">Chargement…</div>}>
+            {Body ? <Body /> : <Placeholder mod={mod} />}
+          </Suspense>
+        </div>
       </div>
-    </div>
+      <ModuleTour moduleKey={mod.key} />
+    </TourDemoProvider>
   );
 }

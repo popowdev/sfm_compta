@@ -64,33 +64,3 @@ export const updateVip = (companyId: number, id: number, body: Partial<{ driverU
   apiFetch<{ ok: boolean }>(`${base(companyId)}/vip/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 export const deleteVip = (companyId: number, id: number) =>
   apiFetch<{ ok: boolean }>(`${base(companyId)}/vip/${id}`, { method: 'DELETE' });
-
-export interface Warning { id: number; reason: string; createdAt: string }
-export interface PersonnelRow {
-  id: number;
-  name: string;
-  active: boolean;
-  roleName: string | null;
-  contractSigned: boolean;
-  medicalVisit: boolean;
-  warnings: Warning[];
-  vehicles: { id: number; plate: string; perf: boolean }[];
-}
-export const getPersonnel = (companyId: number) =>
-  apiFetch<{ canWrite: boolean; rows: PersonnelRow[] }>(`${base(companyId)}/personnel`);
-export const updatePersonnel = (companyId: number, employeeId: number, body: Partial<{ contractSigned: boolean; medicalVisit: boolean }>) =>
-  apiFetch<{ ok: boolean }>(`${base(companyId)}/personnel/${employeeId}`, { method: 'PATCH', body: JSON.stringify(body) });
-export const addWarning = (companyId: number, employeeId: number, reason: string) =>
-  apiFetch<{ ok: boolean; id: number }>(`${base(companyId)}/personnel/${employeeId}/warnings`, { method: 'POST', body: JSON.stringify({ reason }) });
-export const deleteWarning = (companyId: number, employeeId: number, id: number) =>
-  apiFetch<{ ok: boolean }>(`${base(companyId)}/personnel/${employeeId}/warnings/${id}`, { method: 'DELETE' });
-
-export interface Vehicle { id: number; plate: string; perf: boolean; assignedEmployeeId: number | null; assignedName: string | null; notes: string | null; createdAt: string }
-export const getVehicles = (companyId: number) =>
-  apiFetch<{ canWrite: boolean; employees: { id: number; name: string }[]; stats: { total: number; perf: number; assigned: number; available: number }; rows: Vehicle[] }>(`${base(companyId)}/vehicles`);
-export const createVehicle = (companyId: number, body: { plate: string; perf?: boolean; assignedEmployeeId?: number | null; notes?: string | null }) =>
-  apiFetch<{ ok: boolean; id: number }>(`${base(companyId)}/vehicles`, { method: 'POST', body: JSON.stringify(body) });
-export const updateVehicle = (companyId: number, id: number, body: Partial<{ plate: string; perf: boolean; assignedEmployeeId: number | null; notes: string | null }>) =>
-  apiFetch<{ ok: boolean }>(`${base(companyId)}/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
-export const deleteVehicle = (companyId: number, id: number) =>
-  apiFetch<{ ok: boolean }>(`${base(companyId)}/vehicles/${id}`, { method: 'DELETE' });

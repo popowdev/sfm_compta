@@ -21,6 +21,8 @@ import {
   Wallet,
   Receipt,
   Landmark,
+  CheckCircle2,
+  Circle,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -52,12 +54,13 @@ import {
   updateExercice,
   deleteExercice,
   setExercicePayroll,
+  setExercicePaid,
   type Exercice,
   type ExerciceInput,
   type PayrollLine,
 } from '@/lib/exercices';
 import { getSale, deleteSale } from '@/lib/sales';
-import { buildInvoiceSvg, downloadSvgAsPng } from '@/lib/pngDoc';
+import { buildInvoiceSvg, buildPayrollSvg, downloadSvgAsPng } from '@/lib/pngDoc';
 
 const inputCls =
   'h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
@@ -553,6 +556,40 @@ function Row({
   );
 }
 
+const TONE = {
+  emerald: { border: 'border-emerald-500/30', bg: 'bg-emerald-500/5', text: 'text-emerald-400', chip: 'bg-emerald-500/15 text-emerald-300' },
+  red: { border: 'border-destructive/30', bg: 'bg-destructive/5', text: 'text-destructive', chip: 'bg-destructive/15 text-destructive' },
+} as const;
+
+function FlowStage({ n, title, tone, big, bigLabel, lines, caption }: {
+  n: number; title: string; tone: 'emerald' | 'red'; big: string; bigLabel: string; lines: [string, string][]; caption: string;
+}) {
+  const t = TONE[tone];
+  return (
+    <div className={`flex flex-col rounded-xl border ${t.border} ${t.bg} p-4`}>
+      <div className="mb-2 flex items-center gap-2">
+        <span className={`grid h-6 w-6 place-items-center rounded-full text-xs font-bold ${t.chip}`}>{n}</span>
+        <span className="text-sm font-semibold">{title}</span>
+      </div>
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{bigLabel}</div>
+      <div className={`text-2xl font-extrabold tracking-tight ${t.text}`}>{big}</div>
+      <div className="mt-2 space-y-1 border-t pt-2">
+        {lines.map(([l, v]) => (
+          <div key={l} className="flex items-center justify-between gap-2 text-xs">
+            <span className="text-muted-foreground">{l}</span>
+            <span className="font-medium">{v}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{caption}</p>
+    </div>
+  );
+}
+
+function FlowOp({ symbol }: { symbol: string }) {
+  return <div className="grid place-content-center self-center text-2xl font-bold text-muted-foreground/50 lg:px-1">{symbol}</div>;
+}
+
 const cellInput =
   'h-7 w-20 rounded border border-input bg-background px-1.5 text-right text-sm outline-none focus:ring-1 focus:ring-ring';
 
@@ -560,12 +597,18 @@ function PayrollRow({
   p,
   editable,
   showGarage,
+  showTaxi,
+  showPawn,
   onSave,
+  onTogglePaid,
 }: {
   p: PayrollLine;
   editable: boolean;
   showGarage: boolean;
+  showTaxi: boolean;
+  showPawn: boolean;
   onSave: (employeeId: number, body: { bonus: number; deductions: number }) => void;
+  onTogglePaid: (employeeId: number, paid: boolean) => void;
 }) {
   const [bonus, setBonus] = useState(p.bonus ? String(p.bonus) : '');
   const [deductions, setDeductions] = useState(p.deductions ? String(p.deductions) : '');
@@ -600,6 +643,9 @@ function PayrollRow({
         {p.cappedHours < p.hours && (
           <div className="text-[10px] text-amber-400">/ {p.hours.toLocaleString('fr-FR')} h</div>
         )}
+        {p.peakHours > 0 && (
+          <div className="text-[10px] text-violet-400">dont {p.peakHours.toLocaleString('fr-FR')} h pointe</div>
+        )}
       </td>
       <td className="px-2 py-1.5 text-right text-muted-foreground">{fmtInt(p.base)} $</td>
       <td className="px-2 py-1.5 text-right text-muted-foreground" title="Commission automatique — définie par le grade (module RH)">
@@ -608,6 +654,16 @@ function PayrollRow({
       {showGarage && (
         <td className="px-2 py-1.5 text-right text-emerald-400/80">
           {p.garageCommission ? `${fmtInt(p.garageCommission)} $` : '—'}
+        </td>
+      )}
+      {showTaxi && (
+        <td className="px-2 py-1.5 text-right text-amber-300/80" title={`Commission taxi — ${fmtInt(p.taxiRevenue)} $ de courses`}>
+          {p.taxiCommission ? `${fmtInt(p.taxiCommission)} $` : '—'}
+        </td>
+      )}
+      {showPawn && (
+        <td className="px-2 py-1.5 text-right text-violet-300/80" title={`Commission pawnshop — ${fmtInt(p.pawnshopRevenue)} $ de reventes`}>
+          {p.pawnshopCommission ? `${fmtInt(p.pawnshopCommission)} $` : '—'}
         </td>
       )}
       <td className="px-2 py-1.5 text-right">
@@ -625,6 +681,11 @@ function PayrollRow({
           />
         ) : (
           `${fmtInt(p.bonus)} $`
+        )}
+        {p.peakBonus > 0 && (
+          <div className="text-[10px] text-violet-400" title="Prime heures de pointe (21h→00h) — automatique">
+            +{fmtInt(p.peakBonus)} $ pointe
+          </div>
         )}
       </td>
       <td className="px-2 py-1.5 text-right">
@@ -647,6 +708,18 @@ function PayrollRow({
       <td className="px-2 py-1.5 text-right font-medium">
         {fmtInt(p.paid)} $
         {capped && <div className="text-[10px] text-amber-400">plafonné</div>}
+      </td>
+      <td className="px-2 py-1.5 text-center">
+        <button
+          type="button"
+          disabled={!editable}
+          onClick={() => onTogglePaid(p.employeeId, !p.isPaid)}
+          title={p.isPaid ? (p.paidAt ? `Payé le ${new Date(p.paidAt).toLocaleDateString('fr-FR')}` : 'Payé') : 'Marquer comme payé'}
+          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${p.isPaid ? 'bg-emerald-500/15 text-emerald-300' : 'bg-muted text-muted-foreground'} ${editable ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+        >
+          {p.isPaid ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}
+          {p.isPaid ? 'Payé' : 'À payer'}
+        </button>
       </td>
     </tr>
   );
@@ -796,6 +869,11 @@ function ExerciceDetailView({
       refresh();
     },
   });
+  const payPaid = useMutation({
+    mutationFn: (v: { employeeId: number; paid: boolean }) => setExercicePaid(companyId, id, v.employeeId, v.paid),
+    onSuccess: refresh,
+    onError: () => { alert('Échec.'); refresh(); },
+  });
   const saveDiv = useMutation({
     mutationFn: (v: number) => updateExercice(companyId, id, { dividends: v }),
     onSuccess: refresh,
@@ -828,6 +906,8 @@ function ExerciceDetailView({
   const { summary: s, payroll, payrollVisible, canEdit, stocksEnabled, salesByDay, salesByPayment, perfByEmployee, topProducts, salesList } = q.data;
 
   const showGarage = s.garageRevenue > 0 || payroll.some((p) => p.garageCommission > 0);
+  const showTaxi = payroll.some((p) => p.taxiCommission > 0);
+  const showPawn = payroll.some((p) => p.pawnshopCommission > 0);
   const totalCa = perfByEmployee.reduce((a, p) => a + p.ca, 0);
   const payData = salesByPayment.map((p) => ({ name: PAY_LABEL[p.method] ?? p.method, value: p.total }));
   const filteredSales = salesList.filter(
@@ -874,57 +954,62 @@ function ExerciceDetailView({
         <Kpi icon={Coins} label="Résultat après impôts" value={`${fmtMoney(s.netAfterTax)} $`} accent={s.netAfterTax >= 0 ? 'text-emerald-400' : 'text-destructive'} />
       </div>
 
-      <div className="rounded-xl border bg-card p-5">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">Déclaration fiscale</h3>
+      <div className="rounded-xl border bg-card p-5 md:p-6">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-bold tracking-tight">Le parcours de l'argent 💸</h3>
+            <p className="text-sm text-muted-foreground">Ce qui rentre, ce qui sort, ce qu'il reste — puis les impôts.</p>
+          </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={copyPayroll}><Copy className="h-3.5 w-3.5" />Copier paies</Button>
             <Button variant="outline" onClick={copyDeclaration}><Copy className="h-3.5 w-3.5" />Copier déclaration</Button>
           </div>
         </div>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div>
-            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">État comptable</div>
-            <Row label="CA Brut (avant remises)" value={`${fmtMoney(s.caGross)} $`} />
-            <Row label="Remises accordées" value={`− ${fmtMoney(s.salesDiscount)} $`} accent="text-violet-400" indent />
-            <Row label="CA Net" value={`${fmtMoney(s.caNet)} $`} strong accent="text-emerald-400" />
-            <Row label="Salaires versés" value={`− ${fmtInt(s.payrollTotal)} $`} accent="text-destructive" indent />
-            <Row label="Dépenses autres" value={`− ${fmtMoney(s.expensesTotal)} $`} accent="text-destructive" indent />
-            <Row label="Total charges" value={`− ${fmtMoney(s.charges)} $`} strong accent="text-destructive" />
-            <Row label="Réduction fiscale (dépenses déductibles)" value={`${fmtMoney(s.expensesDeductible)} $`} accent="text-sky-400" />
-            <div className="my-1 border-t" />
-            <Row label="Bénéfice (CA Net − Charges)" value={`${fmtMoney(s.benefit)} $`} strong accent={s.benefit >= 0 ? 'text-emerald-400' : 'text-destructive'} />
-          </div>
-          <div>
-            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Fiscalité</div>
-            <Row label="Base imposable" value={`${fmtMoney(s.taxableBenefit)} $`} />
-            <Row label={`Impôt sur les bénéfices${s.effectiveRate > 0 ? ` (~${s.effectiveRate}%)` : ''}`} value={`− ${fmtMoney(s.corporateTax)} $`} accent="text-destructive" />
-            {showDividends && (
-              <div className="flex items-center justify-between gap-3 py-1.5 text-sm">
-                <span className="text-muted-foreground">Dividendes versés</span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    disabled={!canEdit}
-                    className="h-8 w-28 rounded-md border border-input bg-background px-2 text-right text-sm outline-none focus:ring-1 focus:ring-ring"
-                    value={div}
-                    onChange={(e) => setDiv(e.target.value)}
-                  />
-                  {canEdit && (
-                    <Button variant="outline" onClick={() => saveDiv.mutate(Number(div) || 0)} disabled={saveDiv.isPending}>
-                      OK
-                    </Button>
-                  )}
+
+        <div className="grid items-stretch gap-3 lg:grid-cols-[1fr_auto_1fr_auto_1fr]">
+          <FlowStage
+            n={1} title="Ce qui rentre" tone="emerald"
+            big={`${fmtMoney(s.caNet)} $`} bigLabel="Chiffre d'affaires net"
+            lines={[['Ventes (CA brut)', `${fmtMoney(s.caGross)} $`], ['Remises accordées', `− ${fmtMoney(s.salesDiscount)} $`]]}
+            caption="Tout ce que l'entreprise a encaissé, remises déduites." />
+          <FlowOp symbol="−" />
+          <FlowStage
+            n={2} title="Ce qui sort" tone="red"
+            big={`${fmtMoney(s.charges)} $`} bigLabel="Total des charges"
+            lines={[['Salaires versés', `${fmtInt(s.payrollTotal)} $`], ['Dépenses', `${fmtMoney(s.expensesTotal)} $`]]}
+            caption="Les salaires payés + toutes les dépenses." />
+          <FlowOp symbol="=" />
+          <FlowStage
+            n={3} title="Ce qu'il reste" tone={s.benefit >= 0 ? 'emerald' : 'red'}
+            big={`${fmtMoney(s.benefit)} $`} bigLabel="Bénéfice (avant impôts)"
+            lines={[['CA net − charges', `${fmtMoney(s.benefit)} $`], ['Dépenses déductibles', `${fmtMoney(s.expensesDeductible)} $`]]}
+            caption="Revenus moins charges. C'est la base de l'impôt." />
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 md:col-span-2">
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-300"><Landmark className="h-4 w-4" /> Les impôts</div>
+            <div className="space-y-1.5 text-sm">
+              <div className="flex items-center justify-between"><span className="text-muted-foreground">Base imposable</span><span className="font-medium">{fmtMoney(s.taxableBenefit)} $</span></div>
+              <div className="flex items-center justify-between"><span className="text-muted-foreground">Impôt sur les bénéfices{s.effectiveRate > 0 ? ` (~${s.effectiveRate}%)` : ''}</span><span className="font-medium text-destructive">− {fmtMoney(s.corporateTax)} $</span></div>
+              {showDividends && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Dividendes versés</span>
+                  <div className="flex items-center gap-2">
+                    <input type="number" step="1" min="0" disabled={!canEdit} className="h-8 w-28 rounded-md border border-input bg-background px-2 text-right text-sm outline-none focus:ring-1 focus:ring-ring" value={div} onChange={(e) => setDiv(e.target.value)} />
+                    {canEdit && <Button variant="outline" onClick={() => saveDiv.mutate(Number(div) || 0)} disabled={saveDiv.isPending}>OK</Button>}
+                  </div>
                 </div>
-              </div>
-            )}
-            {showDividends && (
-              <Row label={`Impôt sur les dividendes (${s.dividendTaxRate}%)`} value={`− ${fmtMoney(s.dividendTax)} $`} accent="text-destructive" />
-            )}
-            <div className="my-1 border-t" />
-            <Row label="Résultat net après impôts" value={`${fmtMoney(s.netAfterTax)} $`} strong accent={s.netAfterTax >= 0 ? 'text-emerald-400' : 'text-destructive'} />
+              )}
+              {showDividends && (
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Impôt sur les dividendes ({s.dividendTaxRate}%)</span><span className="font-medium text-destructive">− {fmtMoney(s.dividendTax)} $</span></div>
+              )}
+            </div>
+          </div>
+          <div className={`grid place-content-center rounded-xl border p-4 text-center ${s.netAfterTax >= 0 ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-destructive/40 bg-destructive/10'}`}>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Résultat net final</div>
+            <div className={`mt-1 text-3xl font-extrabold tracking-tight ${s.netAfterTax >= 0 ? 'text-emerald-400' : 'text-destructive'}`}>{fmtMoney(s.netAfterTax)} $</div>
+            <div className="mt-1 text-xs text-muted-foreground">dans la poche, après impôts</div>
           </div>
         </div>
       </div>
@@ -1041,11 +1126,32 @@ function ExerciceDetailView({
       <div className="rounded-xl border bg-card p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">Paies employés — {fmtInt(s.payrollTotal)} $ versés</h3>
-          {q.data.hoursCap > 0 || q.data.salaryCap > 0 ? (
-            <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-              Plafonds {q.data.salaryCap > 0 ? `${fmtMoney(q.data.salaryCap)} $` : '∞'} / {q.data.hoursCap > 0 ? `${q.data.hoursCap}h` : '∞'}
-            </span>
-          ) : null}
+          <div className="flex items-center gap-2">
+            {q.data.hoursCap > 0 || q.data.salaryCap > 0 ? (
+              <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                Plafonds {q.data.salaryCap > 0 ? `${fmtMoney(q.data.salaryCap)} $` : '∞'} / {q.data.hoursCap > 0 ? `${q.data.hoursCap}h` : '∞'}
+              </span>
+            ) : null}
+            {payrollVisible && payroll.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const fd = (s2: string) => { const dt = new Date(`${s2}T00:00:00`); return Number.isNaN(dt.getTime()) ? s2 : dt.toLocaleDateString('fr-FR'); };
+                  const svg = buildPayrollSvg({
+                    companyName,
+                    exerciceLabel: q.data!.label,
+                    period: `${fd(q.data!.startDate)} → ${fd(q.data!.endDate)}`,
+                    today: `Généré le ${new Date().toLocaleDateString('fr-FR')}`,
+                    rows: payroll.map((p) => ({ name: p.name, gradeName: p.gradeName, hours: p.hours, base: p.base, commission: p.commission, total: p.paid, isPaid: p.isPaid })),
+                  });
+                  const slug = q.data!.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+                  downloadSvgAsPng(svg, `paies-${slug || q.data!.id}.png`);
+                }}
+              >
+                <FileDown className="h-4 w-4" /> Récap paies (IRS)
+              </Button>
+            )}
+          </div>
         </div>
         {!payrollVisible ? (
           <div className="text-xs text-muted-foreground">Le détail par employé nécessite l'accès « Badgeuse ». Total inclus dans les charges.</div>
@@ -1063,18 +1169,21 @@ function ExerciceDetailView({
                   {showGarage && (
                     <th className="px-2 py-1.5 text-right font-semibold">Garage</th>
                   )}
+                  {showTaxi && <th className="px-2 py-1.5 text-right font-semibold">Taxi</th>}
+                  {showPawn && <th className="px-2 py-1.5 text-right font-semibold">Pawnshop</th>}
                   <th className="px-2 py-1.5 text-right font-semibold">Prime</th>
                   <th className="px-2 py-1.5 text-right font-semibold">Retenue</th>
                   <th className="px-2 py-1.5 text-right font-semibold">Total paie</th>
+                  <th className="px-2 py-1.5 text-center font-semibold">Statut</th>
                 </tr>
               </thead>
               <tbody>
                 {payroll.map((p) => (
-                  <PayrollRow key={p.employeeId} p={p} editable={canEdit} showGarage={showGarage} onSave={(employeeId, body) => savePay.mutate({ employeeId, body })} />
+                  <PayrollRow key={p.employeeId} p={p} editable={canEdit} showGarage={showGarage} showTaxi={showTaxi} showPawn={showPawn} onSave={(employeeId, body) => savePay.mutate({ employeeId, body })} onTogglePaid={(employeeId, paid) => payPaid.mutate({ employeeId, paid })} />
                 ))}
                 <tr className="border-t-2 font-semibold">
                   <td className="px-2 py-2">TOTAL</td>
-                  <td className="px-2 py-2 text-right text-sky-400">{Math.round(payroll.reduce((a, p) => a + p.hours, 0) * 60)}min</td>
+                  <td className="px-2 py-2 text-right text-sky-400">{payroll.reduce((a, p) => a + p.hours, 0).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} h</td>
                   <td className="px-2 py-2 text-right">{fmtInt(payroll.reduce((a, p) => a + p.base, 0))} $</td>
                   <td className="px-2 py-2 text-right">{fmtInt(payroll.reduce((a, p) => a + p.commission, 0))} $</td>
                   {showGarage && (
@@ -1082,9 +1191,17 @@ function ExerciceDetailView({
                       {fmtInt(payroll.reduce((a, p) => a + p.garageCommission, 0))} $
                     </td>
                   )}
-                  <td className="px-2 py-2 text-right">{fmtInt(payroll.reduce((a, p) => a + p.bonus, 0))} $</td>
+                  {showTaxi && <td className="px-2 py-2 text-right text-amber-300/80">{fmtInt(payroll.reduce((a, p) => a + p.taxiCommission, 0))} $</td>}
+                  {showPawn && <td className="px-2 py-2 text-right text-violet-300/80">{fmtInt(payroll.reduce((a, p) => a + p.pawnshopCommission, 0))} $</td>}
+                  <td className="px-2 py-2 text-right">
+                    {fmtInt(payroll.reduce((a, p) => a + p.bonus, 0))} $
+                    {s.peakBonus > 0 && (
+                      <div className="text-[10px] font-normal text-violet-400">+{fmtInt(s.peakBonus)} $ pointe</div>
+                    )}
+                  </td>
                   <td className="px-2 py-2 text-right text-destructive">{fmtInt(payroll.reduce((a, p) => a + p.deductions, 0))} $</td>
                   <td className="px-2 py-2 text-right">{fmtInt(s.payrollTotal)} $</td>
+                  <td className="px-2 py-2 text-center text-xs text-muted-foreground">{payroll.filter((p) => p.isPaid).length}/{payroll.length} payés</td>
                 </tr>
               </tbody>
             </table>

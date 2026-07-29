@@ -14,6 +14,7 @@ import {
   getSale,
   createSale,
   deleteSale,
+  getSaleVendeurs,
   type SaleInput,
 } from '@/lib/sales';
 import { buildInvoiceSvg, downloadSvgAsPng } from '@/lib/pngDoc';
@@ -61,6 +62,9 @@ export function SalesView({
   const [payment, setPayment] = useState<PaymentMethod>('cash');
   const [discount, setDiscount] = useState('');
   const [notes, setNotes] = useState('');
+  const [vendeurId, setVendeurId] = useState<number | ''>('');
+  const vendeursQ = useQuery({ queryKey: ['vendeurs', companyId], queryFn: () => getSaleVendeurs(companyId) });
+  const vendeurs = vendeursQ.data?.vendeurs ?? [];
 
   const salesQ = useQuery({ queryKey: ['sales', companyId], queryFn: () => getSales(companyId) });
   const clientsQ = useQuery({
@@ -83,6 +87,7 @@ export function SalesView({
       setCart([]);
       setDiscount('');
       setNotes('');
+      setVendeurId('');
       setClientId('');
       invalidateAll();
       const warns: string[] = [];
@@ -169,6 +174,7 @@ export function SalesView({
     const body: SaleInput = {
       paymentMethod: payment,
       clientId: clientLink && clientId ? Number(clientId) : null,
+      employeeId: vendeurId ? Number(vendeurId) : null,
       discount: discountAllowed ? Number(discount) || 0 : 0,
       notes: notes.trim() || undefined,
       lines: cart.map((l) =>
@@ -345,6 +351,15 @@ export function SalesView({
                 )}
               </div>
             )}
+            <label className="block text-sm">
+              <span className="mb-1 block text-muted-foreground">Vendeur</span>
+              <select className={inputCls} value={vendeurId} onChange={(e) => setVendeurId(e.target.value ? Number(e.target.value) : '')}>
+                <option value="">Moi</option>
+                {vendeurs.map((v) => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+            </label>
             <label className="block text-sm">
               <span className="mb-1 block text-muted-foreground">Paiement</span>
               <select

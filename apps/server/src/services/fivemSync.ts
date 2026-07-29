@@ -1,4 +1,4 @@
-import { and, eq, isNull, inArray, notInArray } from 'drizzle-orm';
+import { and, eq, isNull, inArray, notInArray, sql } from 'drizzle-orm';
 import { MODULES } from '@rp-compta/shared';
 import { defaultPermRows } from './grades';
 import { fetchGameCharacters, isUnemployedJob, type GameChar } from './fivemPull';
@@ -152,7 +152,7 @@ async function upsertMembership(companyId: number, userId: number, roleId: numbe
     .where(and(eq(memberships.companyId, companyId), eq(memberships.userId, userId)))
     .limit(1);
   if (existing[0]) {
-    await db.update(memberships).set({ companyRoleId: roleId, active: true }).where(eq(memberships.id, existing[0].id));
+    await db.update(memberships).set({ active: true }).where(eq(memberships.id, existing[0].id));
     return;
   }
   try {
@@ -161,12 +161,13 @@ async function upsertMembership(companyId: number, userId: number, roleId: numbe
     if (!isDuplicate(err)) throw err;
     await db
       .update(memberships)
-      .set({ companyRoleId: roleId, active: true })
+      .set({ active: true })
       .where(and(eq(memberships.companyId, companyId), eq(memberships.userId, userId)));
   }
 }
 
 async function deactivateOtherFivemMemberships(userId: number, keepCompanyIds: number[]): Promise<void> {
+  if (!keepCompanyIds.length) return;
   const rows = await db
     .select({ id: memberships.id })
     .from(memberships)
@@ -265,7 +266,6 @@ function toSelected(c: GameChar): SelectedChar {
 }
 
 export async function saveCharacterList(discord: string, characters: GameChar[]): Promise<void> {
-  await db.delete(fivemCharacters).where(eq(fivemCharacters.discordId, discord));
   const seen = new Set<string>();
   const rows = characters
     .map((c) => ({ ...c, name: (c.name || '—').slice(0, 120) }))
@@ -283,7 +283,25 @@ export async function saveCharacterList(discord: string, characters: GameChar[])
       gradeLabel: c.gradeLabel.slice(0, 120),
       unemployed: isUnemployedJob(c.jobId),
     }));
-  if (rows.length) await db.insert(fivemCharacters).values(rows);
+  if (!rows.length) {
+    await db.delete(fivemCharacters).where(eq(fivemCharacters.discordId, discord));
+    return;
+  }
+  await db
+    .insert(fivemCharacters)
+    .values(rows)
+    .onDuplicateKeyUpdate({
+      set: {
+        jobId: sql`values(job_id)`,
+        jobLabel: sql`values(job_label)`,
+        grade: sql`values(grade)`,
+        gradeLabel: sql`values(grade_label)`,
+        unemployed: sql`values(unemployed)`,
+      },
+    });
+  await db
+    .delete(fivemCharacters)
+    .where(and(eq(fivemCharacters.discordId, discord), notInArray(fivemCharacters.name, rows.map((r) => r.name))));
 }
 
 async function saveSelectedRoster(discord: string, char: SelectedChar | null): Promise<void> {
@@ -404,7 +422,6 @@ export async function refreshSelectedCharacters(): Promise<{ processed: number; 
     try {
       const res = await fetchGameCharacters(r.discordId);
       if (!res.ok) {
-        if (res.reason === 'not_found') departed += await deactivateFivemMembershipsForDiscord(r.discordId);
         continue;
       }
       const out = await provisionAllCharacters(r.discordId, res.characters);

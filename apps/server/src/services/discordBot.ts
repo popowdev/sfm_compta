@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { env } from '../env';
 import { logger } from '../logger';
 
@@ -113,4 +114,134 @@ export function buildRentOverdueEmbed(i: RentOverdueInput): Record<string, unkno
     ],
     footer: { text: 'Notification automatique. Merci de régulariser au plus vite.' },
   };
+}
+
+function botHeaders(): Record<string, string> | null {
+  const token = env.DISCORD_BOT_TOKEN;
+  if (!token) return null;
+  return { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' };
+}
+
+export async function createGuildTextChannel(
+  guildId: string,
+  name: string,
+  opts?: { parentId?: string; topic?: string },
+): Promise<string | null> {
+  const headers = botHeaders();
+  if (!headers) return null;
+  try {
+    const res = await fetch(`${API}/guilds/${guildId}/channels`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name,
+        type: 0,
+        parent_id: opts?.parentId,
+        topic: opts?.topic?.slice(0, 1024),
+      }),
+    });
+    if (!res.ok) {
+      logger.warn({ status: res.status }, 'createGuildTextChannel: échec');
+      return null;
+    }
+    const ch = (await res.json()) as { id: string };
+    return ch.id;
+  } catch (err) {
+    logger.error({ err }, 'createGuildTextChannel: erreur réseau');
+    return null;
+  }
+}
+
+export async function postChannelMessage(channelId: string, content: string): Promise<boolean> {
+  const headers = botHeaders();
+  if (!headers) return false;
+  try {
+    const res = await fetch(`${API}/channels/${channelId}/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ content: content.slice(0, 2000), allowed_mentions: { parse: [] } }),
+    });
+    return res.ok;
+  } catch (err) {
+    logger.error({ err }, 'postChannelMessage: erreur réseau');
+    return false;
+  }
+}
+
+export async function uploadChannelFile(
+  channelId: string,
+  filename: string,
+  data: string,
+  content?: string,
+): Promise<boolean> {
+  const token = env.DISCORD_BOT_TOKEN;
+  if (!token) return false;
+  try {
+    const form = new FormData();
+    form.append('payload_json', JSON.stringify({ content: content?.slice(0, 2000) ?? '', allowed_mentions: { parse: [] } }));
+    form.append('files[0]', new Blob([data], { type: 'text/html' }), filename);
+    const res = await fetch(`${API}/channels/${channelId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bot ${token}` },
+      body: form,
+    });
+    if (!res.ok) logger.warn({ status: res.status }, 'uploadChannelFile: échec');
+    return res.ok;
+  } catch (err) {
+    logger.error({ err }, 'uploadChannelFile: erreur réseau');
+    return false;
+  }
+}
+
+export async function deleteChannel(channelId: string): Promise<boolean> {
+  const token = env.DISCORD_BOT_TOKEN;
+  if (!token) return false;
+  try {
+    const res = await fetch(`${API}/channels/${channelId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bot ${token}` },
+    });
+    return res.ok;
+  } catch (err) {
+    logger.error({ err }, 'deleteChannel: erreur réseau');
+    return false;
+  }
+}
+
+export async function postChannelPayload(channelId: string, payload: Record<string, unknown>): Promise<boolean> {
+  const headers = botHeaders();
+  if (!headers) return false;
+  try {
+    const res = await fetch(`${API}/channels/${channelId}/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ allowed_mentions: { parse: [] }, ...payload }),
+    });
+    if (!res.ok) logger.warn({ status: res.status }, 'postChannelPayload: échec');
+    return res.ok;
+  } catch (err) {
+    logger.error({ err }, 'postChannelPayload: erreur réseau');
+    return false;
+  }
+}
+
+export async function uploadChannelAttachment(channelId: string, filePath: string, filename: string, content?: string): Promise<boolean> {
+  const token = env.DISCORD_BOT_TOKEN;
+  if (!token) return false;
+  try {
+    const data = await readFile(filePath);
+    const form = new FormData();
+    form.append('payload_json', JSON.stringify({ content: content?.slice(0, 2000) ?? '', allowed_mentions: { parse: [] } }));
+    form.append('files[0]', new Blob([new Uint8Array(data)]), filename.slice(0, 200) || 'fichier');
+    const res = await fetch(`${API}/channels/${channelId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bot ${token}` },
+      body: form,
+    });
+    if (!res.ok) logger.warn({ status: res.status }, 'uploadChannelAttachment: échec');
+    return res.ok;
+  } catch (err) {
+    logger.error({ err }, 'uploadChannelAttachment: erreur réseau');
+    return false;
+  }
 }

@@ -1,8 +1,9 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNotNull, isNull, lte, sql } from 'drizzle-orm';
+import { moduleConfigNumber } from '@rp-compta/shared';
 import { db } from '../db';
-import { timeEntries, companyEmployees, companyRoles } from '../db/schema';
+import { timeEntries, companyEmployees, companyRoles, companyModules } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
@@ -19,6 +20,44 @@ function nowStr(): string {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+function weekBounds(): { from: string; to: string } {
+  const now = new Date();
+  const dow = (now.getUTCDay() + 6) % 7;
+  const mon = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dow));
+  const sun = new Date(mon.getTime() + 6 * 86_400_000);
+  return { from: mon.toISOString().slice(0, 10), to: sun.toISOString().slice(0, 10) };
+}
+
+async function weeklyHoursCapFor(companyId: number): Promise<number> {
+  const rows = await db
+    .select({ config: companyModules.config })
+    .from(companyModules)
+    .where(and(eq(companyModules.companyId, companyId), eq(companyModules.moduleKey, 'badgeuse')))
+    .limit(1);
+  const raw = rows[0]?.config;
+  const cfg = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Record<string, unknown> | null;
+  return moduleConfigNumber(cfg, 'badgeuse', 'weeklyHoursCap');
+}
+
+async function weekWorkedHours(companyId: number, employeeId: number): Promise<number> {
+  const { from, to } = weekBounds();
+  const rows = await db
+    .select({
+      mins: sql<string>`COALESCE(SUM(GREATEST(0, TIMESTAMPDIFF(MINUTE, ${timeEntries.clockIn}, ${timeEntries.clockOut}) - ${timeEntries.pauseMinutes})), 0)`,
+    })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.companyId, companyId),
+        eq(timeEntries.employeeId, employeeId),
+        isNotNull(timeEntries.clockOut),
+        gte(sql`DATE(${timeEntries.clockIn})`, from),
+        lte(sql`DATE(${timeEntries.clockIn})`, to),
+      ),
+    );
+  return Number(rows[0]?.mins ?? 0) / 60;
 }
 
 function minutesBetween(a: string, b: string | null): number | null {
@@ -145,6 +184,10 @@ meTimeclockRouter.post(
   asyncHandler(async (req, res) => {
     await selfAction(req, res, async (emp, open) => {
       if (open) return { status: 409, error: 'already_open' };
+      const cap = await weeklyHoursCapFor(emp.companyId);
+      if (cap > 0 && (await weekWorkedHours(emp.companyId, emp.id)) >= cap) {
+        return { status: 409, error: 'week_hours_cap' };
+      }
       await db.insert(timeEntries).values({ companyId: emp.companyId, employeeId: emp.id, clockIn: nowStr() });
     });
   }),

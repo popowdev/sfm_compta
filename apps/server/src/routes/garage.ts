@@ -106,12 +106,13 @@ meGarageRouter.get('/members', asyncHandler(async (req, res) => {
   const g = await gate(req, companyId);
   if (g.error) return res.status(g.error).json({ error: 'forbidden' });
   const rows = await db
-    .select({ userId: users.id, name: users.displayName, gradeName: companyRoles.name })
+    .select({ userId: users.id, name: users.displayName, gradeName: companyRoles.name, commissionRate: companyEmployees.commissionRate })
     .from(memberships)
     .innerJoin(users, eq(memberships.userId, users.id))
     .leftJoin(companyRoles, eq(memberships.companyRoleId, companyRoles.id))
+    .leftJoin(companyEmployees, and(eq(companyEmployees.userId, users.id), eq(companyEmployees.companyId, companyId), eq(companyEmployees.active, true)))
     .where(and(eq(memberships.companyId, companyId), eq(memberships.active, true)));
-  res.json({ members: rows });
+  res.json({ members: rows.map((r) => ({ userId: r.userId, name: r.name, gradeName: r.gradeName, commissionRate: r.commissionRate != null ? Number(r.commissionRate) : null })) });
 }));
 
 meGarageRouter.get('/earnings', asyncHandler(async (req, res) => {
@@ -146,6 +147,46 @@ meGarageRouter.get('/earnings', asyncHandler(async (req, res) => {
     map.set(k, e);
   }
   res.json({ earnings: [...map.values()].sort((a, b) => b.commission - a.commission) });
+}));
+
+meGarageRouter.get('/billing', asyncHandler(async (req, res) => {
+  const companyId = parseId(req.params.companyId);
+  if (!companyId) return res.status(400).json({ error: 'bad_request' });
+  const g = await gate(req, companyId);
+  if (g.error) return res.status(g.error).json({ error: 'forbidden' });
+
+  const now = new Date();
+  const day = now.getUTCDay();
+  const mon = new Date(now);
+  mon.setUTCDate(now.getUTCDate() - (day === 0 ? 6 : day - 1));
+  const sun = new Date(mon);
+  sun.setUTCDate(mon.getUTCDate() + 6);
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+  const fromQ = typeof req.query.from === 'string' && dateRe.test(req.query.from) ? req.query.from : mon.toISOString().slice(0, 10);
+  const toQ = typeof req.query.to === 'string' && dateRe.test(req.query.to) ? req.query.to : sun.toISOString().slice(0, 10);
+
+  const repWhere = and(eq(garageRepairs.companyId, companyId), sql`${garageRepairs.contractId} IS NOT NULL`, sql`${garageRepairs.createdAt} >= ${fromQ + ' 00:00:00'}`, sql`${garageRepairs.createdAt} <= ${toQ + ' 23:59:59'}`);
+  const cusWhere = and(eq(garageCustoms.companyId, companyId), sql`${garageCustoms.contractId} IS NOT NULL`, sql`${garageCustoms.createdAt} >= ${fromQ + ' 00:00:00'}`, sql`${garageCustoms.createdAt} <= ${toQ + ' 23:59:59'}`);
+
+  const [rep, cus, contracts] = await Promise.all([
+    db.select({ contractId: garageRepairs.contractId, count: sql<number>`COUNT(*)`, total: sql<string>`COALESCE(SUM(${garageRepairs.total}),0)` }).from(garageRepairs).where(repWhere).groupBy(garageRepairs.contractId),
+    db.select({ contractId: garageCustoms.contractId, count: sql<number>`COUNT(*)`, total: sql<string>`COALESCE(SUM(${garageCustoms.finalPrice}),0)` }).from(garageCustoms).where(cusWhere).groupBy(garageCustoms.contractId),
+    db.select({ id: garageContracts.id, name: garageContracts.name, active: garageContracts.active }).from(garageContracts).where(eq(garageContracts.companyId, companyId)),
+  ]);
+  const repById = new Map(rep.map((r) => [r.contractId, r]));
+  const cusById = new Map(cus.map((c) => [c.contractId, c]));
+  const rows = contracts
+    .map((c) => {
+      const r = repById.get(c.id);
+      const cu = cusById.get(c.id);
+      const repairsTotal = Math.round(Number(r?.total ?? 0));
+      const customsTotal = Math.round(Number(cu?.total ?? 0));
+      return { contractId: c.id, name: c.name, active: c.active, repairsCount: Number(r?.count ?? 0), repairsTotal, customsCount: Number(cu?.count ?? 0), customsTotal, total: repairsTotal + customsTotal };
+    })
+    .filter((x) => x.repairsCount || x.customsCount || x.active)
+    .sort((a, b) => b.total - a.total);
+  const grandTotal = rows.reduce((s, r) => s + r.total, 0);
+  res.json({ from: fromQ, to: toQ, rows, grandTotal });
 }));
 
 async function requireWrite(req: Request, companyId: number, res: import('express').Response): Promise<boolean> {
@@ -489,9 +530,9 @@ meGarageRouter.post('/repairs', asyncHandler(async (req, res) => {
   }
   const km = d.depannageKm ?? 0;
   const depannage = km * perKm * mult;
-  const total = Math.round((base + depannage) * 100) / 100;
+  const total = Math.round(base + depannage);
   const effectivePct = await commissionPctFor(companyId, d.mechanicUserId, commissionPct);
-  const commissionAmount = Math.round((total * effectivePct) / 100 * 100) / 100;
+  const commissionAmount = Math.round((total * effectivePct) / 100);
 
   await db.insert(garageRepairs).values({
     companyId,
@@ -568,10 +609,10 @@ meGarageRouter.post('/customs', asyncHandler(async (req, res) => {
   const commissionPct = Number(settings?.commissionPct ?? 30);
   const discount = d.discountPct ?? 0;
   const base = d.costPrice * (1 + margin / 100);
-  const finalPrice = Math.round(base * (1 - discount / 100) * 100) / 100;
-  const profit = Math.round((finalPrice - d.costPrice) * 100) / 100;
+  const finalPrice = Math.round(base * (1 - discount / 100));
+  const profit = Math.round(finalPrice - d.costPrice);
   const effectivePct = await commissionPctFor(companyId, d.mechanicUserId, commissionPct);
-  const commissionAmount = Math.round((Math.max(0, profit) * effectivePct) / 100 * 100) / 100;
+  const commissionAmount = Math.round((Math.max(0, profit) * effectivePct) / 100);
   await db.insert(garageCustoms).values({
     companyId,
     contractId: d.contractId ?? null,

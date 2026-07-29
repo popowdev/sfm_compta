@@ -223,3 +223,72 @@ export function buildInvoiceSvg(d: InvoiceData): string {
     `${header(d.companyName, `FACTURE N° ${d.saleId}`, `Le ${d.date}`)}${meta}${tableHead}${rows}${more}${totals}${pay}`,
   );
 }
+
+function intFmt(n: number): string {
+  return Math.round(n).toLocaleString('fr-FR', { maximumFractionDigits: 0 });
+}
+
+export interface PayrollDoc {
+  companyName: string;
+  exerciceLabel: string;
+  period: string;
+  today: string;
+  rows: { name: string; gradeName: string | null; hours: number; base: number; commission: number; total: number; isPaid: boolean }[];
+}
+
+export function buildPayrollSvg(d: PayrollDoc): string {
+  const rows = d.rows.slice(0, 26);
+  const totHours = d.rows.reduce((s, r) => s + r.hours, 0);
+  const totBase = d.rows.reduce((s, r) => s + r.base, 0);
+  const totComm = d.rows.reduce((s, r) => s + r.commission, 0);
+  const totPaid = d.rows.reduce((s, r) => s + r.total, 0);
+  const nbPaid = d.rows.filter((r) => r.isPaid).length;
+
+  const thY = 214;
+  const x = { name: 40, hours: 380, base: 490, comm: 600, total: 712, paid: 758 };
+  let y = thY + 30;
+  const body = rows
+    .map((r) => {
+      const row = `
+    <text x="${x.name}" y="${y}" font-family="${FONT}" font-size="13" fill="${DARK}">${esc(r.name.slice(0, 30))}</text>
+    ${r.gradeName ? `<text x="${x.name}" y="${y + 13}" font-family="${FONT}" font-size="10" fill="${MUTED}">${esc(r.gradeName.slice(0, 30))}</text>` : ''}
+    <text x="${x.hours}" y="${y}" font-family="${FONT}" font-size="13" fill="${DARK}" text-anchor="end">${intFmt(r.hours)} h</text>
+    <text x="${x.base}" y="${y}" font-family="${FONT}" font-size="13" fill="${MUTED}" text-anchor="end">${intFmt(r.base)}</text>
+    <text x="${x.comm}" y="${y}" font-family="${FONT}" font-size="13" fill="${MUTED}" text-anchor="end">${intFmt(r.commission)}</text>
+    <text x="${x.total}" y="${y}" font-family="${FONT}" font-size="13" font-weight="700" fill="${DARK}" text-anchor="end">${intFmt(r.total)}</text>
+    <text x="${x.paid}" y="${y}" font-family="${FONT}" font-size="13" font-weight="700" fill="${r.isPaid ? ACCENT : '#cbd5e1'}" text-anchor="middle">${r.isPaid ? '✓' : '–'}</text>
+    <line x1="40" y1="${y + 11}" x2="${W - 40}" y2="${y + 11}" stroke="${LINE}" stroke-width="1"/>`;
+      y += 30;
+      return row;
+    })
+    .join('');
+
+  const totY = y + 8;
+  const boxY = totY + 24;
+  const inner = `
+    ${header(d.companyName, 'RÉCAPITULATIF DES PAIES', d.today)}
+    <text x="40" y="145" font-family="${FONT}" font-size="16" font-weight="700" fill="${DARK}">${esc(d.exerciceLabel)}</text>
+    <text x="40" y="168" font-family="${FONT}" font-size="13" fill="${MUTED}">Période : ${esc(d.period)}</text>
+
+    <rect x="40" y="${thY - 18}" width="${W - 80}" height="26" fill="#f1f5f9"/>
+    <text x="${x.name}" y="${thY}" font-family="${FONT}" font-size="11" font-weight="700" fill="${MUTED}">EMPLOYÉ</text>
+    <text x="${x.hours}" y="${thY}" font-family="${FONT}" font-size="11" font-weight="700" fill="${MUTED}" text-anchor="end">HEURES</text>
+    <text x="${x.base}" y="${thY}" font-family="${FONT}" font-size="11" font-weight="700" fill="${MUTED}" text-anchor="end">BASE</text>
+    <text x="${x.comm}" y="${thY}" font-family="${FONT}" font-size="11" font-weight="700" fill="${MUTED}" text-anchor="end">COMM.</text>
+    <text x="${x.total}" y="${thY}" font-family="${FONT}" font-size="11" font-weight="700" fill="${MUTED}" text-anchor="end">TOTAL</text>
+    <text x="${x.paid}" y="${thY}" font-family="${FONT}" font-size="11" font-weight="700" fill="${MUTED}" text-anchor="middle">PAYÉ</text>
+    ${body}
+    <text x="${x.name}" y="${totY}" font-family="${FONT}" font-size="13" font-weight="700" fill="${DARK}">TOTAL (${d.rows.length} employé${d.rows.length > 1 ? 's' : ''})</text>
+    <text x="${x.hours}" y="${totY}" font-family="${FONT}" font-size="13" font-weight="700" fill="${DARK}" text-anchor="end">${intFmt(totHours)} h</text>
+    <text x="${x.base}" y="${totY}" font-family="${FONT}" font-size="13" font-weight="700" fill="${DARK}" text-anchor="end">${intFmt(totBase)}</text>
+    <text x="${x.comm}" y="${totY}" font-family="${FONT}" font-size="13" font-weight="700" fill="${DARK}" text-anchor="end">${intFmt(totComm)}</text>
+    <text x="${x.total}" y="${totY}" font-family="${FONT}" font-size="13" font-weight="700" fill="${ACCENT}" text-anchor="end">${intFmt(totPaid)}</text>
+
+    <rect x="40" y="${boxY}" width="${W - 80}" height="52" rx="8" fill="${DARK}"/>
+    <text x="60" y="${boxY + 22}" font-family="${FONT}" font-size="12" fill="#94a3b8">MASSE SALARIALE TOTALE</text>
+    <text x="60" y="${boxY + 42}" font-family="${FONT}" font-size="20" font-weight="700" fill="#ffffff">${intFmt(totPaid)} $</text>
+    <text x="${W - 60}" y="${boxY + 22}" font-family="${FONT}" font-size="12" fill="#94a3b8" text-anchor="end">Payés</text>
+    <text x="${W - 60}" y="${boxY + 42}" font-family="${FONT}" font-size="20" font-weight="700" fill="${ACCENT}" text-anchor="end">${nbPaid}/${d.rows.length}</text>
+    ${d.rows.length > 26 ? `<text x="40" y="${boxY + 80}" font-family="${FONT}" font-size="11" fill="${MUTED}">Note : ${d.rows.length - 26} employé(s) supplémentaire(s) non affiché(s).</text>` : ''}`;
+  return frame(inner);
+}
