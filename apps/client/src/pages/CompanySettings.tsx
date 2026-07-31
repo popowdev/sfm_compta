@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings2, Award, Users, type LucideIcon } from 'lucide-react';
+import { Settings2, Award, Users, LayoutList, type LucideIcon } from 'lucide-react';
 import { MODULES, MODULE_CONFIG, moduleConfigBool, type ModuleKey } from '@rp-compta/shared';
 import { toggleMyModule, uploadMyCompanyLogo, type MyModule } from '@/lib/me';
 import { useCompany } from '@/lib/useCompany';
@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/toast';
 import { ModuleConfigModal } from '@/components/ModuleConfigModal';
 import { LoyaltyTiersModal } from '@/components/LoyaltyTiersModal';
 import { GradesPanelModal } from '@/components/GradesPanelModal';
+import { MenuOrganizer } from '@/components/MenuOrganizer';
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
@@ -100,6 +101,7 @@ export default function CompanySettings() {
   const [configModule, setConfigModule] = useState<MyModule | null>(null);
   const [tiersOpen, setTiersOpen] = useState(false);
   const [gradesOpen, setGradesOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   if (isLoading) return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
   if (!mine || !mine.canManage) return <Navigate to="/" replace />;
@@ -246,12 +248,28 @@ export default function CompanySettings() {
             onAction={() => setGradesOpen(true)}
             border={loyaltyOn}
           />
+          <AdminRow
+            icon={LayoutList}
+            title="Organiser le menu"
+            desc="Réordonne les modules et range-les dans des catégories (glisser-déposer)."
+            actionLabel="Organiser"
+            onAction={() => setMenuOpen(true)}
+            border
+          />
         </div>
       </Section>
 
       <ModuleConfigModal companyId={companyId} module={configModule} onClose={() => setConfigModule(null)} />
       <LoyaltyTiersModal companyId={companyId} open={tiersOpen} onClose={() => setTiersOpen(false)} />
       <GradesPanelModal companyId={companyId} open={gradesOpen} onClose={() => setGradesOpen(false)} />
+      {menuOpen && (
+        <MenuOrganizer
+          companyId={companyId}
+          modules={mine.modules.filter((m) => COMPANY_PAGE_KEYS.has(m.key) && m.enabled && !m.blocked).map((m) => ({ key: m.key, label: m.label }))}
+          initial={mine.company.menuLayout}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
     </div>
   );
 }

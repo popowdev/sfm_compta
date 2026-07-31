@@ -55,6 +55,7 @@ interface CompanyEntry {
   name: string;
   slug: string;
   logoUrl: string | null;
+  menuLayout: unknown;
   gradeId: number | null;
   gradeName: string | null;
   canManage: boolean;
@@ -76,6 +77,7 @@ meRouter.get(
           name: companies.name,
           slug: companies.slug,
           logoUrl: companies.logoUrl,
+          menuLayout: companies.menuLayout,
         })
         .from(companies)
         .where(isNull(companies.deletedAt))
@@ -88,6 +90,7 @@ meRouter.get(
           name: companies.name,
           slug: companies.slug,
           logoUrl: companies.logoUrl,
+          menuLayout: companies.menuLayout,
           gradeId: companyRoles.id,
           gradeName: companyRoles.name,
           canManage: companyRoles.canManage,
@@ -182,8 +185,13 @@ meRouter.get(
         };
       });
 
+      const menuLayout = ((): unknown => {
+        const v = e.menuLayout;
+        if (typeof v === 'string') { try { return JSON.parse(v); } catch { return null; } }
+        return v ?? null;
+      })();
       result.push({
-        company: { id: e.companyId, name: e.name, slug: e.slug, logoUrl: e.logoUrl },
+        company: { id: e.companyId, name: e.name, slug: e.slug, logoUrl: e.logoUrl, menuLayout },
         grade: e.gradeId ? { id: e.gradeId, name: e.gradeName } : null,
         canManage: e.canManage,
         fivemActive: staff || !selectedJob || e.fivemJob === null || e.fivemJob === selectedJob,
@@ -267,6 +275,25 @@ meRouter.put(
       .values({ companyId: id, moduleKey, enabled: defaultEnabled, config })
       .onDuplicateKeyUpdate({ set: { config } });
     emitInvalidate(['irs', `company:${id}`], [['my-companies'], ['companies']]);
+    res.json({ ok: true });
+  }),
+);
+
+const menuLayoutSchema = z.object({
+  categories: z.array(z.object({ id: z.string().min(1).max(40), name: z.string().trim().min(1).max(40) })).max(30),
+  items: z.array(z.object({ key: z.string().min(1).max(40), categoryId: z.union([z.string().max(40), z.null()]) })).max(120),
+});
+
+meRouter.put(
+  '/companies/:id/menu-layout',
+  asyncHandler(async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'bad_request' });
+    if (!(await canManageCompany(req.user!.id, id))) return res.status(403).json({ error: 'forbidden' });
+    const p = menuLayoutSchema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: 'bad_request' });
+    await db.update(companies).set({ menuLayout: p.data }).where(eq(companies.id, id));
+    emitInvalidate(['irs', `company:${id}`], [['my-companies']]);
     res.json({ ok: true });
   }),
 );

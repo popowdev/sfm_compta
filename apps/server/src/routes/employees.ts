@@ -1,9 +1,12 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import { CONTRACT_TYPE_KEYS } from '@rp-compta/shared';
 import { db } from '../db';
-import { companyEmployees, companyVehicles, employeeWarnings, memberships, companyRoles, users } from '../db/schema';
+import {
+  companyEmployees, companyVehicles, employeeWarnings, memberships, companyRoles, users,
+  sales, taxiCitoyens, taxiConcitoyens, taxiVip, pawnshopTransactions, garageRepairs, garageCustoms, timeEntries,
+} from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
@@ -128,6 +131,82 @@ async function roleBelongs(companyId: number, companyRoleId: number | null | und
     .limit(1);
   return !!r[0];
 }
+
+interface EmpPerf {
+  caisseRev: number; caisseCnt: number;
+  garageRev: number; garageCnt: number;
+  taxiRev: number; taxiCnt: number;
+  pawnRev: number; pawnCnt: number;
+  hours: number;
+}
+
+meEmployeesRouter.get(
+  '/performance',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+
+    const emps = await db.select({ id: companyEmployees.id, userId: companyEmployees.userId }).from(companyEmployees).where(eq(companyEmployees.companyId, companyId));
+    const empByUser = new Map<number, number>();
+    for (const e of emps) if (e.userId != null) empByUser.set(e.userId, e.id);
+
+    const [caisse, taxiC, taxiCo, taxiV, pawn, garRep, garCus, hoursRows] = await Promise.all([
+      db.select({ empId: sales.employeeId, rev: sql<string>`COALESCE(SUM(${sales.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(sales).where(eq(sales.companyId, companyId)).groupBy(sales.employeeId),
+      db.select({ userId: taxiCitoyens.driverUserId, rev: sql<string>`COALESCE(SUM(${taxiCitoyens.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(taxiCitoyens).where(eq(taxiCitoyens.companyId, companyId)).groupBy(taxiCitoyens.driverUserId),
+      db.select({ userId: taxiConcitoyens.driverUserId, rev: sql<string>`COALESCE(SUM(${taxiConcitoyens.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(taxiConcitoyens).where(eq(taxiConcitoyens.companyId, companyId)).groupBy(taxiConcitoyens.driverUserId),
+      db.select({ userId: taxiVip.driverUserId, rev: sql<string>`COALESCE(SUM(${taxiVip.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(taxiVip).where(eq(taxiVip.companyId, companyId)).groupBy(taxiVip.driverUserId),
+      db.select({ userId: pawnshopTransactions.createdByUserId, rev: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.type, 'sell'))).groupBy(pawnshopTransactions.createdByUserId),
+      db.select({ userId: garageRepairs.mechanicUserId, rev: sql<string>`COALESCE(SUM(${garageRepairs.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(garageRepairs).where(eq(garageRepairs.companyId, companyId)).groupBy(garageRepairs.mechanicUserId),
+      db.select({ userId: garageCustoms.mechanicUserId, rev: sql<string>`COALESCE(SUM(${garageCustoms.finalPrice}),0)`, cnt: sql<number>`COUNT(*)` }).from(garageCustoms).where(eq(garageCustoms.companyId, companyId)).groupBy(garageCustoms.mechanicUserId),
+      db.select({ empId: timeEntries.employeeId, mins: sql<string>`COALESCE(SUM(GREATEST(0, TIMESTAMPDIFF(MINUTE, ${timeEntries.clockIn}, ${timeEntries.clockOut}) - ${timeEntries.pauseMinutes})),0)` }).from(timeEntries).where(and(eq(timeEntries.companyId, companyId), isNotNull(timeEntries.clockOut))).groupBy(timeEntries.employeeId),
+    ]);
+
+    const perf = new Map<number, EmpPerf>();
+    const ensure = (empId: number): EmpPerf => {
+      let p = perf.get(empId);
+      if (!p) { p = { caisseRev: 0, caisseCnt: 0, garageRev: 0, garageCnt: 0, taxiRev: 0, taxiCnt: 0, pawnRev: 0, pawnCnt: 0, hours: 0 }; perf.set(empId, p); }
+      return p;
+    };
+    const addByUser = (rows: { userId: number | null; rev: string; cnt: number }[], apply: (p: EmpPerf, rev: number, cnt: number) => void) => {
+      for (const r of rows) {
+        if (r.userId == null) continue;
+        const empId = empByUser.get(r.userId);
+        if (empId == null) continue;
+        apply(ensure(empId), Number(r.rev), Number(r.cnt));
+      }
+    };
+    for (const r of caisse) if (r.empId != null) { const p = ensure(r.empId); p.caisseRev += Number(r.rev); p.caisseCnt += Number(r.cnt); }
+    addByUser(taxiC, (p, rev, cnt) => { p.taxiRev += rev; p.taxiCnt += cnt; });
+    addByUser(taxiCo, (p, rev, cnt) => { p.taxiRev += rev; p.taxiCnt += cnt; });
+    addByUser(taxiV, (p, rev, cnt) => { p.taxiRev += rev; p.taxiCnt += cnt; });
+    addByUser(pawn, (p, rev, cnt) => { p.pawnRev += rev; p.pawnCnt += cnt; });
+    addByUser(garRep, (p, rev, cnt) => { p.garageRev += rev; p.garageCnt += cnt; });
+    addByUser(garCus, (p, rev, cnt) => { p.garageRev += rev; p.garageCnt += cnt; });
+    for (const r of hoursRows) if (r.empId != null) { ensure(r.empId).hours += Number(r.mins) / 60; }
+
+    const performance: Record<number, {
+      caisse: { revenue: number; count: number };
+      garage: { revenue: number; count: number };
+      taxi: { revenue: number; count: number };
+      pawnshop: { revenue: number; count: number };
+      hours: number;
+      totalRevenue: number;
+    }> = {};
+    for (const [empId, p] of perf) {
+      performance[empId] = {
+        caisse: { revenue: Math.round(p.caisseRev), count: p.caisseCnt },
+        garage: { revenue: Math.round(p.garageRev), count: p.garageCnt },
+        taxi: { revenue: Math.round(p.taxiRev), count: p.taxiCnt },
+        pawnshop: { revenue: Math.round(p.pawnRev), count: p.pawnCnt },
+        hours: Math.round(p.hours * 10) / 10,
+        totalRevenue: Math.round(p.caisseRev + p.garageRev + p.taxiRev + p.pawnRev),
+      };
+    }
+    res.json({ performance });
+  }),
+);
 
 meEmployeesRouter.get(
   '/',

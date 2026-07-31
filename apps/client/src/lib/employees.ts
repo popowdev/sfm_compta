@@ -72,6 +72,17 @@ export const deleteEmployee = (companyId: number, id: number) =>
 
 const eBase = (companyId: number) => `/api/me/companies/${companyId}/employees`;
 
+export interface EmployeePerf {
+  caisse: { revenue: number; count: number };
+  garage: { revenue: number; count: number };
+  taxi: { revenue: number; count: number };
+  pawnshop: { revenue: number; count: number };
+  hours: number;
+  totalRevenue: number;
+}
+export const getEmployeesPerformance = (companyId: number) =>
+  apiFetch<{ performance: Record<number, EmployeePerf> }>(`${eBase(companyId)}/performance`);
+
 export interface Warning { id: number; reason: string; createdAt: string }
 export interface PersonnelRow {
   id: number;

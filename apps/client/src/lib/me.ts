@@ -16,8 +16,12 @@ export interface MyModule {
   config: Record<string, unknown>;
 }
 
+export interface MenuCategory { id: string; name: string }
+export interface MenuLayoutItem { key: string; categoryId: string | null }
+export interface MenuLayout { categories: MenuCategory[]; items: MenuLayoutItem[] }
+
 export interface MyCompany {
-  company: { id: number; name: string; slug: string; logoUrl: string | null };
+  company: { id: number; name: string; slug: string; logoUrl: string | null; menuLayout: MenuLayout | null };
   grade: { id: number; name: string } | null;
   canManage: boolean;
   fivemActive: boolean;
@@ -25,6 +29,12 @@ export interface MyCompany {
 }
 
 export const getMyCompanies = () => apiFetch<MyCompany[]>('/api/me/companies');
+
+export const saveMenuLayout = (companyId: number, layout: MenuLayout) =>
+  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/menu-layout`, {
+    method: 'PUT',
+    body: JSON.stringify(layout),
+  });
 
 export const toggleMyModule = (companyId: number, key: ModuleKey, enabled: boolean) =>
   apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/modules/${key}`, {

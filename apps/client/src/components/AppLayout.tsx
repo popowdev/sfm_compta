@@ -167,25 +167,54 @@ export function AppLayout({ children }: { children: ReactNode }) {
     ];
   }
 
-  function companyNavItems(c: MyCompany): NavItem[] {
+  function companyNavGroups(c: MyCompany): NavGroup[] {
     const accessible = c.modules.filter(
       (m) => COMPANY_PAGE_KEYS.has(m.key) && m.enabled && !m.blocked && m.canView,
     );
-    const items: NavItem[] = [
-      { to: `/entreprise/${c.company.slug}`, label: 'Tableau de bord', Icon: LayoutDashboard, end: true },
-    ];
-    for (const m of accessible) {
-      items.push({
-        to: `/entreprise/${c.company.slug}/m/${m.key}`,
-        label: m.label,
-        Icon: moduleIcon(m.key),
+    const byKey = new Map(accessible.map((m) => [m.key as string, m]));
+    const dash: NavItem = { to: `/entreprise/${c.company.slug}`, label: 'Tableau de bord', Icon: LayoutDashboard, end: true };
+    const navItem = (key: string, label: string): NavItem => ({
+      to: `/entreprise/${c.company.slug}/m/${key}`,
+      label,
+      Icon: moduleIcon(key),
+    });
+    const layout = c.company.menuLayout;
+    const groups: NavGroup[] = [];
+
+    if (layout && Array.isArray(layout.items) && layout.items.length) {
+      const validCat = new Set(layout.categories.map((cat) => cat.id));
+      const byCat = new Map<string | null, string[]>();
+      const used = new Set<string>();
+      for (const it of layout.items) {
+        if (!byKey.has(it.key) || used.has(it.key)) continue;
+        const cid = it.categoryId && validCat.has(it.categoryId) ? it.categoryId : null;
+        if (!byCat.has(cid)) byCat.set(cid, []);
+        byCat.get(cid)!.push(it.key);
+        used.add(it.key);
+      }
+      const top: NavItem[] = [dash];
+      for (const k of byCat.get(null) ?? []) top.push(navItem(k, byKey.get(k)!.label));
+      for (const m of accessible) if (!used.has(m.key)) top.push(navItem(m.key, m.label));
+      groups.push({ title: null, items: top });
+      for (const cat of layout.categories) {
+        const keys = byCat.get(cat.id) ?? [];
+        if (!keys.length) continue;
+        groups.push({ title: cat.name, items: keys.map((k) => navItem(k, byKey.get(k)!.label)) });
+      }
+    } else {
+      groups.push({ title: null, items: [dash, ...accessible.map((m) => navItem(m.key, m.label))] });
+    }
+
+    if (c.canManage) {
+      groups.push({
+        title: null,
+        items: [
+          { to: `/entreprise/${c.company.slug}/evenements`, label: 'Évènements', Icon: CalendarDays },
+          { to: `/entreprise/${c.company.slug}/parametres`, label: 'Paramètres', Icon: Settings },
+        ],
       });
     }
-    if (c.canManage) {
-      items.push({ to: `/entreprise/${c.company.slug}/evenements`, label: 'Évènements', Icon: CalendarDays });
-      items.push({ to: `/entreprise/${c.company.slug}/parametres`, label: 'Paramètres', Icon: Settings });
-    }
-    return items;
+    return groups;
   }
 
   // Immersive per-company / per-association shell when inside one, else the global shell.
@@ -194,14 +223,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const immersive = immersiveCompany || immersiveAssoc;
   let groups: NavGroup[];
   if (immersiveCompany) {
-    groups = [{ title: null, items: companyNavItems(currentCompany!) }];
+    groups = companyNavGroups(currentCompany!);
   } else if (immersiveAssoc) {
     groups = [{ title: null, items: associationNavItems(activeAssocSlug!) }];
   } else {
     const companyGroups: NavGroup[] = data
       .filter((c) => c.fivemActive)
       .map((c) => {
-        const items = companyNavItems(c).filter((it) => !it.end);
+        const items = companyNavGroups(c).flatMap((g) => g.items).filter((it) => !it.end);
         return { title: c.company.name, items, defaultClosed: isIrs };
       })
       .filter((g) => g.items.length > 0);

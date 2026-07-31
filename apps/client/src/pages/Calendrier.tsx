@@ -52,8 +52,10 @@ function segmentForDay(ev: CalEvent, dayStart: Date) {
   const segStart = s < dayStart ? dayStart : s;
   const segEnd = e > dayEnd ? dayEnd : e;
   const top = ((segStart.getTime() - dayStart.getTime()) / 3_600_000) * HOUR_PX;
-  const height = Math.max(24, ((segEnd.getTime() - segStart.getTime()) / 3_600_000) * HOUR_PX);
-  return { top, height };
+  const height = Math.max(34, ((segEnd.getTime() - segStart.getTime()) / 3_600_000) * HOUR_PX);
+  const continues = e > dayEnd;
+  const startedBefore = s < dayStart;
+  return { top, height, continues, startedBefore };
 }
 
 export default function Calendrier() {
@@ -195,32 +197,51 @@ export default function Calendrier() {
               {days.map((d) => {
                 const dayEvents = events
                   .map((ev) => ({ ev, seg: segmentForDay(ev, d) }))
-                  .filter((x): x is { ev: CalEvent; seg: { top: number; height: number } } => x.seg !== null);
+                  .filter((x): x is { ev: CalEvent; seg: NonNullable<ReturnType<typeof segmentForDay>> } => x.seg !== null);
                 return (
                   <div key={dateKey(d)} className="relative flex-1 border-l" style={{ height: 24 * HOUR_PX }}>
                     {HOURS.map((h) => (
                       <div key={h} style={{ height: HOUR_PX }} className="border-b border-border/40" />
                     ))}
-                    {dayEvents.map(({ ev, seg }) => (
+                    {dayEvents.map(({ ev, seg }) => {
+                      const compact = seg.height < 52;
+                      return (
                       <div
                         key={ev.id}
                         style={{ top: seg.top, height: seg.height }}
-                        className={`absolute inset-x-1 z-10 overflow-hidden rounded-lg border p-1.5 text-xs ${OWNER_STYLE[ev.ownerType]}`}
+                        title={`${fmtTime(ev.startAt)}–${fmtTime(ev.endAt)} · ${ev.title} · ${ev.ownerName}`}
+                        className={`group absolute inset-x-1 z-10 flex flex-col overflow-hidden rounded-lg border px-1.5 py-1 text-xs leading-tight ${OWNER_STYLE[ev.ownerType]}`}
                       >
-                        <div className="font-semibold leading-tight">{fmtTime(ev.startAt)}–{fmtTime(ev.endAt)}</div>
-                        <div className="truncate font-medium leading-tight">{ev.title}</div>
-                        <div className="truncate opacity-80">{ev.ownerName}</div>
+                        {compact ? (
+                          <div className="flex min-w-0 items-baseline gap-1">
+                            <span className="shrink-0 text-[10px] font-semibold tabular-nums opacity-90">{seg.startedBefore ? `↑${fmtTime(ev.endAt)}` : fmtTime(ev.startAt)}</span>
+                            <span className="truncate font-medium">{ev.title}</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="text-[10px] font-semibold tabular-nums opacity-90">
+                              {fmtTime(ev.startAt)}–{fmtTime(ev.endAt)}
+                              {seg.continues && <span className="ml-1 opacity-70">↴</span>}
+                              {seg.startedBefore && <span className="ml-1 opacity-70">(suite)</span>}
+                            </div>
+                            <div className="truncate font-medium">{ev.title}</div>
+                            {seg.height >= 68 && <div className="truncate opacity-80">{ev.ownerName}</div>}
+                          </>
+                        )}
                         {ev.canManage && (
                           <button
                             type="button"
                             onClick={() => cancel(ev)}
-                            className="mt-1 w-full rounded bg-black/30 py-0.5 text-[10px] font-medium hover:bg-black/50"
+                            aria-label="Annuler la réservation"
+                            title="Annuler"
+                            className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded bg-black/30 text-[10px] leading-none opacity-60 transition-opacity hover:bg-black/60 hover:opacity-100"
                           >
-                            Annuler
+                            ✕
                           </button>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 );
               })}

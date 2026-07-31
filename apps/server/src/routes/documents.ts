@@ -1,9 +1,10 @@
 import { Router, type Request } from 'express';
+import { z } from 'zod';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { db } from '../db';
-import { companyDocuments, irsDocuments, users } from '../db/schema';
+import { companyDocuments, companyDocFolders, irsDocuments, users } from '../db/schema';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
@@ -56,6 +57,11 @@ function docFolder(req: Request): string | null {
   return raw ? raw.slice(0, 60) : null;
 }
 
+async function ensureFolder(companyId: number, name: string | null): Promise<void> {
+  if (!name) return;
+  await db.insert(companyDocFolders).values({ companyId, name }).onDuplicateKeyUpdate({ set: { name } });
+}
+
 // ---------- Company documents ----------
 
 export const meDocumentsRouter = Router({ mergeParams: true });
@@ -94,8 +100,20 @@ meDocumentsRouter.get(
       .leftJoin(users, eq(companyDocuments.uploadedByUserId, users.id))
       .where(eq(companyDocuments.companyId, companyId))
       .orderBy(desc(companyDocuments.createdAt));
+    const folderRows = await db
+      .select({ name: companyDocFolders.name })
+      .from(companyDocFolders)
+      .where(eq(companyDocFolders.companyId, companyId));
+    const counts = new Map<string, number>();
+    for (const r of rows) if (r.folder) counts.set(r.folder, (counts.get(r.folder) ?? 0) + 1);
+    const names = new Set<string>(folderRows.map((f) => f.name));
+    for (const n of counts.keys()) names.add(n);
+    const folders = [...names]
+      .sort((a, b) => a.localeCompare(b, 'fr'))
+      .map((name) => ({ name, count: counts.get(name) ?? 0 }));
     res.json({
       canWrite: g.canWrite,
+      folders,
       documents: rows.map((r) => ({ ...r, url: `/api/me/companies/${companyId}/documents/${r.id}/download` })),
     });
   }),
@@ -140,17 +158,95 @@ meDocumentsRouter.post(
       await cleanupReqFile(req);
       return res.status(400).json({ error: 'quota_exceeded' });
     }
+    const folder = docFolder(req);
+    await ensureFolder(companyId, folder);
     await db.insert(companyDocuments).values({
       companyId,
       name: docName(req),
       url: documentFileUrl(req.file.filename),
       mimeType: req.file.mimetype,
       size: req.file.size,
-      folder: docFolder(req),
+      folder,
       uploadedByUserId: req.user!.id,
     });
     emitInvalidate(['irs', `company:${companyId}`], [['company-documents', companyId]]);
     res.status(201).json({ ok: true });
+  }),
+);
+
+const folderNameSchema = z.object({ name: z.string().trim().min(1).max(60) });
+const folderRenameSchema = z.object({ from: z.string().trim().min(1).max(60), to: z.string().trim().min(1).max(60) });
+const moveSchema = z.object({ folder: z.union([z.string().trim().max(60), z.null()]) });
+
+meDocumentsRouter.post(
+  '/folders',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    const p = folderNameSchema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: 'bad_request' });
+    await ensureFolder(companyId, p.data.name);
+    emitInvalidate(['irs', `company:${companyId}`], [['company-documents', companyId]]);
+    res.status(201).json({ ok: true });
+  }),
+);
+
+meDocumentsRouter.patch(
+  '/folders',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    const p = folderRenameSchema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: 'bad_request' });
+    if (p.data.from === p.data.to) return res.json({ ok: true });
+    await db.delete(companyDocFolders).where(and(eq(companyDocFolders.companyId, companyId), eq(companyDocFolders.name, p.data.from)));
+    await ensureFolder(companyId, p.data.to);
+    await db.update(companyDocuments).set({ folder: p.data.to }).where(and(eq(companyDocuments.companyId, companyId), eq(companyDocuments.folder, p.data.from)));
+    emitInvalidate(['irs', `company:${companyId}`], [['company-documents', companyId]]);
+    res.json({ ok: true });
+  }),
+);
+
+meDocumentsRouter.delete(
+  '/folders/:name',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    const name = String(req.params.name ?? '').slice(0, 60);
+    if (!name) return res.status(400).json({ error: 'bad_request' });
+    await db.update(companyDocuments).set({ folder: null }).where(and(eq(companyDocuments.companyId, companyId), eq(companyDocuments.folder, name)));
+    await db.delete(companyDocFolders).where(and(eq(companyDocFolders.companyId, companyId), eq(companyDocFolders.name, name)));
+    emitInvalidate(['irs', `company:${companyId}`], [['company-documents', companyId]]);
+    res.json({ ok: true });
+  }),
+);
+
+meDocumentsRouter.patch(
+  '/:id/folder',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const id = parseId(req.params.id);
+    if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    const p = moveSchema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: 'bad_request' });
+    const folder = p.data.folder ? p.data.folder.slice(0, 60) : null;
+    await ensureFolder(companyId, folder);
+    const upd = await db.update(companyDocuments).set({ folder }).where(and(eq(companyDocuments.id, id), eq(companyDocuments.companyId, companyId)));
+    if (!upd[0].affectedRows) return res.status(404).json({ error: 'not_found' });
+    emitInvalidate(['irs', `company:${companyId}`], [['company-documents', companyId]]);
+    res.json({ ok: true });
   }),
 );
 

@@ -23,14 +23,27 @@ export async function uploadDoc(url: string, file: File, name: string, folder?: 
   }
 }
 
+export interface DocFolder { name: string; count: number }
+
+const cBase = (companyId: number) => `/api/me/companies/${companyId}/documents`;
+
 export const getCompanyDocuments = (companyId: number) =>
-  apiFetch<{ canWrite: boolean; documents: DocItem[] }>(`/api/me/companies/${companyId}/documents`);
+  apiFetch<{ canWrite: boolean; folders: DocFolder[]; documents: DocItem[] }>(cBase(companyId));
 
 export const uploadCompanyDocument = (companyId: number, file: File, name: string, folder?: string) =>
-  uploadDoc(`/api/me/companies/${companyId}/documents`, file, name, folder);
+  uploadDoc(cBase(companyId), file, name, folder);
 
 export const deleteCompanyDocument = (companyId: number, id: number) =>
-  apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/documents/${id}`, { method: 'DELETE' });
+  apiFetch<{ ok: boolean }>(`${cBase(companyId)}/${id}`, { method: 'DELETE' });
+
+export const createDocFolder = (companyId: number, name: string) =>
+  apiFetch<{ ok: boolean }>(`${cBase(companyId)}/folders`, { method: 'POST', body: JSON.stringify({ name }) });
+export const renameDocFolder = (companyId: number, from: string, to: string) =>
+  apiFetch<{ ok: boolean }>(`${cBase(companyId)}/folders`, { method: 'PATCH', body: JSON.stringify({ from, to }) });
+export const deleteDocFolder = (companyId: number, name: string) =>
+  apiFetch<{ ok: boolean }>(`${cBase(companyId)}/folders/${encodeURIComponent(name)}`, { method: 'DELETE' });
+export const moveCompanyDocument = (companyId: number, id: number, folder: string | null) =>
+  apiFetch<{ ok: boolean }>(`${cBase(companyId)}/${id}/folder`, { method: 'PATCH', body: JSON.stringify({ folder }) });
 
 export const getIrsDocuments = () => apiFetch<{ documents: DocItem[] }>('/api/irs/documents');
 

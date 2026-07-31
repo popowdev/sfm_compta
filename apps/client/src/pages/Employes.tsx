@@ -24,11 +24,13 @@ import { Button } from '@/components/ui/button';
 import { fmtInt } from '@/lib/declarations';
 import {
   getEmployees,
+  getEmployeesPerformance,
   createEmployee,
   updateEmployee,
   deleteEmployee,
   type Employee,
   type EmployeeInput,
+  type EmployeePerf,
   type CompanyMemberRef,
 } from '@/lib/employees';
 import { getSalaryGrid } from '@/lib/salary';
@@ -137,6 +139,7 @@ export default function Employes() {
   const toast = useToast();
 
   const q = useQuery({ queryKey: ['employees', companyId], queryFn: () => getEmployees(companyId) });
+  const perfQ = useQuery({ queryKey: ['employees-perf', companyId], queryFn: () => getEmployeesPerformance(companyId) });
   const grid = useQuery({ queryKey: ['salary-grid', companyId], queryFn: () => getSalaryGrid(companyId) });
   const gridRate = (roleId: number | null) =>
     grid.data?.grid.find((g) => g.companyRoleId === roleId)?.hourlyRate ?? 0;
@@ -498,18 +501,36 @@ export default function Employes() {
 
                   <div className="mt-4 rounded-lg border bg-muted/30 p-3">
                     <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Performance
+                      Performance <span className="normal-case text-muted-foreground/70">· tous modules</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      <Field label="Ventes faites" value={<Soon module="caisse" />} />
-                      <Field label="CA généré" value={<Soon module="caisse" />} />
-                      <Field label="Heures" value={<Soon module="badgeuse" />} />
-                      <Field label="Salaire période" value={<Soon module="badgeuse" />} />
-                    </div>
-                    <p className="mt-2 text-[11px] text-muted-foreground">
-                      Ventes & CA se rempliront avec le module Caisse ; les heures et le salaire avec
-                      la Badgeuse.
-                    </p>
+                    {(() => {
+                      const perf = perfQ.data?.performance[e.id];
+                      if (perfQ.isLoading) return <div className="text-[11px] text-muted-foreground">Chargement…</div>;
+                      const mods: { key: string; label: string; p: { revenue: number; count: number }; unit: string }[] = [
+                        { key: 'caisse', label: 'Ventes caisse', p: perf?.caisse ?? { revenue: 0, count: 0 }, unit: 'vente' },
+                        { key: 'garage', label: 'Garage', p: perf?.garage ?? { revenue: 0, count: 0 }, unit: 'interv.' },
+                        { key: 'taxi', label: 'Taxi', p: perf?.taxi ?? { revenue: 0, count: 0 }, unit: 'course' },
+                        { key: 'pawnshop', label: 'Pawnshop', p: perf?.pawnshop ?? { revenue: 0, count: 0 }, unit: 'revente' },
+                      ].filter((m) => m.p.count > 0);
+                      return (
+                        <>
+                          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            {mods.map((m) => (
+                              <Field
+                                key={m.key}
+                                label={m.label}
+                                value={<span>{fmtInt(m.p.revenue)} $ <span className="text-[10px] text-muted-foreground">· {m.p.count} {m.unit}{m.p.count > 1 ? 's' : ''}</span></span>}
+                              />
+                            ))}
+                            <Field label="Heures" value={`${(perf?.hours ?? 0).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} h`} />
+                            <Field label="CA total généré" value={<span className="font-semibold text-emerald-400">{fmtInt(perf?.totalRevenue ?? 0)} $</span>} />
+                          </div>
+                          {mods.length === 0 && (
+                            <p className="mt-2 text-[11px] text-muted-foreground">Aucune vente/prestation enregistrée sur les modules — seules les heures sont comptées.</p>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {!e.active && e.terminationReason && (

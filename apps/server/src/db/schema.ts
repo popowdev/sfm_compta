@@ -57,6 +57,7 @@ export const companies = mysqlTable('companies', {
   externalLink: varchar('external_link', { length: 255 }),
   valuation: decimal('valuation', { precision: 14, scale: 2 }).notNull().default('0'),
   immoSeeded: boolean('immo_seeded').notNull().default(false),
+  menuLayout: json('menu_layout'),
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at')
     .notNull()
@@ -342,6 +343,17 @@ export const companyDocuments = mysqlTable('company_documents', {
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const companyDocFolders = mysqlTable(
+  'company_doc_folders',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 60 }).notNull(),
+    createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => ({ uq: unique('uq_doc_folder').on(t.companyId, t.name) }),
+);
 
 export const irsDocuments = mysqlTable('irs_documents', {
   id: int('id').autoincrement().primaryKey(),
