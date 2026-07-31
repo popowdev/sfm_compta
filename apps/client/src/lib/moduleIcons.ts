@@ -27,6 +27,7 @@ import {
   Map,
   Car,
   Gem,
+  Truck,
   type LucideIcon,
 } from 'lucide-react';
 import type { ModuleKey } from '@rp-compta/shared';
@@ -54,6 +55,7 @@ const ICONS: Record<ModuleKey, LucideIcon> = {
   immo_carte: Map,
   taxi: Car,
   pawnshop: Gem,
+  runs: Truck,
 };
 
 export function moduleIcon(key: string): LucideIcon {

@@ -53,6 +53,7 @@ export interface PayrollLine {
   garageCommission: number;
   taxiCommission: number;
   pawnshopCommission: number;
+  runsCommission: number;
   taxiRevenue: number;
   pawnshopRevenue: number;
   bonus: number;
@@ -78,6 +79,7 @@ export interface ExerciceSummary {
   garageCommission: number;
   taxiCommission: number;
   pawnshopCommission: number;
+  runsCommission: number;
   peakBonus: number;
   peakEnabled: boolean;
   peakMultiplier: number;

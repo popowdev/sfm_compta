@@ -22,6 +22,7 @@ import {
   taxiConcitoyens,
   taxiVip,
   pawnshopTransactions,
+  companyRuns,
 } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
@@ -617,6 +618,16 @@ meExercicesRouter.get(
       garagePartsCost = round2(Number(custTot[0]?.cost ?? 0));
     }
 
+    const runsCommByEmp = new Map<number, number>();
+    {
+      const rows = await db
+        .select({ employeeId: companyRuns.employeeId, comm: sql<string>`COALESCE(SUM(${companyRuns.commission}),0)` })
+        .from(companyRuns)
+        .where(and(eq(companyRuns.companyId, companyId), gte(sql`DATE(${companyRuns.createdAt})`, ex.startDate), lte(sql`DATE(${companyRuns.createdAt})`, ex.endDate)))
+        .groupBy(companyRuns.employeeId);
+      for (const r of rows) if (r.employeeId != null) runsCommByEmp.set(r.employeeId, Number(r.comm));
+    }
+
     const taxiRevByEmp = new Map<number, number>();
     const pawnshopRevByEmp = new Map<number, number>();
     {
@@ -668,11 +679,12 @@ meExercicesRouter.get(
       const pawnshopRevenue = Math.round(pawnshopRevByEmp.get(r.employeeId) ?? 0);
       const taxiCommission = Math.round(taxiRate * taxiRevenue);
       const pawnshopCommission = Math.round(pawnRate * pawnshopRevenue);
+      const runsCommission = Math.round(runsCommByEmp.get(r.employeeId) ?? 0);
       const bonus = o ? Math.round(Number(o.bonus)) : 0;
       const deductions = o ? Math.round(Number(o.deductions)) : 0;
       const peakHours = peakEnabled ? Math.min((peakMinByEmp.get(r.employeeId) ?? 0) / 60, cappedHours) : 0;
       const peakBonus = peakHours > 0 && peakMultiplier > 1 ? Math.round(peakHours * rate * (peakMultiplier - 1)) : 0;
-      const theoretical = Math.max(0, base + commission + garageCommission + taxiCommission + pawnshopCommission + bonus + peakBonus - deductions);
+      const theoretical = Math.max(0, base + commission + garageCommission + taxiCommission + pawnshopCommission + runsCommission + bonus + peakBonus - deductions);
       const paid = ex.salaryCap > 0 ? Math.min(theoretical, Math.round(ex.salaryCap)) : theoretical;
       return {
         employeeId: r.employeeId,
@@ -689,6 +701,7 @@ meExercicesRouter.get(
         garageCommission,
         taxiCommission,
         pawnshopCommission,
+        runsCommission,
         taxiRevenue,
         pawnshopRevenue,
         bonus,
@@ -740,6 +753,7 @@ meExercicesRouter.get(
         garageCommission: Math.round(payroll.reduce((s, p) => s + p.garageCommission, 0)),
         taxiCommission: Math.round(payroll.reduce((s, p) => s + p.taxiCommission, 0)),
         pawnshopCommission: Math.round(payroll.reduce((s, p) => s + p.pawnshopCommission, 0)),
+        runsCommission: Math.round(payroll.reduce((s, p) => s + p.runsCommission, 0)),
         peakBonus: Math.round(payroll.reduce((s, p) => s + p.peakBonus, 0)),
         peakEnabled,
         peakMultiplier,

@@ -1323,6 +1323,19 @@ export const pawnshopTransactions = mysqlTable('pawnshop_transactions', {
   createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const companyRuns = mysqlTable('company_runs', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  employeeId: int('employee_id').references(() => companyEmployees.id, { onDelete: 'set null' }),
+  qty: int('qty').notNull().default(1),
+  unitPrice: decimal('unit_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  total: decimal('total', { precision: 14, scale: 2 }).notNull().default('0'),
+  commission: decimal('commission', { precision: 14, scale: 2 }).notNull().default('0'),
+  note: varchar('note', { length: 255 }),
+  createdByUserId: int('created_by_user_id'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const usersRelations = relations(users, ({ many }) => ({
   appRoles: many(userAppRoles),
   memberships: many(memberships),

@@ -34,6 +34,7 @@ export const MODULE_KEYS = [
   'immo_carte',
   'taxi',
   'pawnshop',
+  'runs',
 ] as const;
 export type ModuleKey = (typeof MODULE_KEYS)[number];
 
@@ -76,6 +77,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'immo_carte', label: 'Carte interactive', group: 'Immobilier', defaultEnabled: false, companyPage: true },
   { key: 'taxi', label: 'Taxi', group: 'Taxi', defaultEnabled: false, companyPage: true },
   { key: 'pawnshop', label: 'Prêteur sur gages', group: 'Commerce', defaultEnabled: false, companyPage: true },
+  { key: 'runs', label: 'Runs / livraisons', group: 'Commerce', defaultEnabled: false, companyPage: true },
 ];
 
 export interface ModuleConfigBoolField {
@@ -284,6 +286,30 @@ export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
       step: 1,
       suffix: '%',
       help: 'Appliqué au CA des reventes grossiste uniquement si « taux personnalisé » est activé.',
+    },
+  ],
+  runs: [
+    {
+      key: 'unitPrice',
+      label: 'Prix d’une run ($)',
+      type: 'number',
+      default: 200,
+      min: 0,
+      max: 999_999,
+      step: 1,
+      suffix: '$',
+      help: 'Montant gagné par run livrée.',
+    },
+    {
+      key: 'commissionPct',
+      label: 'Part employé (%)',
+      type: 'number',
+      default: 50,
+      min: 0,
+      max: 100,
+      step: 1,
+      suffix: '%',
+      help: 'Part reversée à l’employé qui fait la run (le reste va à l’entreprise). Fixe pour tous les employés.',
     },
   ],
 };
