@@ -13,6 +13,7 @@ import { getRuns, addRun, deleteRun } from '@/lib/runs';
 const inputCls = 'h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
 const money = (n: number) => `${fmtInt(n)} $`;
 const fmtDay = (s: string) => new Date(String(s).replace(' ', 'T')).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+const fmtDayTime = (s: string) => new Date(String(s).replace(' ', 'T')).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 export default function Runs() {
   const { companyId, isLoading } = useCompany();
@@ -35,7 +36,7 @@ export default function Runs() {
   if (isLoading || q.isLoading) return <div className="space-y-4"><Skeleton className="h-24 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
   if (!q.data) return <EmptyState icon={Truck} title="Runs / livraisons" hint="Module indisponible." />;
 
-  const { config, employees, runs, summary, canWrite } = q.data;
+  const { config, employees, runs, summary, canWrite, canManage } = q.data;
   const qtyN = Math.max(1, Math.floor(Number(qty) || 1));
   const previewTotal = qtyN * config.unitPrice;
   const previewComm = Math.round((previewTotal * config.commissionPct) / 100);
@@ -91,7 +92,7 @@ export default function Runs() {
                     <th className="py-2 text-right font-semibold">Runs</th>
                     <th className="py-2 text-right font-semibold">Total</th>
                     <th className="py-2 text-right font-semibold">Part employé</th>
-                    <th className="py-2 text-left font-semibold">Par</th>
+                    {canManage && <th className="py-2 text-left font-semibold">Ajouté (log)</th>}
                     {canWrite && <th className="py-2"></th>}
                   </tr>
                 </thead>
@@ -103,7 +104,7 @@ export default function Runs() {
                       <td className="py-2 text-right">{r.qty}</td>
                       <td className="py-2 text-right text-emerald-400">{money(r.total)}</td>
                       <td className="py-2 text-right text-amber-400">{money(r.commission)}</td>
-                      <td className="py-2 text-xs text-muted-foreground">{r.authorName ?? '—'}</td>
+                      {canManage && <td className="py-2 text-xs text-muted-foreground">{r.authorName ?? '—'} · {fmtDayTime(r.createdAt)}</td>}
                       {canWrite && <td className="py-2 text-right"><button type="button" onClick={async () => { if (await confirm({ title: 'Supprimer cette run ?', message: `${r.qty} run(s) · ${money(r.total)}`, destructive: true })) del.mutate(r.id); }} className="text-muted-foreground hover:text-red-400"><Trash2 className="h-4 w-4" /></button></td>}
                     </tr>
                   ))}

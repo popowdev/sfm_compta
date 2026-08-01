@@ -23,6 +23,7 @@ const EntrepriseIndex = lazyRetry(() => import('@/pages/EntrepriseIndex'));
 const ModulePage = lazyRetry(() => import('@/pages/ModulePage'));
 const CompanySettings = lazyRetry(() => import('@/pages/CompanySettings'));
 const Evenements = lazyRetry(() => import('@/pages/Evenements'));
+const MaPaie = lazyRetry(() => import('@/pages/MaPaie'));
 const Fivem = lazyRetry(() => import('@/pages/Fivem'));
 const Associations = lazyRetry(() => import('@/pages/Associations'));
 const Calendrier = lazyRetry(() => import('@/pages/Calendrier'));
@@ -68,6 +69,7 @@ function ProtectedApp() {
           <Route path="/entreprise/:slug/m/:moduleKey" element={<ModulePage />} />
           <Route path="/entreprise/:slug/parametres" element={<CompanySettings />} />
           <Route path="/entreprise/:slug/evenements" element={<Evenements />} />
+          <Route path="/entreprise/:slug/ma-paie" element={<MaPaie />} />
           <Route path="/associations" element={<Associations />} />
           <Route path="/calendrier" element={<Calendrier />} />
           <Route path="/support" element={<Support />} />

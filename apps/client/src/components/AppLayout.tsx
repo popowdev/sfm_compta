@@ -173,6 +173,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
     const byKey = new Map(accessible.map((m) => [m.key as string, m]));
     const dash: NavItem = { to: `/entreprise/${c.company.slug}`, label: 'Tableau de bord', Icon: LayoutDashboard, end: true };
+    const myPay: NavItem = { to: `/entreprise/${c.company.slug}/ma-paie`, label: 'Ma paie', Icon: Wallet };
     const navItem = (key: string, label: string): NavItem => ({
       to: `/entreprise/${c.company.slug}/m/${key}`,
       label,
@@ -192,7 +193,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         byCat.get(cid)!.push(it.key);
         used.add(it.key);
       }
-      const top: NavItem[] = [dash];
+      const top: NavItem[] = [dash, myPay];
       for (const k of byCat.get(null) ?? []) top.push(navItem(k, byKey.get(k)!.label));
       for (const m of accessible) if (!used.has(m.key)) top.push(navItem(m.key, m.label));
       groups.push({ title: null, items: top });
@@ -202,7 +203,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         groups.push({ title: cat.name, items: keys.map((k) => navItem(k, byKey.get(k)!.label)) });
       }
     } else {
-      groups.push({ title: null, items: [dash, ...accessible.map((m) => navItem(m.key, m.label))] });
+      groups.push({ title: null, items: [dash, myPay, ...accessible.map((m) => navItem(m.key, m.label))] });
     }
 
     if (c.canManage) {

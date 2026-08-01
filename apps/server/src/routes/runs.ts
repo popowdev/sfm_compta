@@ -6,7 +6,7 @@ import { db } from '../db';
 import { companyRuns, companyEmployees, companyModules, users } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
-import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
+import { getModuleAccess, actionDenied, canManageCompany, type PermAction } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
 
 function parseId(v: string | undefined): number | null {
@@ -46,6 +46,7 @@ meRunsRouter.get(
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
+    const canManage = await canManageCompany(req.user!.id, companyId);
     const config = await runsConfig(companyId);
     const employees = await db
       .select({ id: companyEmployees.id, name: companyEmployees.name })
@@ -84,6 +85,7 @@ meRunsRouter.get(
     const totalCommission = Math.round(Number(agg[0]?.comm ?? 0));
     res.json({
       canWrite: g.canWrite,
+      canManage,
       config,
       employees,
       runs: rows.map((r) => ({
@@ -92,6 +94,8 @@ meRunsRouter.get(
         unitPrice: Math.round(Number(r.unitPrice)),
         total: Math.round(Number(r.total)),
         commission: Math.round(Number(r.commission)),
+        authorName: canManage ? r.authorName : null,
+        createdAt: canManage ? r.createdAt : String(r.createdAt).slice(0, 10),
       })),
       summary: {
         totalRuns: Number(agg[0]?.qty ?? 0),

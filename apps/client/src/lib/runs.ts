@@ -14,6 +14,7 @@ export interface RunRow {
 }
 export interface RunsData {
   canWrite: boolean;
+  canManage: boolean;
   config: { unitPrice: number; commissionPct: number };
   employees: { id: number; name: string }[];
   runs: RunRow[];
