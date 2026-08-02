@@ -1,7 +1,7 @@
 import { and, eq, isNull, inArray, notInArray, sql } from 'drizzle-orm';
 import { MODULES } from '@rp-compta/shared';
 import { defaultPermRows } from './grades';
-import { fetchGameCharacters, isUnemployedJob, type GameChar } from './fivemPull';
+import { fetchGameCharacters, isUnemployedJob, isUnemployedLabel, type GameChar } from './fivemPull';
 import { db } from '../db';
 import {
   companies,
@@ -94,6 +94,7 @@ export function isManagerGrade(label: string | null | undefined): boolean {
 }
 
 async function ensureCompanyForJob(job: JobDef, partial = false): Promise<number | null> {
+  if (isUnemployedJob(job.name) || isUnemployedLabel(job.label)) return null;
   const found = await db
     .select({ id: companies.id, managed: companies.managedByFivem })
     .from(companies)
@@ -281,7 +282,7 @@ export async function saveCharacterList(discord: string, characters: GameChar[])
       jobLabel: c.jobLabel.slice(0, 120),
       grade: c.grade,
       gradeLabel: c.gradeLabel.slice(0, 120),
-      unemployed: isUnemployedJob(c.jobId),
+      unemployed: isUnemployedJob(c.jobId) || isUnemployedLabel(c.jobLabel),
     }));
   if (!rows.length) {
     await db.delete(fivemCharacters).where(eq(fivemCharacters.discordId, discord));
@@ -346,7 +347,7 @@ export async function provisionAllCharacters(
   const wanted = selectedName ?? existing[0]?.s ?? null;
   const selected =
     (wanted ? characters.find((c) => c.name === wanted) : undefined) ??
-    characters.find((c) => !isUnemployedJob(c.jobId)) ??
+    characters.find((c) => !isUnemployedJob(c.jobId) && !isUnemployedLabel(c.jobLabel)) ??
     characters[0] ??
     null;
 
@@ -356,7 +357,7 @@ export async function provisionAllCharacters(
   const keep: number[] = [];
   let selectedCompanyId: number | null = null;
   for (const c of characters) {
-    if (isUnemployedJob(c.jobId)) continue;
+    if (isUnemployedJob(c.jobId) || isUnemployedLabel(c.jobLabel)) continue;
     const companyId = await ensureCompanyForJob(
       { name: c.jobId, label: c.jobLabel, grades: [{ grade: c.grade, label: c.gradeLabel }] },
       true,
@@ -389,7 +390,7 @@ export async function pullAndProvision(discord: string, charName: string): Promi
     ok: true,
     companyId: out.selectedCompanyId,
     userId: out.userId,
-    job: isUnemployedJob(match.jobId) ? null : match.jobLabel,
+    job: isUnemployedJob(match.jobId) || isUnemployedLabel(match.jobLabel) ? null : match.jobLabel,
   };
 }
 

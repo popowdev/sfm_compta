@@ -15,10 +15,14 @@ export type PullResult =
   | { ok: true; characters: GameChar[] }
   | { ok: false; reason: PullReason };
 
-const UNEMPLOYED_JOBS = new Set(['unemployed', '', 'chomage']);
+const UNEMPLOYED_JOBS = new Set(['unemployed', '', 'chomage', 'chômage', 'sans emploi', 'sans-emploi']);
 
 export function isUnemployedJob(jobId: string): boolean {
   return UNEMPLOYED_JOBS.has(jobId.trim().toLowerCase());
+}
+
+export function isUnemployedLabel(label: string | null | undefined): boolean {
+  return UNEMPLOYED_JOBS.has((label ?? '').trim().toLowerCase());
 }
 
 const DISCORD_RE = /^\d{5,32}$/;
