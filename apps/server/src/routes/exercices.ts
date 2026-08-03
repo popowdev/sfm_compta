@@ -856,10 +856,6 @@ meExercicesRouter.put(
     if (!companyId || !id || !employeeId) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
-    const badgeuseAcc = await getModuleAccess(req.user!.id, companyId, 'badgeuse');
-    if (!badgeuseAcc || !badgeuseAcc.enabled || badgeuseAcc.blocked || !badgeuseAcc.canView) {
-      return res.status(403).json({ error: 'forbidden' });
-    }
     const parsed = payrollSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     const exRow = await db
@@ -901,10 +897,6 @@ meExercicesRouter.put(
     if (!companyId || !id || !employeeId) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
-    const badgeuseAcc = await getModuleAccess(req.user!.id, companyId, 'badgeuse');
-    if (!badgeuseAcc || !badgeuseAcc.enabled || badgeuseAcc.blocked || !badgeuseAcc.canView) {
-      return res.status(403).json({ error: 'forbidden' });
-    }
     const parsed = paidSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     const exRow = await db.select({ id: exercices.id, status: exercices.status }).from(exercices).where(and(eq(exercices.id, id), eq(exercices.companyId, companyId))).limit(1);

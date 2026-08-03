@@ -1,7 +1,7 @@
 import { apiFetch } from './api';
 
 export interface MyPayWeek {
-  exerciceId: number;
+  exerciceId: number | null;
   label: string;
   startDate: string;
   endDate: string;

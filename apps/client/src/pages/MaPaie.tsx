@@ -87,7 +87,7 @@ export default function MaPaie() {
             <div>
               <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Semaines précédentes</h3>
               <div className="grid gap-3 md:grid-cols-2">
-                {previous.map((w) => <WeekCard key={w.exerciceId} w={w} />)}
+                {previous.map((w) => <WeekCard key={w.startDate} w={w} />)}
               </div>
             </div>
           )}

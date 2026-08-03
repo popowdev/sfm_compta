@@ -75,18 +75,36 @@ meMyPayRouter.get(
     const rate = g && Number(g.hourlyRate) > 0 ? Number(g.hourlyRate) : Number(emp.hourlyRate);
     const baseSalary = g ? Number(g.baseSalary) : 0;
 
+    const weekWindow = (offset: number) => {
+      const now = new Date();
+      now.setUTCDate(now.getUTCDate() + offset * 7);
+      const dow = now.getUTCDay();
+      const monday = new Date(now);
+      monday.setUTCDate(now.getUTCDate() - (dow === 0 ? 6 : dow - 1));
+      const sunday = new Date(monday);
+      sunday.setUTCDate(monday.getUTCDate() + 6);
+      const start = monday.toISOString().slice(0, 10);
+      const end = sunday.toISOString().slice(0, 10);
+      const label = `Semaine du ${monday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })} au ${sunday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}`;
+      return { start, end, label };
+    };
+    const windows = Array.from({ length: 8 }, (_, i) => weekWindow(-i));
+    const earliest = windows[windows.length - 1]!.start;
+
     const exRows = await db
       .select()
       .from(exercices)
-      .where(and(eq(exercices.companyId, companyId), sql`DATEDIFF(${exercices.endDate}, ${exercices.startDate}) = 6`))
-      .orderBy(desc(exercices.startDate))
-      .limit(8);
+      .where(and(eq(exercices.companyId, companyId), sql`DATEDIFF(${exercices.endDate}, ${exercices.startDate}) = 6`, gte(exercices.startDate, earliest)))
+      .orderBy(desc(exercices.startDate));
+    const exByRange = new Map(exRows.map((ex) => [`${ex.startDate}|${ex.endDate}`, ex]));
 
     const weeks = [];
-    for (const ex of exRows) {
-      const start = ex.startDate, end = ex.endDate;
+    for (let wi = 0; wi < windows.length; wi++) {
+      const w = windows[wi]!;
+      const ex = exByRange.get(`${w.start}|${w.end}`) ?? null;
+      const start = w.start, end = w.end;
       const inRange = (col: unknown) => and(gte(sql`DATE(${col})`, start), lte(sql`DATE(${col})`, end));
-      const [teRows, caisseAgg, garComm, garRev, taxiC, taxiCo, taxiV, pawnAgg, runsAgg, override] = await Promise.all([
+      const [teRows, caisseAgg, garComm, garRev, taxiC, taxiCo, taxiV, pawnAgg, runsAgg] = await Promise.all([
         db.select({ clockIn: timeEntries.clockIn, clockOut: timeEntries.clockOut, workedMin: sql<string>`GREATEST(0, TIMESTAMPDIFF(MINUTE, ${timeEntries.clockIn}, ${timeEntries.clockOut}) - ${timeEntries.pauseMinutes})` }).from(timeEntries).where(and(eq(timeEntries.companyId, companyId), eq(timeEntries.employeeId, emp.id), isNotNull(timeEntries.clockOut), inRange(timeEntries.clockIn))),
         db.select({ ca: sql<string>`COALESCE(SUM(${sales.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(sales).where(and(eq(sales.companyId, companyId), eq(sales.employeeId, emp.id), inRange(sales.createdAt))),
         db.select({ c: sql<string>`COALESCE(SUM(${garageRepairs.commissionAmount}),0)` }).from(garageRepairs).where(and(eq(garageRepairs.companyId, companyId), eq(garageRepairs.mechanicUserId, userId), inRange(garageRepairs.createdAt))),
@@ -96,12 +114,14 @@ meMyPayRouter.get(
         db.select({ t: sql<string>`COALESCE(SUM(${taxiVip.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(taxiVip).where(and(eq(taxiVip.companyId, companyId), eq(taxiVip.driverUserId, userId), inRange(taxiVip.createdAt))),
         db.select({ t: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.createdByUserId, userId), eq(pawnshopTransactions.type, 'sell'), inRange(pawnshopTransactions.createdAt))),
         db.select({ c: sql<string>`COALESCE(SUM(${companyRuns.commission}),0)`, cnt: sql<string>`COALESCE(SUM(${companyRuns.qty}),0)` }).from(companyRuns).where(and(eq(companyRuns.companyId, companyId), eq(companyRuns.employeeId, emp.id), inRange(companyRuns.createdAt))),
-        db.select().from(exercicePayroll).where(and(eq(exercicePayroll.exerciceId, ex.id), eq(exercicePayroll.employeeId, emp.id))).limit(1),
       ]);
+      const override = ex
+        ? await db.select().from(exercicePayroll).where(and(eq(exercicePayroll.exerciceId, ex.id), eq(exercicePayroll.employeeId, emp.id))).limit(1)
+        : [];
 
       const rawMin = teRows.reduce((s, t) => s + Number(t.workedMin), 0);
       const rawHours = rawMin / 60;
-      const caps = [Number(ex.hoursCap), weeklyHoursCap].filter((c) => c > 0);
+      const caps = [ex ? Number(ex.hoursCap) : 0, weeklyHoursCap].filter((c) => c > 0);
       const cappedHours = caps.length ? Math.min(rawHours, ...caps) : rawHours;
       const base = Math.round(baseSalary + cappedHours * rate);
       const caisseCommission = Math.round((caisseRate / 100) * Number(caisseAgg[0]?.ca ?? 0));
@@ -119,14 +139,21 @@ meMyPayRouter.get(
       const bonus = o ? Math.round(Number(o.bonus)) : 0;
       const deductions = o ? Math.round(Number(o.deductions)) : 0;
       const theoretical = Math.max(0, base + caisseCommission + garageCommission + taxiCommission + pawnshopCommission + runsCommission + bonus + peakBonus - deductions);
-      const paid = Number(ex.salaryCap) > 0 ? Math.min(theoretical, Math.round(Number(ex.salaryCap))) : theoretical;
+      const salaryCap = ex ? Number(ex.salaryCap) : 0;
+      const paid = salaryCap > 0 ? Math.min(theoretical, Math.round(salaryCap)) : theoretical;
+
+      const salesCount = Number(caisseAgg[0]?.cnt ?? 0);
+      const garageCount = Number(garRev[0]?.cnt ?? 0);
+      const runsCount = Number(runsAgg[0]?.cnt ?? 0);
+      const hasWork = rawMin > 0 || coursesCount > 0 || salesCount > 0 || garageCount > 0 || runsCount > 0 || Number(pawnAgg[0]?.t ?? 0) > 0;
+      if (wi > 0 && !ex && !hasWork) continue;
 
       weeks.push({
-        exerciceId: ex.id,
-        label: ex.label,
+        exerciceId: ex ? ex.id : null,
+        label: ex ? ex.label : w.label,
         startDate: start,
         endDate: end,
-        status: ex.status,
+        status: ex ? ex.status : 'none',
         hours: Math.round(rawHours * 10) / 10,
         cappedHours: Math.round(cappedHours * 10) / 10,
         base,
@@ -140,9 +167,9 @@ meMyPayRouter.get(
         deductions,
         paid: Math.round(paid),
         coursesCount,
-        salesCount: Number(caisseAgg[0]?.cnt ?? 0),
-        garageCount: Number(garRev[0]?.cnt ?? 0),
-        runsCount: Number(runsAgg[0]?.cnt ?? 0),
+        salesCount,
+        garageCount,
+        runsCount,
         isPaid: o?.paid ?? false,
       });
     }

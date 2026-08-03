@@ -156,6 +156,7 @@ meRunsRouter.delete(
     if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!(await canManageCompany(req.user!.id, companyId))) return res.status(403).json({ error: 'forbidden' });
     await db.delete(companyRuns).where(and(eq(companyRuns.id, id), eq(companyRuns.companyId, companyId)));
     emitInvalidate(['irs', `company:${companyId}`], [['runs', companyId]]);
     res.json({ ok: true });

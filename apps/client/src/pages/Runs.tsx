@@ -93,7 +93,7 @@ export default function Runs() {
                     <th className="py-2 text-right font-semibold">Total</th>
                     <th className="py-2 text-right font-semibold">Part employé</th>
                     {canManage && <th className="py-2 text-left font-semibold">Ajouté (log)</th>}
-                    {canWrite && <th className="py-2"></th>}
+                    {canManage && <th className="py-2"></th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -105,7 +105,7 @@ export default function Runs() {
                       <td className="py-2 text-right text-emerald-400">{money(r.total)}</td>
                       <td className="py-2 text-right text-amber-400">{money(r.commission)}</td>
                       {canManage && <td className="py-2 text-xs text-muted-foreground">{r.authorName ?? '—'} · {fmtDayTime(r.createdAt)}</td>}
-                      {canWrite && <td className="py-2 text-right"><button type="button" onClick={async () => { if (await confirm({ title: 'Supprimer cette run ?', message: `${r.qty} run(s) · ${money(r.total)}`, destructive: true })) del.mutate(r.id); }} className="text-muted-foreground hover:text-red-400"><Trash2 className="h-4 w-4" /></button></td>}
+                      {canManage && <td className="py-2 text-right"><button type="button" onClick={async () => { if (await confirm({ title: 'Supprimer cette run ?', message: `${r.qty} run(s) · ${money(r.total)}`, destructive: true })) del.mutate(r.id); }} className="text-muted-foreground hover:text-red-400"><Trash2 className="h-4 w-4" /></button></td>}
                     </tr>
                   ))}
                 </tbody>
