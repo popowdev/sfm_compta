@@ -511,6 +511,7 @@ export default function Employes() {
                         { key: 'garage', label: 'Garage', p: perf?.garage ?? { revenue: 0, count: 0 }, unit: 'interv.' },
                         { key: 'taxi', label: 'Taxi', p: perf?.taxi ?? { revenue: 0, count: 0 }, unit: 'course' },
                         { key: 'pawnshop', label: 'Pawnshop', p: perf?.pawnshop ?? { revenue: 0, count: 0 }, unit: 'revente' },
+                        { key: 'chasse', label: 'Chasse', p: perf?.chasse ?? { revenue: 0, count: 0 }, unit: 'revente' },
                       ].filter((m) => m.p.count > 0);
                       return (
                         <>

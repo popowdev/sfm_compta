@@ -599,6 +599,7 @@ function PayrollRow({
   showGarage,
   showTaxi,
   showPawn,
+  showChasse,
   showRuns,
   onSave,
   onTogglePaid,
@@ -608,6 +609,7 @@ function PayrollRow({
   showGarage: boolean;
   showTaxi: boolean;
   showPawn: boolean;
+  showChasse: boolean;
   showRuns: boolean;
   onSave: (employeeId: number, body: { bonus: number; deductions: number }) => void;
   onTogglePaid: (employeeId: number, paid: boolean) => void;
@@ -666,6 +668,11 @@ function PayrollRow({
       {showPawn && (
         <td className="px-2 py-1.5 text-right text-violet-300/80" title={`Commission pawnshop — ${fmtInt(p.pawnshopRevenue)} $ de reventes`}>
           {p.pawnshopCommission ? `${fmtInt(p.pawnshopCommission)} $` : '—'}
+        </td>
+      )}
+      {showChasse && (
+        <td className="px-2 py-1.5 text-right text-orange-300/80" title={`Commission chasse — ${fmtInt(p.chasseRevenue)} $ de reventes`}>
+          {p.chasseCommission ? `${fmtInt(p.chasseCommission)} $` : '—'}
         </td>
       )}
       {showRuns && (
@@ -915,6 +922,7 @@ function ExerciceDetailView({
   const showGarage = s.garageRevenue > 0 || payroll.some((p) => p.garageCommission > 0);
   const showTaxi = payroll.some((p) => p.taxiCommission > 0);
   const showPawn = payroll.some((p) => p.pawnshopCommission > 0);
+  const showChasse = payroll.some((p) => p.chasseCommission > 0);
   const showRuns = payroll.some((p) => p.runsCommission > 0);
   const totalCa = perfByEmployee.reduce((a, p) => a + p.ca, 0);
   const payData = salesByPayment.map((p) => ({ name: PAY_LABEL[p.method] ?? p.method, value: p.total }));
@@ -1179,6 +1187,7 @@ function ExerciceDetailView({
                   )}
                   {showTaxi && <th className="px-2 py-1.5 text-right font-semibold">Taxi</th>}
                   {showPawn && <th className="px-2 py-1.5 text-right font-semibold">Pawnshop</th>}
+                  {showChasse && <th className="px-2 py-1.5 text-right font-semibold">Chasse</th>}
                   {showRuns && <th className="px-2 py-1.5 text-right font-semibold">Runs</th>}
                   <th className="px-2 py-1.5 text-right font-semibold">Prime</th>
                   <th className="px-2 py-1.5 text-right font-semibold">Retenue</th>
@@ -1188,7 +1197,7 @@ function ExerciceDetailView({
               </thead>
               <tbody>
                 {payroll.map((p) => (
-                  <PayrollRow key={p.employeeId} p={p} editable={canEdit} showGarage={showGarage} showTaxi={showTaxi} showPawn={showPawn} showRuns={showRuns} onSave={(employeeId, body) => savePay.mutate({ employeeId, body })} onTogglePaid={(employeeId, paid) => payPaid.mutate({ employeeId, paid })} />
+                  <PayrollRow key={p.employeeId} p={p} editable={canEdit} showGarage={showGarage} showTaxi={showTaxi} showPawn={showPawn} showChasse={showChasse} showRuns={showRuns} onSave={(employeeId, body) => savePay.mutate({ employeeId, body })} onTogglePaid={(employeeId, paid) => payPaid.mutate({ employeeId, paid })} />
                 ))}
                 <tr className="border-t-2 font-semibold">
                   <td className="px-2 py-2">TOTAL</td>
@@ -1202,6 +1211,7 @@ function ExerciceDetailView({
                   )}
                   {showTaxi && <td className="px-2 py-2 text-right text-amber-300/80">{fmtInt(payroll.reduce((a, p) => a + p.taxiCommission, 0))} $</td>}
                   {showPawn && <td className="px-2 py-2 text-right text-violet-300/80">{fmtInt(payroll.reduce((a, p) => a + p.pawnshopCommission, 0))} $</td>}
+                  {showChasse && <td className="px-2 py-2 text-right text-orange-300/80">{fmtInt(payroll.reduce((a, p) => a + p.chasseCommission, 0))} $</td>}
                   {showRuns && <td className="px-2 py-2 text-right text-sky-300/80">{fmtInt(payroll.reduce((a, p) => a + p.runsCommission, 0))} $</td>}
                   <td className="px-2 py-2 text-right">
                     {fmtInt(payroll.reduce((a, p) => a + p.bonus, 0))} $

@@ -31,6 +31,7 @@ import { meTicketsRouter, supportTicketsRouter, ticketFilesRouter, devTicketLogs
 import { meImmoRentalsRouter, meImmoSalesRouter, meImmoParcelsRouter, meImmoSettingsRouter } from './routes/immo';
 import { meTaxiRouter } from './routes/taxi';
 import { mePawnshopRouter } from './routes/pawnshop';
+import { meChasseRouter } from './routes/chasse';
 import { meRunsRouter } from './routes/runs';
 import { meMyPayRouter } from './routes/mypay';
 import { irsCompanyNotesRouter } from './routes/companyNotes';
@@ -138,6 +139,7 @@ app.use('/api/me/companies/:companyId/immo-parcels', meImmoParcelsRouter);
 app.use('/api/me/companies/:companyId/immo-settings', meImmoSettingsRouter);
 app.use('/api/me/companies/:companyId/taxi', meTaxiRouter);
 app.use('/api/me/companies/:companyId/pawnshop', mePawnshopRouter);
+app.use('/api/me/companies/:companyId/chasse', meChasseRouter);
 app.use('/api/me/companies/:companyId/runs', meRunsRouter);
 app.use('/api/me/companies/:companyId/my-pay', meMyPayRouter);
 app.use('/api/me/companies/:companyId/sales', meSalesRouter);

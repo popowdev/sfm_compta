@@ -1,6 +1,6 @@
 import { useCompany } from '@/lib/useCompany';
 import { useQuery } from '@tanstack/react-query';
-import { Wallet, Clock, Car, ShoppingCart, Wrench, Gem, Truck, CheckCircle2, Circle } from 'lucide-react';
+import { Wallet, Clock, Car, ShoppingCart, Wrench, Gem, Truck, Target, CheckCircle2, Circle } from 'lucide-react';
 import { fmtInt } from '@/lib/declarations';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -25,6 +25,7 @@ function WeekCard({ w, current }: { w: MyPayWeek; current?: boolean }) {
     { label: `Commission garage (${w.garageCount})`, value: w.garageCommission, icon: Wrench, accent: '' },
     { label: `Commission taxi (${w.coursesCount} course${w.coursesCount > 1 ? 's' : ''})`, value: w.taxiCommission, icon: Car, accent: 'text-amber-400' },
     { label: `Commission pawnshop`, value: w.pawnshopCommission, icon: Gem, accent: '' },
+    { label: `Commission chasse`, value: w.chasseCommission, icon: Target, accent: '' },
     { label: `Runs (${w.runsCount})`, value: w.runsCommission, icon: Truck, accent: '' },
     { label: `Prime de pointe`, value: w.peakBonus, icon: Wallet, accent: 'text-violet-400' },
     { label: `Prime`, value: w.bonus, icon: Wallet, accent: '' },

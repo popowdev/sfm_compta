@@ -4,7 +4,7 @@ import { moduleConfigBool, moduleConfigNumber } from '@rp-compta/shared';
 import { db } from '../db';
 import {
   exercices, exercicePayroll, companyEmployees, companyRoles, salaryGrid, companyModules, timeEntries,
-  sales, garageRepairs, garageCustoms, taxiCitoyens, taxiConcitoyens, taxiVip, pawnshopTransactions, companyRuns,
+  sales, garageRepairs, garageCustoms, taxiCitoyens, taxiConcitoyens, taxiVip, pawnshopTransactions, chasseTransactions, companyRuns,
 } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
@@ -55,7 +55,7 @@ meMyPayRouter.get(
     if (!emp) return res.json({ hasFiche: false, weeks: [] });
     const userId = emp.userId!;
 
-    const cfgRows = await db.select({ moduleKey: companyModules.moduleKey, config: companyModules.config }).from(companyModules).where(and(eq(companyModules.companyId, companyId), inArray(companyModules.moduleKey, ['badgeuse', 'caisse', 'garage', 'taxi', 'pawnshop'])));
+    const cfgRows = await db.select({ moduleKey: companyModules.moduleKey, config: companyModules.config }).from(companyModules).where(and(eq(companyModules.companyId, companyId), inArray(companyModules.moduleKey, ['badgeuse', 'caisse', 'garage', 'taxi', 'pawnshop', 'chasse'])));
     const parse = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v) as Record<string, unknown> | null;
     const cfg = (k: string) => parse(cfgRows.find((r) => r.moduleKey === k)?.config ?? null);
     const badge = cfg('badgeuse');
@@ -66,7 +66,7 @@ meMyPayRouter.get(
       const c = cfg(mod);
       return moduleConfigBool(c, mod as 'caisse', 'commissionCustom') ? moduleConfigNumber(c, mod as 'caisse', 'commissionRate') : Number(emp.commissionRate);
     };
-    const caisseRate = rateOf('caisse'), taxiRate = rateOf('taxi'), pawnRate = rateOf('pawnshop');
+    const caisseRate = rateOf('caisse'), taxiRate = rateOf('taxi'), pawnRate = rateOf('pawnshop'), chasseRate = rateOf('chasse');
     const garageCustom = moduleConfigBool(cfg('garage'), 'garage', 'commissionCustom');
     const garageRate = moduleConfigNumber(cfg('garage'), 'garage', 'commissionRate');
 
@@ -104,7 +104,7 @@ meMyPayRouter.get(
       const ex = exByRange.get(`${w.start}|${w.end}`) ?? null;
       const start = w.start, end = w.end;
       const inRange = (col: unknown) => and(gte(sql`DATE(${col})`, start), lte(sql`DATE(${col})`, end));
-      const [teRows, caisseAgg, garComm, garRev, taxiC, taxiCo, taxiV, pawnAgg, runsAgg] = await Promise.all([
+      const [teRows, caisseAgg, garComm, garRev, taxiC, taxiCo, taxiV, pawnAgg, chasseAgg, runsAgg] = await Promise.all([
         db.select({ clockIn: timeEntries.clockIn, clockOut: timeEntries.clockOut, workedMin: sql<string>`GREATEST(0, TIMESTAMPDIFF(MINUTE, ${timeEntries.clockIn}, ${timeEntries.clockOut}) - ${timeEntries.pauseMinutes})` }).from(timeEntries).where(and(eq(timeEntries.companyId, companyId), eq(timeEntries.employeeId, emp.id), isNotNull(timeEntries.clockOut), inRange(timeEntries.clockIn))),
         db.select({ ca: sql<string>`COALESCE(SUM(${sales.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(sales).where(and(eq(sales.companyId, companyId), eq(sales.employeeId, emp.id), inRange(sales.createdAt))),
         db.select({ c: sql<string>`COALESCE(SUM(${garageRepairs.commissionAmount}),0)` }).from(garageRepairs).where(and(eq(garageRepairs.companyId, companyId), eq(garageRepairs.mechanicUserId, userId), inRange(garageRepairs.createdAt))),
@@ -113,6 +113,7 @@ meMyPayRouter.get(
         db.select({ t: sql<string>`COALESCE(SUM(${taxiConcitoyens.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(taxiConcitoyens).where(and(eq(taxiConcitoyens.companyId, companyId), eq(taxiConcitoyens.driverUserId, userId), inRange(taxiConcitoyens.createdAt))),
         db.select({ t: sql<string>`COALESCE(SUM(${taxiVip.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(taxiVip).where(and(eq(taxiVip.companyId, companyId), eq(taxiVip.driverUserId, userId), inRange(taxiVip.createdAt))),
         db.select({ t: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.createdByUserId, userId), eq(pawnshopTransactions.type, 'sell'), inRange(pawnshopTransactions.createdAt))),
+        db.select({ t: sql<string>`COALESCE(SUM(${chasseTransactions.total}),0)` }).from(chasseTransactions).where(and(eq(chasseTransactions.companyId, companyId), eq(chasseTransactions.createdByUserId, userId), eq(chasseTransactions.type, 'sell'), inRange(chasseTransactions.createdAt))),
         db.select({ c: sql<string>`COALESCE(SUM(${companyRuns.commission}),0)`, cnt: sql<string>`COALESCE(SUM(${companyRuns.qty}),0)` }).from(companyRuns).where(and(eq(companyRuns.companyId, companyId), eq(companyRuns.employeeId, emp.id), inRange(companyRuns.createdAt))),
       ]);
       const override = ex
@@ -130,6 +131,7 @@ meMyPayRouter.get(
       const coursesCount = Number(taxiC[0]?.cnt ?? 0) + Number(taxiCo[0]?.cnt ?? 0) + Number(taxiV[0]?.cnt ?? 0);
       const taxiCommission = Math.round((taxiRate / 100) * taxiRevenue);
       const pawnshopCommission = Math.round((pawnRate / 100) * Number(pawnAgg[0]?.t ?? 0));
+      const chasseCommission = Math.round((chasseRate / 100) * Number(chasseAgg[0]?.t ?? 0));
       const runsCommission = Math.round(Number(runsAgg[0]?.c ?? 0));
       let peakMin = 0;
       if (peakEnabled && peakMultiplier > 1) for (const t of teRows) if (t.clockOut) peakMin += peakMinutes(t.clockIn, t.clockOut);
@@ -138,14 +140,14 @@ meMyPayRouter.get(
       const o = override[0];
       const bonus = o ? Math.round(Number(o.bonus)) : 0;
       const deductions = o ? Math.round(Number(o.deductions)) : 0;
-      const theoretical = Math.max(0, base + caisseCommission + garageCommission + taxiCommission + pawnshopCommission + runsCommission + bonus + peakBonus - deductions);
+      const theoretical = Math.max(0, base + caisseCommission + garageCommission + taxiCommission + pawnshopCommission + chasseCommission + runsCommission + bonus + peakBonus - deductions);
       const salaryCap = ex ? Number(ex.salaryCap) : 0;
       const paid = salaryCap > 0 ? Math.min(theoretical, Math.round(salaryCap)) : theoretical;
 
       const salesCount = Number(caisseAgg[0]?.cnt ?? 0);
       const garageCount = Number(garRev[0]?.cnt ?? 0);
       const runsCount = Number(runsAgg[0]?.cnt ?? 0);
-      const hasWork = rawMin > 0 || coursesCount > 0 || salesCount > 0 || garageCount > 0 || runsCount > 0 || Number(pawnAgg[0]?.t ?? 0) > 0;
+      const hasWork = rawMin > 0 || coursesCount > 0 || salesCount > 0 || garageCount > 0 || runsCount > 0 || Number(pawnAgg[0]?.t ?? 0) > 0 || Number(chasseAgg[0]?.t ?? 0) > 0;
       if (wi > 0 && !ex && !hasWork) continue;
 
       weeks.push({
@@ -161,6 +163,7 @@ meMyPayRouter.get(
         garageCommission,
         taxiCommission,
         pawnshopCommission,
+        chasseCommission,
         runsCommission,
         peakBonus,
         bonus,

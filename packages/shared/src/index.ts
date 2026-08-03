@@ -35,6 +35,7 @@ export const MODULE_KEYS = [
   'taxi',
   'pawnshop',
   'runs',
+  'chasse',
 ] as const;
 export type ModuleKey = (typeof MODULE_KEYS)[number];
 
@@ -78,6 +79,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'taxi', label: 'Taxi', group: 'Taxi', defaultEnabled: false, companyPage: true },
   { key: 'pawnshop', label: 'Prêteur sur gages', group: 'Commerce', defaultEnabled: false, companyPage: true },
   { key: 'runs', label: 'Runs / livraisons', group: 'Commerce', defaultEnabled: false, companyPage: true },
+  { key: 'chasse', label: 'Chasse', group: 'Commerce', defaultEnabled: false, companyPage: true },
 ];
 
 export interface ModuleConfigBoolField {
@@ -286,6 +288,26 @@ export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
       step: 1,
       suffix: '%',
       help: 'Appliqué au CA des reventes grossiste uniquement si « taux personnalisé » est activé.',
+    },
+  ],
+  chasse: [
+    {
+      key: 'commissionCustom',
+      label: 'Commission : taux personnalisé',
+      type: 'boolean',
+      default: false,
+      help: 'Décoché = taux de commission du grade (fiche RH). Coché = taux fixe ci-dessous pour ce module.',
+    },
+    {
+      key: 'commissionRate',
+      label: 'Taux de commission chasse (%)',
+      type: 'number',
+      default: 0,
+      min: 0,
+      max: 100,
+      step: 1,
+      suffix: '%',
+      help: 'Appliqué au CA des reventes chasse uniquement si « taux personnalisé » est activé.',
     },
   ],
   runs: [

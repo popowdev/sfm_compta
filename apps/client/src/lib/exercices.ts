@@ -53,9 +53,11 @@ export interface PayrollLine {
   garageCommission: number;
   taxiCommission: number;
   pawnshopCommission: number;
+  chasseCommission: number;
   runsCommission: number;
   taxiRevenue: number;
   pawnshopRevenue: number;
+  chasseRevenue: number;
   bonus: number;
   deductions: number;
   theoretical: number;
@@ -79,6 +81,7 @@ export interface ExerciceSummary {
   garageCommission: number;
   taxiCommission: number;
   pawnshopCommission: number;
+  chasseCommission: number;
   runsCommission: number;
   peakBonus: number;
   peakEnabled: boolean;

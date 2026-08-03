@@ -1323,6 +1323,32 @@ export const pawnshopTransactions = mysqlTable('pawnshop_transactions', {
   createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const chasseItems = mysqlTable('chasse_items', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 150 }).notNull(),
+  buyPrice: decimal('buy_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  sellPrice: decimal('sell_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  venteClient: boolean('vente_client').notNull().default(false),
+  active: boolean('active').notNull().default(true),
+  sortOrder: int('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const chasseTransactions = mysqlTable('chasse_transactions', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  itemId: int('item_id').notNull().references(() => chasseItems.id, { onDelete: 'cascade' }),
+  type: mysqlEnum('type', ['buy', 'sell']).notNull(),
+  qty: int('qty').notNull().default(1),
+  unitPrice: decimal('unit_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  total: decimal('total', { precision: 14, scale: 2 }).notNull().default('0'),
+  clientName: varchar('client_name', { length: 120 }),
+  note: varchar('note', { length: 255 }),
+  createdByUserId: int('created_by_user_id'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const companyRuns = mysqlTable('company_runs', {
   id: int('id').autoincrement().primaryKey(),
   companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),

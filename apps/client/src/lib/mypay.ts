@@ -13,6 +13,7 @@ export interface MyPayWeek {
   garageCommission: number;
   taxiCommission: number;
   pawnshopCommission: number;
+  chasseCommission: number;
   runsCommission: number;
   peakBonus: number;
   bonus: number;

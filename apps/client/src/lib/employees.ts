@@ -77,6 +77,7 @@ export interface EmployeePerf {
   garage: { revenue: number; count: number };
   taxi: { revenue: number; count: number };
   pawnshop: { revenue: number; count: number };
+  chasse: { revenue: number; count: number };
   hours: number;
   totalRevenue: number;
 }

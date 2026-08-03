@@ -5,7 +5,7 @@ import { CONTRACT_TYPE_KEYS } from '@rp-compta/shared';
 import { db } from '../db';
 import {
   companyEmployees, companyVehicles, employeeWarnings, memberships, companyRoles, users,
-  sales, taxiCitoyens, taxiConcitoyens, taxiVip, pawnshopTransactions, garageRepairs, garageCustoms, timeEntries,
+  sales, taxiCitoyens, taxiConcitoyens, taxiVip, pawnshopTransactions, chasseTransactions, garageRepairs, garageCustoms, timeEntries,
 } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
@@ -137,6 +137,7 @@ interface EmpPerf {
   garageRev: number; garageCnt: number;
   taxiRev: number; taxiCnt: number;
   pawnRev: number; pawnCnt: number;
+  chasseRev: number; chasseCnt: number;
   hours: number;
 }
 
@@ -152,12 +153,13 @@ meEmployeesRouter.get(
     const empByUser = new Map<number, number>();
     for (const e of emps) if (e.userId != null) empByUser.set(e.userId, e.id);
 
-    const [caisse, taxiC, taxiCo, taxiV, pawn, garRep, garCus, hoursRows] = await Promise.all([
+    const [caisse, taxiC, taxiCo, taxiV, pawn, chasse, garRep, garCus, hoursRows] = await Promise.all([
       db.select({ empId: sales.employeeId, rev: sql<string>`COALESCE(SUM(${sales.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(sales).where(eq(sales.companyId, companyId)).groupBy(sales.employeeId),
       db.select({ userId: taxiCitoyens.driverUserId, rev: sql<string>`COALESCE(SUM(${taxiCitoyens.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(taxiCitoyens).where(eq(taxiCitoyens.companyId, companyId)).groupBy(taxiCitoyens.driverUserId),
       db.select({ userId: taxiConcitoyens.driverUserId, rev: sql<string>`COALESCE(SUM(${taxiConcitoyens.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(taxiConcitoyens).where(eq(taxiConcitoyens.companyId, companyId)).groupBy(taxiConcitoyens.driverUserId),
       db.select({ userId: taxiVip.driverUserId, rev: sql<string>`COALESCE(SUM(${taxiVip.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(taxiVip).where(eq(taxiVip.companyId, companyId)).groupBy(taxiVip.driverUserId),
       db.select({ userId: pawnshopTransactions.createdByUserId, rev: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.type, 'sell'))).groupBy(pawnshopTransactions.createdByUserId),
+      db.select({ userId: chasseTransactions.createdByUserId, rev: sql<string>`COALESCE(SUM(${chasseTransactions.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(chasseTransactions).where(and(eq(chasseTransactions.companyId, companyId), eq(chasseTransactions.type, 'sell'))).groupBy(chasseTransactions.createdByUserId),
       db.select({ userId: garageRepairs.mechanicUserId, rev: sql<string>`COALESCE(SUM(${garageRepairs.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(garageRepairs).where(eq(garageRepairs.companyId, companyId)).groupBy(garageRepairs.mechanicUserId),
       db.select({ userId: garageCustoms.mechanicUserId, rev: sql<string>`COALESCE(SUM(${garageCustoms.finalPrice}),0)`, cnt: sql<number>`COUNT(*)` }).from(garageCustoms).where(eq(garageCustoms.companyId, companyId)).groupBy(garageCustoms.mechanicUserId),
       db.select({ empId: timeEntries.employeeId, mins: sql<string>`COALESCE(SUM(GREATEST(0, TIMESTAMPDIFF(MINUTE, ${timeEntries.clockIn}, ${timeEntries.clockOut}) - ${timeEntries.pauseMinutes})),0)` }).from(timeEntries).where(and(eq(timeEntries.companyId, companyId), isNotNull(timeEntries.clockOut))).groupBy(timeEntries.employeeId),
@@ -166,7 +168,7 @@ meEmployeesRouter.get(
     const perf = new Map<number, EmpPerf>();
     const ensure = (empId: number): EmpPerf => {
       let p = perf.get(empId);
-      if (!p) { p = { caisseRev: 0, caisseCnt: 0, garageRev: 0, garageCnt: 0, taxiRev: 0, taxiCnt: 0, pawnRev: 0, pawnCnt: 0, hours: 0 }; perf.set(empId, p); }
+      if (!p) { p = { caisseRev: 0, caisseCnt: 0, garageRev: 0, garageCnt: 0, taxiRev: 0, taxiCnt: 0, pawnRev: 0, pawnCnt: 0, chasseRev: 0, chasseCnt: 0, hours: 0 }; perf.set(empId, p); }
       return p;
     };
     const addByUser = (rows: { userId: number | null; rev: string; cnt: number }[], apply: (p: EmpPerf, rev: number, cnt: number) => void) => {
@@ -182,6 +184,7 @@ meEmployeesRouter.get(
     addByUser(taxiCo, (p, rev, cnt) => { p.taxiRev += rev; p.taxiCnt += cnt; });
     addByUser(taxiV, (p, rev, cnt) => { p.taxiRev += rev; p.taxiCnt += cnt; });
     addByUser(pawn, (p, rev, cnt) => { p.pawnRev += rev; p.pawnCnt += cnt; });
+    addByUser(chasse, (p, rev, cnt) => { p.chasseRev += rev; p.chasseCnt += cnt; });
     addByUser(garRep, (p, rev, cnt) => { p.garageRev += rev; p.garageCnt += cnt; });
     addByUser(garCus, (p, rev, cnt) => { p.garageRev += rev; p.garageCnt += cnt; });
     for (const r of hoursRows) if (r.empId != null) { ensure(r.empId).hours += Number(r.mins) / 60; }
@@ -191,6 +194,7 @@ meEmployeesRouter.get(
       garage: { revenue: number; count: number };
       taxi: { revenue: number; count: number };
       pawnshop: { revenue: number; count: number };
+      chasse: { revenue: number; count: number };
       hours: number;
       totalRevenue: number;
     }> = {};
@@ -200,8 +204,9 @@ meEmployeesRouter.get(
         garage: { revenue: Math.round(p.garageRev), count: p.garageCnt },
         taxi: { revenue: Math.round(p.taxiRev), count: p.taxiCnt },
         pawnshop: { revenue: Math.round(p.pawnRev), count: p.pawnCnt },
+        chasse: { revenue: Math.round(p.chasseRev), count: p.chasseCnt },
         hours: Math.round(p.hours * 10) / 10,
-        totalRevenue: Math.round(p.caisseRev + p.garageRev + p.taxiRev + p.pawnRev),
+        totalRevenue: Math.round(p.caisseRev + p.garageRev + p.taxiRev + p.pawnRev + p.chasseRev),
       };
     }
     res.json({ performance });
