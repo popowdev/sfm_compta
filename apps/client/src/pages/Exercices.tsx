@@ -924,6 +924,13 @@ function ExerciceDetailView({
   const showPawn = payroll.some((p) => p.pawnshopCommission > 0);
   const showChasse = payroll.some((p) => p.chasseCommission > 0);
   const showRuns = payroll.some((p) => p.runsCommission > 0);
+  const caLines: [string, string][] = [['Chiffre d’affaires brut', `${fmtMoney(s.caGross)} $`]];
+  if (s.garageRevenue > 0) caLines.push(['· dont Garage', `${fmtMoney(s.garageRevenue)} $`]);
+  if (s.taxiRevenue > 0) caLines.push(['· dont Taxi (courses)', `${fmtMoney(s.taxiRevenue)} $`]);
+  if (s.pawnshopRevenue > 0) caLines.push(['· dont Pawnshop', `${fmtMoney(s.pawnshopRevenue)} $`]);
+  if (s.chasseRevenue > 0) caLines.push(['· dont Chasse', `${fmtMoney(s.chasseRevenue)} $`]);
+  if (s.runsRevenue > 0) caLines.push(['· dont Runs', `${fmtMoney(s.runsRevenue)} $`]);
+  caLines.push(['Remises accordées', `− ${fmtMoney(s.salesDiscount)} $`]);
   const totalCa = perfByEmployee.reduce((a, p) => a + p.ca, 0);
   const payData = salesByPayment.map((p) => ({ name: PAY_LABEL[p.method] ?? p.method, value: p.total }));
   const filteredSales = salesList.filter(
@@ -986,7 +993,7 @@ function ExerciceDetailView({
           <FlowStage
             n={1} title="Ce qui rentre" tone="emerald"
             big={`${fmtMoney(s.caNet)} $`} bigLabel="Chiffre d'affaires net"
-            lines={[['Ventes (CA brut)', `${fmtMoney(s.caGross)} $`], ['Remises accordées', `− ${fmtMoney(s.salesDiscount)} $`]]}
+            lines={caLines}
             caption="Tout ce que l'entreprise a encaissé, remises déduites." />
           <FlowOp symbol="−" />
           <FlowStage

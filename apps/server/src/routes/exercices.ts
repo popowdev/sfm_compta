@@ -623,18 +623,25 @@ meExercicesRouter.get(
     }
 
     const runsCommByEmp = new Map<number, number>();
+    let runsRevenueTotal = 0;
     {
       const rows = await db
-        .select({ employeeId: companyRuns.employeeId, comm: sql<string>`COALESCE(SUM(${companyRuns.commission}),0)` })
+        .select({ employeeId: companyRuns.employeeId, comm: sql<string>`COALESCE(SUM(${companyRuns.commission}),0)`, total: sql<string>`COALESCE(SUM(${companyRuns.total}),0)` })
         .from(companyRuns)
         .where(and(eq(companyRuns.companyId, companyId), gte(sql`DATE(${companyRuns.createdAt})`, ex.startDate), lte(sql`DATE(${companyRuns.createdAt})`, ex.endDate)))
         .groupBy(companyRuns.employeeId);
-      for (const r of rows) if (r.employeeId != null) runsCommByEmp.set(r.employeeId, Number(r.comm));
+      for (const r of rows) {
+        if (r.employeeId != null) runsCommByEmp.set(r.employeeId, Number(r.comm));
+        runsRevenueTotal += Number(r.total);
+      }
     }
 
     const taxiRevByEmp = new Map<number, number>();
     const pawnshopRevByEmp = new Map<number, number>();
     const chasseRevByEmp = new Map<number, number>();
+    let taxiRevenueTotal = 0;
+    let pawnshopRevenueTotal = 0;
+    let chasseRevenueTotal = 0;
     {
       const empRows = await db
         .select({ id: companyEmployees.id, userId: companyEmployees.userId })
@@ -655,11 +662,11 @@ meExercicesRouter.get(
         if (empId == null) return;
         map.set(empId, (map.get(empId) ?? 0) + total);
       };
-      for (const r of txCit) addRev(taxiRevByEmp, r.userId, Number(r.total));
-      for (const r of txCon) addRev(taxiRevByEmp, r.userId, Number(r.total));
-      for (const r of txVip) addRev(taxiRevByEmp, r.userId, Number(r.total));
-      for (const r of pawnSell) addRev(pawnshopRevByEmp, r.userId, Number(r.total));
-      for (const r of chasseSell) addRev(chasseRevByEmp, r.userId, Number(r.total));
+      for (const r of txCit) { addRev(taxiRevByEmp, r.userId, Number(r.total)); taxiRevenueTotal += Number(r.total); }
+      for (const r of txCon) { addRev(taxiRevByEmp, r.userId, Number(r.total)); taxiRevenueTotal += Number(r.total); }
+      for (const r of txVip) { addRev(taxiRevByEmp, r.userId, Number(r.total)); taxiRevenueTotal += Number(r.total); }
+      for (const r of pawnSell) { addRev(pawnshopRevByEmp, r.userId, Number(r.total)); pawnshopRevenueTotal += Number(r.total); }
+      for (const r of chasseSell) { addRev(chasseRevByEmp, r.userId, Number(r.total)); chasseRevenueTotal += Number(r.total); }
     }
 
     const caByEmp = new Map(perfRows.map((r) => [r.employeeId, Number(r.ca)]));
@@ -736,7 +743,8 @@ meExercicesRouter.get(
     const salesCount = Number(aggRows[0]?.count ?? 0) + garageTxCount;
     const componentPurchases = round2(Number(purchRows[0]?.purchases ?? 0));
 
-    const caGross = round2(salesGross + ex.revenue + garageRevenue);
+    const moduleRevenue = round2(taxiRevenueTotal + pawnshopRevenueTotal + chasseRevenueTotal + runsRevenueTotal);
+    const caGross = round2(salesGross + ex.revenue + garageRevenue + moduleRevenue);
     const caNet = round2(caGross - salesDiscount);
     const grossMargin = round2(caNet - productionCost);
 
@@ -762,6 +770,11 @@ meExercicesRouter.get(
         revenue: ex.revenue,
         salesRevenue: salesNet,
         garageRevenue,
+        taxiRevenue: Math.round(taxiRevenueTotal),
+        pawnshopRevenue: Math.round(pawnshopRevenueTotal),
+        chasseRevenue: Math.round(chasseRevenueTotal),
+        runsRevenue: Math.round(runsRevenueTotal),
+        moduleRevenue,
         garageCommission: Math.round(payroll.reduce((s, p) => s + p.garageCommission, 0)),
         taxiCommission: Math.round(payroll.reduce((s, p) => s + p.taxiCommission, 0)),
         pawnshopCommission: Math.round(payroll.reduce((s, p) => s + p.pawnshopCommission, 0)),
