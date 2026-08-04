@@ -302,6 +302,7 @@ export const subventions = mysqlTable('subventions', {
   motif: varchar('motif', { length: 200 }).notNull(),
   type: mysqlEnum('type', ['evenement', 'contrat', 'badgeuse', 'autre']).notNull().default('evenement'),
   requesterName: varchar('requester_name', { length: 120 }).notNull(),
+  rib: varchar('rib', { length: 64 }),
   amountRequested: decimal('amount_requested', { precision: 14, scale: 2 }).notNull(),
   amountGranted: decimal('amount_granted', { precision: 14, scale: 2 }),
   status: mysqlEnum('status', ['pending', 'approved', 'rejected', 'paid'])

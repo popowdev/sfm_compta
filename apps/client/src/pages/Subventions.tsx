@@ -31,7 +31,7 @@ export const SUB_TYPE_LABEL: Record<string, string> = Object.fromEntries(
   SUBVENTION_TYPES.map((t) => [t.key, t.label]),
 );
 
-const EMPTY = { motif: '', type: 'evenement' as SubventionType, requesterName: '', amountRequested: '', notes: '' };
+const EMPTY = { motif: '', type: 'evenement' as SubventionType, requesterName: '', rib: '', amountRequested: '', notes: '' };
 const MAX_DOCS = 10;
 
 export default function Subventions() {
@@ -90,7 +90,7 @@ export default function Subventions() {
     .filter((s) => s.status === 'approved' || s.status === 'paid')
     .reduce((sum, s) => sum + (s.amountGranted ?? 0), 0);
   const pending = list.filter((s) => s.status === 'pending').length;
-  const valid = form.motif.trim().length > 0 && form.requesterName.trim().length > 0 && !!photo;
+  const valid = form.motif.trim().length > 0 && form.requesterName.trim().length > 0 && form.rib.trim().length > 0 && !!photo;
 
   const submit = () => {
     if (!valid || !photo) return;
@@ -98,6 +98,7 @@ export default function Subventions() {
       motif: form.motif.trim(),
       type: form.type,
       requesterName: form.requesterName.trim(),
+      rib: form.rib.trim(),
       amountRequested: Number(form.amountRequested) || 0,
       notes: form.notes.trim() || undefined,
       photo,
@@ -256,6 +257,15 @@ export default function Subventions() {
                     className={inputCls}
                     value={form.requesterName}
                     onChange={(e) => set('requesterName', e.target.value)}
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-muted-foreground">RIB (obligatoire)</span>
+                  <input
+                    className={inputCls}
+                    value={form.rib}
+                    onChange={(e) => set('rib', e.target.value)}
+                    placeholder="RIB / IBAN où verser la subvention"
                   />
                 </label>
                 <label className="text-sm">

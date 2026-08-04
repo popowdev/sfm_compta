@@ -143,12 +143,13 @@ export default function IrsSubventions() {
             onClick={() =>
               downloadCsv(
                 'subventions.csv',
-                ['Entreprise', 'Type', 'Motif', 'Demandeur', 'Demandé', 'Accordé', 'Statut'],
+                ['Entreprise', 'Type', 'Motif', 'Demandeur', 'RIB', 'Demandé', 'Accordé', 'Statut'],
                 filtered.map((s) => [
                   s.companyName ?? '',
                   SUB_TYPE_LABEL[s.type] ?? s.type,
                   s.motif,
                   s.requesterName,
+                  s.rib ?? '',
                   s.amountRequested,
                   s.amountGranted ?? '',
                   SUB_STATUS[s.status].label,
@@ -189,7 +190,10 @@ export default function IrsSubventions() {
                       </span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{s.requesterName}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {s.requesterName}
+                    {s.rib && <div className="font-mono text-[11px] text-foreground/70">RIB : {s.rib}</div>}
+                  </td>
                   <td className="px-4 py-3 text-right">{fmtMoney(s.amountRequested)} $</td>
                   <td className="px-4 py-3 text-right">
                     <input

@@ -44,6 +44,7 @@ function serialize(s: typeof subventions.$inferSelect, docs: DocRow[], fileBase:
     motif: s.motif,
     type: s.type,
     requesterName: s.requesterName,
+    rib: s.rib,
     amountRequested: Number(s.amountRequested),
     amountGranted: s.amountGranted === null ? null : Number(s.amountGranted),
     status: s.status,
@@ -158,6 +159,7 @@ const requestSchema = z.object({
   motif: z.string().trim().min(1).max(200),
   type: z.enum(SUBVENTION_TYPE_KEYS as [string, ...string[]]),
   requesterName: z.string().trim().min(1).max(120),
+  rib: z.string().trim().min(1).max(64),
   amountRequested: z.coerce.number().pipe(amount),
   notes: z.string().max(2000).optional(),
 });
@@ -198,6 +200,7 @@ meSubventionsRouter.post(
         motif: d.motif,
         type: d.type as (typeof subventions.$inferInsert)['type'],
         requesterName: d.requesterName,
+        rib: d.rib,
         amountRequested: String(d.amountRequested),
         photoUrl: subventionFileUrl(photo.filename),
         notes: d.notes ?? null,

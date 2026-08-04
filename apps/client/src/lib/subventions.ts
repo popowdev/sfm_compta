@@ -15,6 +15,7 @@ export interface Subvention {
   motif: string;
   type: SubventionType;
   requesterName: string;
+  rib: string | null;
   amountRequested: number;
   amountGranted: number | null;
   status: SubventionStatus;
@@ -30,6 +31,7 @@ export interface SubventionRequestInput {
   motif: string;
   type: SubventionType;
   requesterName: string;
+  rib: string;
   amountRequested: number;
   notes?: string;
   photo: File;
@@ -46,6 +48,7 @@ export async function requestSubvention(companyId: number, body: SubventionReque
   fd.append('motif', body.motif);
   fd.append('type', body.type);
   fd.append('requesterName', body.requesterName);
+  fd.append('rib', body.rib);
   fd.append('amountRequested', String(body.amountRequested));
   if (body.notes) fd.append('notes', body.notes);
   fd.append('photo', body.photo);
