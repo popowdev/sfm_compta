@@ -16,6 +16,7 @@ import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess } from '../services/access';
 import { computeTaxes } from '../services/declarations';
+import { computeWeeklyCharges } from '../services/weeklyCharges';
 import { emitInvalidate } from '../realtime/socket';
 import { recordAudit } from '../services/audit';
 
@@ -95,75 +96,7 @@ meDeclarationsRouter.get(
     const end = sunday.toISOString().slice(0, 10);
     const weekLabel = `Semaine du ${monday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })} au ${sunday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}`;
 
-    const [salesRow, expRow, payRows, garageRep, garageCust] = await Promise.all([
-      db
-        .select({ total: sql<string>`COALESCE(SUM(${sales.total}), 0)` })
-        .from(sales)
-        .where(
-          and(
-            eq(sales.companyId, companyId),
-            gte(sql`DATE(${sales.createdAt})`, start),
-            lte(sql`DATE(${sales.createdAt})`, end),
-          ),
-        ),
-      db
-        .select({ total: sql<string>`COALESCE(SUM(${companyExpenses.amount}), 0)` })
-        .from(companyExpenses)
-        .where(
-          and(
-            eq(companyExpenses.companyId, companyId),
-            ne(companyExpenses.category, 'salary'),
-            gte(companyExpenses.expenseDate, start),
-            lte(companyExpenses.expenseDate, end),
-          ),
-        ),
-      db
-        .select({
-          rate: companyEmployees.hourlyRate,
-          workedMin: sql<string>`COALESCE(SUM(GREATEST(0, TIMESTAMPDIFF(MINUTE, ${timeEntries.clockIn}, ${timeEntries.clockOut}) - ${timeEntries.pauseMinutes})), 0)`,
-        })
-        .from(timeEntries)
-        .innerJoin(companyEmployees, eq(timeEntries.employeeId, companyEmployees.id))
-        .where(
-          and(
-            eq(timeEntries.companyId, companyId),
-            isNotNull(timeEntries.clockOut),
-            gte(sql`DATE(${timeEntries.clockIn})`, start),
-            lte(sql`DATE(${timeEntries.clockIn})`, end),
-          ),
-        )
-        .groupBy(companyEmployees.id),
-      db
-        .select({ total: sql<string>`COALESCE(SUM(${garageRepairs.total}), 0)` })
-        .from(garageRepairs)
-        .where(
-          and(
-            eq(garageRepairs.companyId, companyId),
-            gte(sql`DATE(${garageRepairs.createdAt})`, start),
-            lte(sql`DATE(${garageRepairs.createdAt})`, end),
-          ),
-        ),
-      db
-        .select({ total: sql<string>`COALESCE(SUM(${garageCustoms.finalPrice}), 0)` })
-        .from(garageCustoms)
-        .where(
-          and(
-            eq(garageCustoms.companyId, companyId),
-            gte(sql`DATE(${garageCustoms.createdAt})`, start),
-            lte(sql`DATE(${garageCustoms.createdAt})`, end),
-          ),
-        ),
-    ]);
-
-    const garageCa = Number(garageRep[0]?.total ?? 0) + Number(garageCust[0]?.total ?? 0);
-    const caNet = round2(Number(salesRow[0]?.total ?? 0) + garageCa);
-    const expenses = round2(Number(expRow[0]?.total ?? 0));
-    const payroll = round2(
-      payRows.reduce((s, r) => s + (Number(r.workedMin) / 60) * Number(r.rate), 0),
-    );
-    const charges = round2(expenses + payroll);
-    const benefit = round2(caNet - charges);
-
+    const { caNet, expenses, payroll, charges, benefit } = await computeWeeklyCharges(companyId, start, end);
     res.json({ weekLabel, caNet, expenses, payroll, charges, benefit });
   }),
 );
