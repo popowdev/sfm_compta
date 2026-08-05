@@ -16,6 +16,7 @@ export interface RunsData {
   canWrite: boolean;
   canManage: boolean;
   config: { unitPrice: number; commissionPct: number };
+  week: { offset: number; label: string; start: string; end: string };
   employees: { id: number; name: string }[];
   runs: RunRow[];
   summary: { totalRuns: number; totalRevenue: number; totalCommission: number; companyShare: number; count: number };
@@ -23,7 +24,7 @@ export interface RunsData {
 
 const base = (c: number) => `/api/me/companies/${c}/runs`;
 
-export const getRuns = (c: number) => apiFetch<RunsData>(base(c));
+export const getRuns = (c: number, offset = 0) => apiFetch<RunsData>(`${base(c)}?offset=${offset}`);
 export const addRun = (c: number, body: { employeeId?: number; qty: number; note?: string }) =>
   apiFetch<{ ok: boolean; total: number; commission: number }>(base(c), { method: 'POST', body: JSON.stringify(body) });
 export const deleteRun = (c: number, id: number) =>

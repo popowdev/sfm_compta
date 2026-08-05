@@ -1,6 +1,6 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { moduleConfigNumber } from '@rp-compta/shared';
 import { db } from '../db';
 import { companyRuns, companyEmployees, companyModules, users } from '../db/schema';
@@ -48,6 +48,20 @@ meRunsRouter.get(
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const canManage = await canManageCompany(req.user!.id, companyId);
     const config = await runsConfig(companyId);
+
+    const offset = Number.isFinite(Number(req.query.offset)) ? Math.min(0, Math.trunc(Number(req.query.offset))) : 0;
+    const now = new Date();
+    now.setUTCDate(now.getUTCDate() + offset * 7);
+    const dow = now.getUTCDay();
+    const monday = new Date(now);
+    monday.setUTCDate(now.getUTCDate() - (dow === 0 ? 6 : dow - 1));
+    const sunday = new Date(monday);
+    sunday.setUTCDate(monday.getUTCDate() + 6);
+    const weekStart = monday.toISOString().slice(0, 10);
+    const weekEnd = sunday.toISOString().slice(0, 10);
+    const weekLabel = `Semaine du ${monday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })} au ${sunday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}`;
+    const inWeek = and(gte(sql`DATE(${companyRuns.createdAt})`, weekStart), lte(sql`DATE(${companyRuns.createdAt})`, weekEnd));
+
     const employees = await db
       .select({ id: companyEmployees.id, name: companyEmployees.name })
       .from(companyEmployees)
@@ -69,7 +83,7 @@ meRunsRouter.get(
       .from(companyRuns)
       .leftJoin(companyEmployees, eq(companyRuns.employeeId, companyEmployees.id))
       .leftJoin(users, eq(companyRuns.createdByUserId, users.id))
-      .where(eq(companyRuns.companyId, companyId))
+      .where(and(eq(companyRuns.companyId, companyId), inWeek))
       .orderBy(desc(companyRuns.id))
       .limit(300);
     const agg = await db
@@ -80,13 +94,14 @@ meRunsRouter.get(
         count: sql<number>`COUNT(*)`,
       })
       .from(companyRuns)
-      .where(eq(companyRuns.companyId, companyId));
+      .where(and(eq(companyRuns.companyId, companyId), inWeek));
     const totalRevenue = Math.round(Number(agg[0]?.total ?? 0));
     const totalCommission = Math.round(Number(agg[0]?.comm ?? 0));
     res.json({
       canWrite: g.canWrite,
       canManage,
       config,
+      week: { offset, label: weekLabel, start: weekStart, end: weekEnd },
       employees,
       runs: rows.map((r) => ({
         ...r,

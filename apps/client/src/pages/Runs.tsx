@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useCompany } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Truck, Plus, Trash2, Coins, Users, Building2 } from 'lucide-react';
+import { Truck, Plus, Trash2, Coins, Users, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { fmtInt } from '@/lib/declarations';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -20,7 +20,8 @@ export default function Runs() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
-  const q = useQuery({ queryKey: ['runs', companyId], queryFn: () => getRuns(companyId), enabled: !!companyId });
+  const [weekOffset, setWeekOffset] = useState(0);
+  const q = useQuery({ queryKey: ['runs', companyId, weekOffset], queryFn: () => getRuns(companyId, weekOffset), enabled: !!companyId });
   const inv = () => queryClient.invalidateQueries({ queryKey: ['runs', companyId] });
 
   const [employeeId, setEmployeeId] = useState<number | ''>('');
@@ -36,13 +37,22 @@ export default function Runs() {
   if (isLoading || q.isLoading) return <div className="space-y-4"><Skeleton className="h-24 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
   if (!q.data) return <EmptyState icon={Truck} title="Runs / livraisons" hint="Module indisponible." />;
 
-  const { config, employees, runs, summary, canWrite, canManage } = q.data;
+  const { config, week, employees, runs, summary, canWrite, canManage } = q.data;
   const qtyN = Math.max(1, Math.floor(Number(qty) || 1));
   const previewTotal = qtyN * config.unitPrice;
   const previewComm = Math.round((previewTotal * config.commissionPct) / 100);
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between gap-2 rounded-xl border bg-card px-3 py-2">
+        <Button variant="outline" size="sm" onClick={() => setWeekOffset((o) => o - 1)}><ChevronLeft className="h-4 w-4" /> Précédente</Button>
+        <div className="text-center">
+          <div className="text-sm font-semibold">{week.offset === 0 ? 'Semaine en cours' : 'Semaine passée'}</div>
+          <div className="text-[11px] text-muted-foreground">{week.label}</div>
+        </div>
+        <Button variant="outline" size="sm" disabled={week.offset >= 0} onClick={() => setWeekOffset((o) => Math.min(0, o + 1))}>Suivante <ChevronRight className="h-4 w-4" /></Button>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi icon={Truck} label="Runs livrées" value={String(summary.totalRuns)} sub={`${summary.count} enregistrement${summary.count > 1 ? 's' : ''}`} accent="text-sky-400" />
         <Kpi icon={Coins} label="CA total runs" value={money(summary.totalRevenue)} sub={`${config.unitPrice} $ / run`} accent="text-emerald-400" />
@@ -51,7 +61,7 @@ export default function Runs() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {canWrite && (
+        {canWrite && week.offset === 0 && (
           <form
             className="space-y-4 rounded-2xl border bg-card p-6"
             onSubmit={(e) => { e.preventDefault(); if (!add.isPending) add.mutate(); }}
@@ -78,7 +88,7 @@ export default function Runs() {
           </form>
         )}
 
-        <div className={`rounded-2xl border bg-card p-6 ${canWrite ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+        <div className={`rounded-2xl border bg-card p-6 ${canWrite && week.offset === 0 ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
           <h3 className="mb-3 text-sm font-semibold">Historique des runs</h3>
           {runs.length === 0 ? (
             <EmptyState icon={Truck} title="Aucune run" hint="Enregistre la première livraison." />
