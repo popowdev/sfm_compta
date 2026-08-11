@@ -104,11 +104,13 @@ meMyPayRouter.get(
       const ex = exByRange.get(`${w.start}|${w.end}`) ?? null;
       const start = w.start, end = w.end;
       const inRange = (col: unknown) => and(gte(sql`DATE(${col})`, start), lte(sql`DATE(${col})`, end));
-      const [teRows, caisseAgg, garComm, garRev, taxiC, taxiCo, taxiV, pawnAgg, chasseAgg, runsAgg] = await Promise.all([
+      const [teRows, caisseAgg, garComm, garRev, garCustComm, garCustRev, taxiC, taxiCo, taxiV, pawnAgg, chasseAgg, runsAgg] = await Promise.all([
         db.select({ clockIn: timeEntries.clockIn, clockOut: timeEntries.clockOut, workedMin: sql<string>`GREATEST(0, TIMESTAMPDIFF(MINUTE, ${timeEntries.clockIn}, ${timeEntries.clockOut}) - ${timeEntries.pauseMinutes})` }).from(timeEntries).where(and(eq(timeEntries.companyId, companyId), eq(timeEntries.employeeId, emp.id), isNotNull(timeEntries.clockOut), inRange(timeEntries.clockIn))),
         db.select({ ca: sql<string>`COALESCE(SUM(${sales.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(sales).where(and(eq(sales.companyId, companyId), eq(sales.employeeId, emp.id), inRange(sales.createdAt))),
         db.select({ c: sql<string>`COALESCE(SUM(${garageRepairs.commissionAmount}),0)` }).from(garageRepairs).where(and(eq(garageRepairs.companyId, companyId), eq(garageRepairs.mechanicUserId, userId), inRange(garageRepairs.createdAt))),
         db.select({ r: sql<string>`COALESCE(SUM(${garageRepairs.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(garageRepairs).where(and(eq(garageRepairs.companyId, companyId), eq(garageRepairs.mechanicUserId, userId), inRange(garageRepairs.createdAt))),
+        db.select({ c: sql<string>`COALESCE(SUM(${garageCustoms.commissionAmount}),0)` }).from(garageCustoms).where(and(eq(garageCustoms.companyId, companyId), eq(garageCustoms.mechanicUserId, userId), inRange(garageCustoms.createdAt))),
+        db.select({ r: sql<string>`COALESCE(SUM(${garageCustoms.finalPrice}),0)`, cnt: sql<number>`COUNT(*)` }).from(garageCustoms).where(and(eq(garageCustoms.companyId, companyId), eq(garageCustoms.mechanicUserId, userId), inRange(garageCustoms.createdAt))),
         db.select({ t: sql<string>`COALESCE(SUM(${taxiCitoyens.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(taxiCitoyens).where(and(eq(taxiCitoyens.companyId, companyId), eq(taxiCitoyens.driverUserId, userId), inRange(taxiCitoyens.createdAt))),
         db.select({ t: sql<string>`COALESCE(SUM(${taxiConcitoyens.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(taxiConcitoyens).where(and(eq(taxiConcitoyens.companyId, companyId), eq(taxiConcitoyens.driverUserId, userId), inRange(taxiConcitoyens.createdAt))),
         db.select({ t: sql<string>`COALESCE(SUM(${taxiVip.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(taxiVip).where(and(eq(taxiVip.companyId, companyId), eq(taxiVip.driverUserId, userId), inRange(taxiVip.createdAt))),
@@ -126,7 +128,8 @@ meMyPayRouter.get(
       const cappedHours = caps.length ? Math.min(rawHours, ...caps) : rawHours;
       const base = Math.round(baseSalary + cappedHours * rate);
       const caisseCommission = Math.round((caisseRate / 100) * Number(caisseAgg[0]?.ca ?? 0));
-      const garageCommission = garageCustom ? Math.round((garageRate / 100) * Number(garRev[0]?.r ?? 0)) : Math.round(Number(garComm[0]?.c ?? 0));
+      const garageRevenue = Number(garRev[0]?.r ?? 0) + Number(garCustRev[0]?.r ?? 0);
+      const garageCommission = garageCustom ? Math.round((garageRate / 100) * garageRevenue) : Math.round(Number(garComm[0]?.c ?? 0) + Number(garCustComm[0]?.c ?? 0));
       const taxiRevenue = Number(taxiC[0]?.t ?? 0) + Number(taxiCo[0]?.t ?? 0) + Number(taxiV[0]?.t ?? 0);
       const coursesCount = Number(taxiC[0]?.cnt ?? 0) + Number(taxiCo[0]?.cnt ?? 0) + Number(taxiV[0]?.cnt ?? 0);
       const taxiCommission = Math.round((taxiRate / 100) * taxiRevenue);
@@ -145,7 +148,7 @@ meMyPayRouter.get(
       const paid = salaryCap > 0 ? Math.min(theoretical, Math.round(salaryCap)) : theoretical;
 
       const salesCount = Number(caisseAgg[0]?.cnt ?? 0);
-      const garageCount = Number(garRev[0]?.cnt ?? 0);
+      const garageCount = Number(garRev[0]?.cnt ?? 0) + Number(garCustRev[0]?.cnt ?? 0);
       const runsCount = Number(runsAgg[0]?.cnt ?? 0);
       const hasWork = rawMin > 0 || coursesCount > 0 || salesCount > 0 || garageCount > 0 || runsCount > 0 || Number(pawnAgg[0]?.t ?? 0) > 0 || Number(chasseAgg[0]?.t ?? 0) > 0;
       if (wi > 0 && !ex && !hasWork) continue;
