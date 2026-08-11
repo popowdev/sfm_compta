@@ -82,7 +82,7 @@ export default function Evenements() {
   if (!mine) return <Navigate to="/" replace />;
 
   const events = q.data?.events ?? [];
-  const valid = title.trim().length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(eventDate) && revenue !== '';
+  const valid = title.trim().length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(eventDate);
 
   const del = async (ev: CompanyEvent) => {
     if (await confirm({ title: 'Supprimer cet évènement ?', message: ev.title, destructive: true })) {
