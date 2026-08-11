@@ -475,12 +475,25 @@ export const announcements = mysqlTable('announcements', {
   title: varchar('title', { length: 160 }).notNull(),
   body: text('body').notNull(),
   pinned: boolean('pinned').notNull().default(false),
+  type: mysqlEnum('type', ['irs', 'dev']).notNull().default('irs'),
+  important: boolean('important').notNull().default(false),
   createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
   createdByName: varchar('created_by_name', { length: 120 }).notNull(),
   createdAt: timestamp('created_at')
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const announcementReads = mysqlTable(
+  'announcement_reads',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    announcementId: int('announcement_id').notNull().references(() => announcements.id, { onDelete: 'cascade' }),
+    userId: int('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    readAt: timestamp('read_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => ({ uq: unique('uq_announcement_read').on(t.announcementId, t.userId) }),
+);
 
 export const shareListings = mysqlTable('share_listings', {
   id: int('id').autoincrement().primaryKey(),

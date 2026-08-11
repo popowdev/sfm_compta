@@ -37,9 +37,11 @@ import { useAuth } from '@/auth/AuthContext';
 import { getMyCompanies, type MyCompany } from '@/lib/me';
 import { getMyAssociations, type AssociationListItem } from '@/lib/associations';
 import { getSupportTickets } from '@/lib/tickets';
+import { getAnnouncementsSummary } from '@/lib/announcements';
 import { moduleIcon } from '@/lib/moduleIcons';
 import { QuickClock } from '@/components/QuickClock';
 import { NotificationBell } from '@/components/NotificationBell';
+import { ImportantAnnouncementPopup } from '@/components/ImportantAnnouncementPopup';
 import { GuidedTour, type TourStep } from '@/components/GuidedTour';
 
 function buildCompanyTour(slug: string | null | undefined): TourStep[] {
@@ -144,6 +146,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
   });
   const openTickets = supportQueue.data?.open ?? 0;
 
+  const annSummary = useQuery({ queryKey: ['announcement-summary'], queryFn: getAnnouncementsSummary, refetchInterval: 60_000 });
+  const unreadAnnonces = annSummary.data?.unreadCount ?? 0;
+
   const location = useLocation();
   const slugMatch = location.pathname.match(/^\/entreprise\/([^/]+)/);
   const activeSlug = slugMatch ? slugMatch[1] : null;
@@ -241,7 +246,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         items: [
           { to: '/', label: 'Tableau de bord', Icon: LayoutDashboard, end: true },
           { to: '/calendrier', label: 'Calendrier', Icon: CalendarDays },
-          { to: '/annonces', label: 'Annonces', Icon: Megaphone },
+          { to: '/annonces', label: 'Annonces', Icon: Megaphone, badge: unreadAnnonces },
           { to: '/bourse', label: 'Bourse de parts', Icon: TrendingUp },
           // Members who belong to an association keep a personal entry point
           // (the IRS registry lives in the IRS group below).
@@ -334,6 +339,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
+      <ImportantAnnouncementPopup />
       <aside
         className={`flex shrink-0 flex-col border-r bg-sidebar transition-[width] duration-200 ${
           collapsed ? 'w-16' : 'w-60'
