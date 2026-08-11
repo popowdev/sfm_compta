@@ -1,10 +1,13 @@
 import { lazyRetry } from '@/lib/lazyRetry';
-import { Suspense, type ComponentType, type LazyExoticComponent } from 'react';
+import { Suspense, useState, type ComponentType, type LazyExoticComponent } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
+import { Users } from 'lucide-react';
 import { MODULES } from '@rp-compta/shared';
 import { type MyModule } from '@/lib/me';
 import { useCompany } from '@/lib/useCompany';
 import { moduleIcon } from '@/lib/moduleIcons';
+import { Button } from '@/components/ui/button';
+import { GradesPanelModal } from '@/components/GradesPanelModal';
 import { TourDemoProvider } from '@/components/TourDemo';
 import { ModuleTour } from '@/components/ModuleTour';
 
@@ -71,6 +74,7 @@ function Placeholder({ mod }: { mod: MyModule }) {
 export default function ModulePage() {
   const { moduleKey } = useParams();
   const { company: mine, isLoading } = useCompany();
+  const [accessOpen, setAccessOpen] = useState(false);
 
   if (isLoading) return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
 
@@ -87,7 +91,18 @@ export default function ModulePage() {
         <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {mine.company.name}
         </div>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight">{mod.label}</h1>
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold tracking-tight">{mod.label}</h1>
+          {mine.canManage && (
+            <Button type="button" variant="outline" size="sm" onClick={() => setAccessOpen(true)}>
+              <Users className="h-4 w-4" /> Qui peut accéder ?
+            </Button>
+          )}
+        </div>
+
+        {mine.canManage && (
+          <GradesPanelModal companyId={mine.company.id} open={accessOpen} onClose={() => setAccessOpen(false)} onlyModule={mod.key} />
+        )}
 
         <div className="mt-6">
           <Suspense fallback={<div className="text-sm text-muted-foreground">Chargement…</div>}>
