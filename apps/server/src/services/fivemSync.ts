@@ -7,6 +7,7 @@ import {
   companies,
   companyModules,
   companyRoles,
+  companyEmployees,
   memberships,
   rolePermissions,
   users,
@@ -171,7 +172,7 @@ async function upsertMembership(companyId: number, userId: number, roleId: numbe
 async function deactivateOtherFivemMemberships(userId: number, keepCompanyIds: number[]): Promise<void> {
   if (!keepCompanyIds.length) return;
   const rows = await db
-    .select({ id: memberships.id })
+    .select({ id: memberships.id, companyId: memberships.companyId })
     .from(memberships)
     .innerJoin(companies, eq(memberships.companyId, companies.id))
     .where(
@@ -184,6 +185,10 @@ async function deactivateOtherFivemMemberships(userId: number, keepCompanyIds: n
     );
   for (const r of rows) {
     await db.update(memberships).set({ active: false }).where(eq(memberships.id, r.id));
+    await db
+      .update(companyEmployees)
+      .set({ active: false })
+      .where(and(eq(companyEmployees.companyId, r.companyId), eq(companyEmployees.userId, userId)));
   }
 }
 
