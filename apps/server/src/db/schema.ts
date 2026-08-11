@@ -1363,6 +1363,37 @@ export const companyRuns = mysqlTable('company_runs', {
   createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const concessionVehicles = mysqlTable('concession_vehicles', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 150 }).notNull(),
+  category: varchar('category', { length: 80 }).notNull().default('Autre'),
+  type: mysqlEnum('type', ['new', 'used']).notNull().default('new'),
+  purchasePrice: decimal('purchase_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  salePrice: decimal('sale_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  imageUrl: varchar('image_url', { length: 255 }),
+  description: text('description'),
+  available: boolean('available').notNull().default(true),
+  showroom: boolean('showroom').notNull().default(true),
+  sortOrder: int('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const concessionSales = mysqlTable('concession_sales', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  vehicleId: int('vehicle_id').references(() => concessionVehicles.id, { onDelete: 'set null' }),
+  vehicleName: varchar('vehicle_name', { length: 150 }).notNull(),
+  clientName: varchar('client_name', { length: 120 }),
+  plate: varchar('plate', { length: 20 }),
+  purchasePrice: decimal('purchase_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  salePrice: decimal('sale_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  commission: decimal('commission', { precision: 14, scale: 2 }).notNull().default('0'),
+  note: varchar('note', { length: 255 }),
+  createdByUserId: int('created_by_user_id'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const usersRelations = relations(users, ({ many }) => ({
   appRoles: many(userAppRoles),
   memberships: many(memberships),

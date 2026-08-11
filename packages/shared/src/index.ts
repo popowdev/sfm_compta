@@ -36,6 +36,7 @@ export const MODULE_KEYS = [
   'pawnshop',
   'runs',
   'chasse',
+  'concession',
 ] as const;
 export type ModuleKey = (typeof MODULE_KEYS)[number];
 
@@ -80,6 +81,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'pawnshop', label: 'Prêteur sur gages', group: 'Commerce', defaultEnabled: false, companyPage: true },
   { key: 'runs', label: 'Runs / livraisons', group: 'Commerce', defaultEnabled: false, companyPage: true },
   { key: 'chasse', label: 'Chasse', group: 'Commerce', defaultEnabled: false, companyPage: true },
+  { key: 'concession', label: 'Concession auto', group: 'Commerce', defaultEnabled: false, companyPage: true },
 ];
 
 export interface ModuleConfigBoolField {
@@ -308,6 +310,33 @@ export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
       step: 1,
       suffix: '%',
       help: 'Appliqué au CA des reventes chasse uniquement si « taux personnalisé » est activé.',
+    },
+  ],
+  concession: [
+    {
+      key: 'publicShowroom',
+      label: 'Vitrine publique',
+      type: 'boolean',
+      default: false,
+      help: 'Publie un catalogue « showroom » consultable sans compte via un lien public.',
+    },
+    {
+      key: 'commissionCustom',
+      label: 'Commission : taux personnalisé',
+      type: 'boolean',
+      default: false,
+      help: 'Décoché = taux de commission du grade (fiche RH). Coché = taux fixe ci-dessous pour ce module.',
+    },
+    {
+      key: 'commissionRate',
+      label: 'Taux de commission vente (%)',
+      type: 'number',
+      default: 0,
+      min: 0,
+      max: 100,
+      step: 1,
+      suffix: '%',
+      help: 'Commission du vendeur sur le prix de vente, uniquement si « taux personnalisé » est activé.',
     },
   ],
   runs: [

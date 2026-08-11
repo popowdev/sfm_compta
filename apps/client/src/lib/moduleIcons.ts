@@ -29,6 +29,7 @@ import {
   Gem,
   Truck,
   Target,
+  CarFront,
   type LucideIcon,
 } from 'lucide-react';
 import type { ModuleKey } from '@rp-compta/shared';
@@ -58,6 +59,7 @@ const ICONS: Record<ModuleKey, LucideIcon> = {
   pawnshop: Gem,
   runs: Truck,
   chasse: Target,
+  concession: CarFront,
 };
 
 export function moduleIcon(key: string): LucideIcon {
