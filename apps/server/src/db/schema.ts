@@ -57,7 +57,9 @@ export const companies = mysqlTable('companies', {
   externalLink: varchar('external_link', { length: 255 }),
   valuation: decimal('valuation', { precision: 14, scale: 2 }).notNull().default('0'),
   immoSeeded: boolean('immo_seeded').notNull().default(false),
+  concessionSeeded: boolean('concession_seeded').notNull().default(false),
   menuLayout: json('menu_layout'),
+  showroomToken: varchar('showroom_token', { length: 32 }).unique(),
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at')
     .notNull()

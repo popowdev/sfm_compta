@@ -4,7 +4,7 @@ import { db } from '../db';
 import {
   companyModules, companyExpenses, companyEmployees, companyRoles, salaryGrid, timeEntries,
   sales, garageRepairs, garageCustoms, taxiCitoyens, taxiConcitoyens, taxiVip,
-  pawnshopTransactions, chasseTransactions, companyRuns,
+  pawnshopTransactions, chasseTransactions, companyRuns, concessionSales,
 } from '../db/schema';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -69,7 +69,7 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
 
   const [
     expRow, salesAgg, salesByEmpRows, payRows, gridRows, empRows,
-    runsCommRows, runsRevRow, taxiC, taxiCo, taxiV, pawnSell, chasseSell,
+    runsCommRows, runsRevRow, taxiC, taxiCo, taxiV, pawnSell, chasseSell, concessionRows,
     repByUser, custByUser, rawPeak,
   ] = await Promise.all([
     db.select({ total: sql<string>`COALESCE(SUM(${companyExpenses.amount}),0)` }).from(companyExpenses).where(and(eq(companyExpenses.companyId, companyId), ne(companyExpenses.category, 'salary'), gte(companyExpenses.expenseDate, start), lte(companyExpenses.expenseDate, end))),
@@ -85,6 +85,7 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
     db.select({ userId: taxiVip.driverUserId, total: sql<string>`COALESCE(SUM(${taxiVip.total}),0)` }).from(taxiVip).where(and(eq(taxiVip.companyId, companyId), inDay(taxiVip.createdAt))).groupBy(taxiVip.driverUserId),
     db.select({ userId: pawnshopTransactions.createdByUserId, total: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.type, 'sell'), inDay(pawnshopTransactions.createdAt))).groupBy(pawnshopTransactions.createdByUserId),
     db.select({ userId: chasseTransactions.createdByUserId, total: sql<string>`COALESCE(SUM(${chasseTransactions.total}),0)` }).from(chasseTransactions).where(and(eq(chasseTransactions.companyId, companyId), eq(chasseTransactions.type, 'sell'), inDay(chasseTransactions.createdAt))).groupBy(chasseTransactions.createdByUserId),
+    db.select({ userId: concessionSales.createdByUserId, comm: sql<string>`COALESCE(SUM(${concessionSales.commission}),0)`, total: sql<string>`COALESCE(SUM(${concessionSales.salePrice}),0)` }).from(concessionSales).where(and(eq(concessionSales.companyId, companyId), inDay(concessionSales.createdAt))).groupBy(concessionSales.createdByUserId),
     db.select({ userId: garageRepairs.mechanicUserId, commission: sql<string>`COALESCE(SUM(${garageRepairs.commissionAmount}),0)`, revenue: sql<string>`COALESCE(SUM(${garageRepairs.total}),0)` }).from(garageRepairs).where(and(eq(garageRepairs.companyId, companyId), inDay(garageRepairs.createdAt))).groupBy(garageRepairs.mechanicUserId),
     db.select({ userId: garageCustoms.mechanicUserId, commission: sql<string>`COALESCE(SUM(${garageCustoms.commissionAmount}),0)`, revenue: sql<string>`COALESCE(SUM(${garageCustoms.finalPrice}),0)` }).from(garageCustoms).where(and(eq(garageCustoms.companyId, companyId), inDay(garageCustoms.createdAt))).groupBy(garageCustoms.mechanicUserId),
     peakEnabled && peakMultiplier > 1
@@ -114,6 +115,8 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
   const taxiRevByEmp = new Map<number, number>();
   const pawnshopRevByEmp = new Map<number, number>();
   const chasseRevByEmp = new Map<number, number>();
+  const concessionRevByEmp = new Map<number, number>();
+  const concessionCommByEmp = new Map<number, number>();
   const addRev = (map: Map<number, number>, userId: number | null, total: number) => {
     if (userId == null) return;
     const empId = empByUser.get(userId);
@@ -126,6 +129,12 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
   for (const r of taxiV) { addRev(taxiRevByEmp, r.userId, Number(r.total)); moduleRevenue += Number(r.total); }
   for (const r of pawnSell) { addRev(pawnshopRevByEmp, r.userId, Number(r.total)); moduleRevenue += Number(r.total); }
   for (const r of chasseSell) { addRev(chasseRevByEmp, r.userId, Number(r.total)); moduleRevenue += Number(r.total); }
+  for (const r of concessionRows) {
+    addRev(concessionRevByEmp, r.userId, Number(r.total));
+    moduleRevenue += Number(r.total);
+    const empId = r.userId != null ? empByUser.get(r.userId) : undefined;
+    if (empId != null) concessionCommByEmp.set(empId, (concessionCommByEmp.get(empId) ?? 0) + Number(r.comm));
+  }
   moduleRevenue += Number(runsRevRow[0]?.total ?? 0);
 
   const runsCommByEmp = new Map<number, number>();
@@ -157,9 +166,10 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
     const pawnshopCommission = Math.round(((pawnCommCustom ? pawnCommRate : gradeRate) / 100) * Math.round(pawnshopRevByEmp.get(r.employeeId) ?? 0));
     const chasseCommission = Math.round(((chasseCommCustom ? chasseCommRate : gradeRate) / 100) * Math.round(chasseRevByEmp.get(r.employeeId) ?? 0));
     const runsCommission = Math.round(runsCommByEmp.get(r.employeeId) ?? 0);
+    const concessionCommission = Math.round(concessionCommByEmp.get(r.employeeId) ?? 0);
     const peakHours = peakEnabled ? Math.min((peakMinByEmp.get(r.employeeId) ?? 0) / 60, cappedHours) : 0;
     const peakBonus = peakHours > 0 && peakMultiplier > 1 ? Math.round(peakHours * rate * (peakMultiplier - 1)) : 0;
-    const paid = Math.max(0, base + caisseCommission + garageCommission + taxiCommission + pawnshopCommission + chasseCommission + runsCommission + peakBonus);
+    const paid = Math.max(0, base + caisseCommission + garageCommission + taxiCommission + pawnshopCommission + chasseCommission + runsCommission + concessionCommission + peakBonus);
     payrollTotal += paid;
   }
 

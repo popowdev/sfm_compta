@@ -7,6 +7,7 @@ import { AppLayout } from '@/components/AppLayout';
 import { useAuth } from '@/auth/AuthContext';
 
 const Login = lazyRetry(() => import('@/pages/Login'));
+const Showroom = lazyRetry(() => import('@/pages/Showroom'));
 const Dashboard = lazyRetry(() => import('@/pages/Dashboard'));
 const Companies = lazyRetry(() => import('@/pages/Companies'));
 const Fiscal = lazyRetry(() => import('@/pages/Fiscal'));
@@ -191,6 +192,7 @@ export default function App() {
     <Suspense fallback={<div className="grid min-h-screen place-items-center text-sm text-muted-foreground">Chargement…</div>}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/showroom/:token" element={<Showroom />} />
         <Route
           path="/*"
           element={
