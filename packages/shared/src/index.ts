@@ -163,7 +163,7 @@ export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
       key: 'autoWeek',
       label: 'Semaines automatiques',
       type: 'boolean',
-      default: false,
+      default: true,
       help: 'Crée l’exercice de la semaine en cours et gèle automatiquement les semaines terminées (salaires non modifiables une fois gelés).',
     },
   ],
