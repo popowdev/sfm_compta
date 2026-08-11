@@ -117,7 +117,7 @@ const createSchema = z
   })
   .refine((d) => d.endDate >= d.startDate, { message: 'invalid_range' })
   .refine(
-    (d) => (Date.parse(`${d.endDate}T00:00:00Z`) - Date.parse(`${d.startDate}T00:00:00Z`)) / 86_400_000 <= 400,
+    (d) => (Date.parse(`${d.endDate}T00:00:00Z`) - Date.parse(`${d.startDate}T00:00:00Z`)) / 86_400_000 <= 31,
     { message: 'range_too_long' },
   );
 
