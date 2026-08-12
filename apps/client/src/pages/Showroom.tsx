@@ -7,38 +7,33 @@ const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n);
 const PAGE = 24;
 
 const STYLES = `
-.sr-root{--g1:#10b981;--g2:#84cc16;--g3:#2dd4bf;--ink:#0b1a12;color:var(--ink);background:#eefbf3;}
-.sr-aurora{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:
-  radial-gradient(60% 50% at 12% 8%,rgba(16,185,129,.28),transparent 60%),
-  radial-gradient(55% 45% at 92% 12%,rgba(132,204,22,.22),transparent 60%),
-  radial-gradient(70% 60% at 50% 108%,rgba(45,212,191,.20),transparent 60%),
-  linear-gradient(180deg,#f2fdf6,#e9fbf1 40%,#f4fdf8);}
-.sr-blob{position:absolute;border-radius:50%;filter:blur(48px);opacity:.42;}
-.sr-b1{width:46vw;height:46vw;left:-8vw;top:-10vw;background:radial-gradient(circle,#34d399,transparent 70%);animation:srDrift1 22s ease-in-out infinite;}
-.sr-b2{width:38vw;height:38vw;right:-6vw;top:2vw;background:radial-gradient(circle,#a3e635,transparent 70%);animation:srDrift2 26s ease-in-out infinite;}
-.sr-b3{width:52vw;height:52vw;left:20vw;bottom:-24vw;background:radial-gradient(circle,#2dd4bf,transparent 70%);animation:srDrift3 30s ease-in-out infinite;}
-@keyframes srDrift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(6vw,4vw) scale(1.12)}}
-@keyframes srDrift2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-5vw,5vw) scale(1.15)}}
-@keyframes srDrift3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(4vw,-4vw) scale(1.1)}}
-.sr-grid{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
-  background-image:linear-gradient(rgba(6,78,59,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(6,78,59,.06) 1px,transparent 1px);
-  background-size:44px 44px;mask-image:radial-gradient(120% 80% at 50% 0%,#000,transparent 75%);}
-.sr-shine{background:linear-gradient(90deg,#065f46,#10b981 40%,#84cc16 70%,#065f46);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:srShine 6s linear infinite;}
-@keyframes srShine{to{background-position:220% 0}}
-.sr-float{animation:srFloat 6s ease-in-out infinite;}
-@keyframes srFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+.sr-root{--ink:#0b1a12;color:var(--ink);background:#eefbf3;}
+.sr-aurora{position:fixed;inset:0;z-index:0;pointer-events:none;background:
+  radial-gradient(58% 48% at 12% 6%,rgba(16,185,129,.20),transparent 60%),
+  radial-gradient(52% 42% at 92% 12%,rgba(132,204,22,.16),transparent 60%),
+  radial-gradient(68% 58% at 50% 106%,rgba(45,212,191,.15),transparent 60%),
+  linear-gradient(180deg,#f2fdf6,#e9fbf1 45%,#f4fdf8);}
+.sr-glow{position:fixed;z-index:0;pointer-events:none;border-radius:50%;will-change:transform;contain:strict;}
+.sr-g1{width:68vw;height:68vw;left:-12vw;top:-24vw;background:radial-gradient(circle,rgba(16,185,129,.16),transparent 60%);animation:srG1 26s ease-in-out infinite;}
+.sr-g2{width:54vw;height:54vw;right:-14vw;top:6vw;background:radial-gradient(circle,rgba(132,204,22,.14),transparent 62%);animation:srG2 32s ease-in-out infinite;}
+.sr-g3{width:60vw;height:60vw;left:24vw;bottom:-30vw;background:radial-gradient(circle,rgba(45,212,191,.12),transparent 62%);animation:srG3 38s ease-in-out infinite;}
+@keyframes srG1{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(8vw,5vw,0) scale(1.12)}}
+@keyframes srG2{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(-7vw,4vw,0) scale(1.14)}}
+@keyframes srG3{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(5vw,-5vw,0) scale(1.1)}}
+.sr-shine{background:linear-gradient(90deg,#059669,#10b981 45%,#65a30d);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.sr-float{animation:srFloat 7s ease-in-out infinite;}
+@keyframes srFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
 .sr-bounce{animation:srBounce 1.8s ease-in-out infinite;}
-@keyframes srBounce{0%,100%{transform:translateY(0);opacity:.7}50%{transform:translateY(8px);opacity:1}}
-.sr-tilt{transform:perspective(1000px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .5s cubic-bezier(.2,.8,.2,1),box-shadow .4s;transform-style:preserve-3d;}
+@keyframes srBounce{0%,100%{transform:translateY(0);opacity:.7}50%{transform:translateY(7px);opacity:1}}
+.sr-tilt{transform:perspective(1000px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .4s cubic-bezier(.2,.8,.2,1),box-shadow .35s;transform-style:preserve-3d;}
 .sr-card:hover{will-change:transform;}
-.sr-pop{transform:translateZ(46px);transition:transform .5s cubic-bezier(.2,.8,.2,1);}
-.sr-gloss{position:absolute;inset:0;border-radius:inherit;opacity:0;transition:opacity .4s;background:radial-gradient(240px 240px at var(--gx,50%) var(--gy,0%),rgba(255,255,255,.55),transparent 60%);}
+.sr-pop{transform:translateZ(0);transition:transform .4s cubic-bezier(.2,.8,.2,1);}
+.sr-gloss{position:absolute;inset:0;border-radius:inherit;opacity:0;transition:opacity .3s;background:radial-gradient(220px 220px at var(--gx,50%) var(--gy,0%),rgba(255,255,255,.5),transparent 60%);}
 .sr-card:hover .sr-gloss{opacity:1;}
-.sr-card:hover .sr-pop{transform:translateZ(70px) scale(1.05);}
-.sr-reveal{opacity:0;transform:translateY(46px);}
-.sr-reveal.in{opacity:1;transform:none;transition:opacity .7s cubic-bezier(.2,.8,.2,1),transform .7s cubic-bezier(.2,.8,.2,1);}
-.sr-cardw{content-visibility:auto;contain-intrinsic-size:auto 360px;}
-.sr-fade{transition:opacity .6s ease;}
+.sr-card:hover .sr-pop{transform:translateZ(0) scale(1.05);}
+.sr-reveal{opacity:0;transform:translateY(28px);}
+.sr-reveal.in{opacity:1;transform:none;transition:opacity .5s ease,transform .5s ease;}
+.sr-fade{transition:opacity .5s ease;}
 .sr-noscroll{scrollbar-width:none;}
 .sr-noscroll::-webkit-scrollbar{display:none;}
 .sr-card{cursor:pointer;}
@@ -275,12 +270,10 @@ export default function Showroom() {
   return (
     <div className="sr-root relative min-h-screen overflow-x-clip">
       <style>{STYLES}</style>
-      <div className="sr-aurora">
-        <div className="sr-blob sr-b1" />
-        <div className="sr-blob sr-b2" />
-        <div className="sr-blob sr-b3" />
-      </div>
-      <div className="sr-grid" />
+      <div className="sr-aurora" />
+      <div className="sr-glow sr-g1" />
+      <div className="sr-glow sr-g2" />
+      <div className="sr-glow sr-g3" />
 
       <Hero company={company} featured={featured} count={vehicles.length} cats={categories.length} onExplore={scrollToCatalog} />
 
@@ -426,7 +419,7 @@ function StickyNav({ q, setQ, type, setType, cat, setCat, categories, total, col
   col: Collections; viewFavs: boolean; setViewFavs: (v: boolean) => void;
 }) {
   return (
-    <div className="sticky top-0 z-30 border-y border-emerald-900/10 bg-white/90 backdrop-blur-md">
+    <div className="sticky top-0 z-30 border-y border-emerald-900/10 bg-white shadow-sm">
       <div className="mx-auto max-w-[1400px] px-5 py-3 sm:px-8">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[180px]">
