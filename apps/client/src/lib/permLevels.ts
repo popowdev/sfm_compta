@@ -75,7 +75,7 @@ export const GRADE_PRESETS: GradePreset[] = [
     canManage: false,
     levels: {
       caisse: 'use', garage: 'use', badgeuse: 'use', taxi: 'use', runs: 'use',
-      pawnshop: 'use', chasse: 'use', concession: 'use', clients: 'use', stocks: 'view',
+      pawnshop: 'use', chasse: 'use', concession: 'use', cargaison: 'view', clients: 'use', stocks: 'view',
     },
   },
   {
@@ -85,7 +85,7 @@ export const GRADE_PRESETS: GradePreset[] = [
     canManage: false,
     levels: {
       caisse: 'manage', garage: 'manage', taxi: 'manage', runs: 'manage', pawnshop: 'manage',
-      chasse: 'manage', concession: 'manage', clients: 'manage', stocks: 'manage',
+      chasse: 'manage', concession: 'manage', cargaison: 'manage', clients: 'manage', stocks: 'manage',
       badgeuse: 'manage', rh: 'use', depenses: 'use', documents: 'use', exercices: 'view',
     },
   },

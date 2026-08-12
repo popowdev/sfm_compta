@@ -30,6 +30,7 @@ import {
   Truck,
   Target,
   CarFront,
+  PackageCheck,
   type LucideIcon,
 } from 'lucide-react';
 import type { ModuleKey } from '@rp-compta/shared';
@@ -60,6 +61,7 @@ const ICONS: Record<ModuleKey, LucideIcon> = {
   runs: Truck,
   chasse: Target,
   concession: CarFront,
+  cargaison: PackageCheck,
 };
 
 export function moduleIcon(key: string): LucideIcon {

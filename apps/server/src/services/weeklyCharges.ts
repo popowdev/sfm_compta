@@ -5,6 +5,7 @@ import {
   companyModules, companyExpenses, companyEmployees, companyRoles, salaryGrid, timeEntries,
   sales, garageRepairs, garageCustoms, taxiCitoyens, taxiConcitoyens, taxiVip,
   pawnshopTransactions, chasseTransactions, companyRuns, concessionSales,
+  companyCargaisons, cargaisonParticipants,
 } from '../db/schema';
 import { bizDate, bizPeakMinutes } from './bizTime';
 
@@ -74,6 +75,11 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
       : Promise.resolve([] as { employeeId: number; clockIn: string; clockOut: string | null }[]),
   ]);
 
+  const [cargaisonRevRow, cargaisonShareRows] = await Promise.all([
+    db.select({ total: sql<string>`COALESCE(SUM(${companyCargaisons.total}),0)` }).from(companyCargaisons).where(and(eq(companyCargaisons.companyId, companyId), inDay(companyCargaisons.createdAt))),
+    db.select({ employeeId: cargaisonParticipants.employeeId, share: sql<string>`COALESCE(SUM(${cargaisonParticipants.share}),0)` }).from(cargaisonParticipants).innerJoin(companyCargaisons, eq(cargaisonParticipants.cargaisonId, companyCargaisons.id)).where(and(eq(companyCargaisons.companyId, companyId), inDay(companyCargaisons.createdAt))).groupBy(cargaisonParticipants.employeeId),
+  ]);
+
   const empByUser = new Map<number, number>();
   for (const e of empRows) if (e.userId != null) empByUser.set(e.userId, e.id);
 
@@ -117,9 +123,12 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
     if (empId != null) concessionCommByEmp.set(empId, (concessionCommByEmp.get(empId) ?? 0) + Number(r.comm));
   }
   moduleRevenue += Number(runsRevRow[0]?.total ?? 0);
+  moduleRevenue += Number(cargaisonRevRow[0]?.total ?? 0);
 
   const runsCommByEmp = new Map<number, number>();
   for (const r of runsCommRows) if (r.employeeId != null) runsCommByEmp.set(r.employeeId, Number(r.comm));
+  const cargaisonShareByEmp = new Map<number, number>();
+  for (const r of cargaisonShareRows) if (r.employeeId != null) cargaisonShareByEmp.set(r.employeeId, Number(r.share));
 
   const peakMinByEmp = new Map<number, number>();
   for (const e of rawPeak) {
@@ -148,9 +157,10 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
     const chasseCommission = Math.round(((chasseCommCustom ? chasseCommRate : gradeRate) / 100) * Math.round(chasseRevByEmp.get(r.employeeId) ?? 0));
     const runsCommission = Math.round(runsCommByEmp.get(r.employeeId) ?? 0);
     const concessionCommission = Math.round(concessionCommByEmp.get(r.employeeId) ?? 0);
+    const cargaisonShare = Math.round(cargaisonShareByEmp.get(r.employeeId) ?? 0);
     const peakHours = peakEnabled ? Math.min((peakMinByEmp.get(r.employeeId) ?? 0) / 60, cappedHours) : 0;
     const peakBonus = peakHours > 0 && peakMultiplier > 1 ? Math.round(peakHours * rate * (peakMultiplier - 1)) : 0;
-    const paid = Math.max(0, base + caisseCommission + garageCommission + taxiCommission + pawnshopCommission + chasseCommission + runsCommission + concessionCommission + peakBonus);
+    const paid = Math.max(0, base + caisseCommission + garageCommission + taxiCommission + pawnshopCommission + chasseCommission + runsCommission + concessionCommission + cargaisonShare + peakBonus);
     payrollTotal += paid;
   }
 

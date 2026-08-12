@@ -25,6 +25,8 @@ import {
   chasseTransactions,
   companyRuns,
   concessionSales,
+  companyCargaisons,
+  cargaisonParticipants,
 } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
@@ -605,6 +607,23 @@ meExercicesRouter.get(
       }
     }
 
+    const cargaisonShareByEmp = new Map<number, number>();
+    let cargaisonRevenueTotal = 0;
+    {
+      const revRows = await db
+        .select({ total: sql<string>`COALESCE(SUM(${companyCargaisons.total}),0)` })
+        .from(companyCargaisons)
+        .where(and(eq(companyCargaisons.companyId, companyId), gte(bizDate(companyCargaisons.createdAt), ex.startDate), lte(bizDate(companyCargaisons.createdAt), ex.endDate)));
+      cargaisonRevenueTotal = Number(revRows[0]?.total ?? 0);
+      const partRows = await db
+        .select({ employeeId: cargaisonParticipants.employeeId, share: sql<string>`COALESCE(SUM(${cargaisonParticipants.share}),0)` })
+        .from(cargaisonParticipants)
+        .innerJoin(companyCargaisons, eq(cargaisonParticipants.cargaisonId, companyCargaisons.id))
+        .where(and(eq(companyCargaisons.companyId, companyId), gte(bizDate(companyCargaisons.createdAt), ex.startDate), lte(bizDate(companyCargaisons.createdAt), ex.endDate)))
+        .groupBy(cargaisonParticipants.employeeId);
+      for (const r of partRows) if (r.employeeId != null) cargaisonShareByEmp.set(r.employeeId, Number(r.share));
+    }
+
     const taxiRevByEmp = new Map<number, number>();
     const pawnshopRevByEmp = new Map<number, number>();
     const chasseRevByEmp = new Map<number, number>();
@@ -678,11 +697,12 @@ meExercicesRouter.get(
       const chasseCommission = Math.round(chasseRate * chasseRevenue);
       const runsCommission = Math.round(runsCommByEmp.get(r.employeeId) ?? 0);
       const concessionCommission = Math.round(concessionCommByEmp.get(r.employeeId) ?? 0);
+      const cargaisonShare = Math.round(cargaisonShareByEmp.get(r.employeeId) ?? 0);
       const bonus = o ? Math.round(Number(o.bonus)) : 0;
       const deductions = o ? Math.round(Number(o.deductions)) : 0;
       const peakHours = peakEnabled ? Math.min((peakMinByEmp.get(r.employeeId) ?? 0) / 60, cappedHours) : 0;
       const peakBonus = peakHours > 0 && peakMultiplier > 1 ? Math.round(peakHours * rate * (peakMultiplier - 1)) : 0;
-      const theoretical = Math.max(0, base + commission + garageCommission + taxiCommission + pawnshopCommission + chasseCommission + runsCommission + concessionCommission + bonus + peakBonus - deductions);
+      const theoretical = Math.max(0, base + commission + garageCommission + taxiCommission + pawnshopCommission + chasseCommission + runsCommission + concessionCommission + cargaisonShare + bonus + peakBonus - deductions);
       const paid = ex.salaryCap > 0 ? Math.min(theoretical, Math.round(ex.salaryCap)) : theoretical;
       return {
         employeeId: r.employeeId,
@@ -702,6 +722,7 @@ meExercicesRouter.get(
         chasseCommission,
         runsCommission,
         concessionCommission,
+        cargaisonShare,
         taxiRevenue,
         pawnshopRevenue,
         chasseRevenue,
@@ -726,7 +747,7 @@ meExercicesRouter.get(
     const salesCount = Number(aggRows[0]?.count ?? 0) + garageTxCount;
     const componentPurchases = round2(Number(purchRows[0]?.purchases ?? 0));
 
-    const moduleRevenue = round2(taxiRevenueTotal + pawnshopRevenueTotal + chasseRevenueTotal + runsRevenueTotal + concessionRevenueTotal);
+    const moduleRevenue = round2(taxiRevenueTotal + pawnshopRevenueTotal + chasseRevenueTotal + runsRevenueTotal + concessionRevenueTotal + cargaisonRevenueTotal);
     const caGross = round2(salesGross + ex.revenue + garageRevenue + moduleRevenue);
     const caNet = round2(caGross - salesDiscount);
     const grossMargin = round2(caNet - productionCost);
@@ -758,6 +779,7 @@ meExercicesRouter.get(
         chasseRevenue: Math.round(chasseRevenueTotal),
         runsRevenue: Math.round(runsRevenueTotal),
         concessionRevenue: Math.round(concessionRevenueTotal),
+        cargaisonRevenue: Math.round(cargaisonRevenueTotal),
         moduleRevenue,
         garageCommission: Math.round(payroll.reduce((s, p) => s + p.garageCommission, 0)),
         taxiCommission: Math.round(payroll.reduce((s, p) => s + p.taxiCommission, 0)),
@@ -765,6 +787,7 @@ meExercicesRouter.get(
         chasseCommission: Math.round(payroll.reduce((s, p) => s + p.chasseCommission, 0)),
         runsCommission: Math.round(payroll.reduce((s, p) => s + p.runsCommission, 0)),
         concessionCommission: Math.round(payroll.reduce((s, p) => s + p.concessionCommission, 0)),
+        cargaisonShare: Math.round(payroll.reduce((s, p) => s + p.cargaisonShare, 0)),
         peakBonus: Math.round(payroll.reduce((s, p) => s + p.peakBonus, 0)),
         peakEnabled,
         peakMultiplier,

@@ -1379,6 +1379,31 @@ export const companyRuns = mysqlTable('company_runs', {
   createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const companyCargaisons = mysqlTable('company_cargaisons', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  clientName: varchar('client_name', { length: 120 }).notNull().default(''),
+  blNumber: varchar('bl_number', { length: 60 }).notNull().default(''),
+  product: varchar('product', { length: 150 }).notNull().default(''),
+  qty: int('qty').notNull().default(1),
+  total: decimal('total', { precision: 14, scale: 2 }).notNull().default('0'),
+  employeeShare: decimal('employee_share', { precision: 14, scale: 2 }).notNull().default('0'),
+  companyShare: decimal('company_share', { precision: 14, scale: 2 }).notNull().default('0'),
+  participantCount: int('participant_count').notNull().default(0),
+  note: varchar('note', { length: 255 }),
+  createdByUserId: int('created_by_user_id'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const cargaisonParticipants = mysqlTable('cargaison_participants', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  cargaisonId: int('cargaison_id').notNull().references(() => companyCargaisons.id, { onDelete: 'cascade' }),
+  employeeId: int('employee_id').references(() => companyEmployees.id, { onDelete: 'set null' }),
+  share: decimal('share', { precision: 14, scale: 2 }).notNull().default('0'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const concessionVehicles = mysqlTable('concession_vehicles', {
   id: int('id').autoincrement().primaryKey(),
   companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),

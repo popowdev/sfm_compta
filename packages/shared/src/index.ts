@@ -37,6 +37,7 @@ export const MODULE_KEYS = [
   'runs',
   'chasse',
   'concession',
+  'cargaison',
 ] as const;
 export type ModuleKey = (typeof MODULE_KEYS)[number];
 
@@ -83,6 +84,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'runs', label: 'Runs / livraisons', group: 'Commerce', defaultEnabled: false, companyPage: true },
   { key: 'chasse', label: 'Chasse', group: 'Commerce', defaultEnabled: false, companyPage: true },
   { key: 'concession', label: 'Concession auto', group: 'Commerce', defaultEnabled: false, companyPage: true, staffOnly: true },
+  { key: 'cargaison', label: 'Cargaison / commandes', group: 'Commerce', defaultEnabled: false, companyPage: true },
 ];
 
 export interface ModuleConfigBoolField {
@@ -362,6 +364,19 @@ export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
       step: 1,
       suffix: '%',
       help: 'Part reversée à l’employé qui fait la run (le reste va à l’entreprise). Fixe pour tous les employés.',
+    },
+  ],
+  cargaison: [
+    {
+      key: 'companyPct',
+      label: 'Part entreprise (%)',
+      type: 'number',
+      default: 25,
+      min: 0,
+      max: 100,
+      step: 1,
+      suffix: '%',
+      help: 'Part gardée par l’entreprise sur chaque commande. Le reste est réparti à parts égales entre les employés sélectionnés.',
     },
   ],
 };

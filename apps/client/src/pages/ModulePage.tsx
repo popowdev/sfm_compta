@@ -34,6 +34,7 @@ const Pawnshop = lazyRetry(() => import('@/pages/Pawnshop'));
 const Runs = lazyRetry(() => import('@/pages/Runs'));
 const Chasse = lazyRetry(() => import('@/pages/Chasse'));
 const Concession = lazyRetry(() => import('@/pages/Concession'));
+const Cargaison = lazyRetry(() => import('@/pages/Cargaison'));
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
@@ -61,6 +62,7 @@ const CONTENT: Partial<Record<string, LazyExoticComponent<ComponentType>>> = {
   runs: Runs,
   chasse: Chasse,
   concession: Concession,
+  cargaison: Cargaison,
 };
 
 function Placeholder({ mod }: { mod: MyModule }) {
