@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getShowroom, type ShowroomVehicle } from '@/lib/concession';
@@ -39,7 +39,131 @@ const STYLES = `
 .sr-fade{transition:opacity .6s ease;}
 .sr-noscroll{scrollbar-width:none;}
 .sr-noscroll::-webkit-scrollbar{display:none;}
+.sr-card{cursor:pointer;}
+.sr-mbd{animation:srFade .28s ease both;}
+.sr-mc{animation:srPop .42s cubic-bezier(.2,.9,.3,1.15) both;}
+@keyframes srFade{from{opacity:0}to{opacity:1}}
+@keyframes srPop{from{opacity:0;transform:translateY(22px) scale(.96)}to{opacity:1;transform:none}}
 `;
+
+export interface FavList {
+  id: string;
+  name: string;
+  ids: number[];
+}
+export interface Collections {
+  lists: FavList[];
+  activeId: string;
+  active: FavList | null;
+  totalFav: number;
+  isInActive: (vid: number) => boolean;
+  isInAny: (vid: number) => boolean;
+  toggleActive: (vid: number) => void;
+  toggleIn: (listId: string, vid: number) => void;
+  setActive: (listId: string) => void;
+  createList: (name: string) => string;
+  renameList: (listId: string, name: string) => void;
+  deleteList: (listId: string) => void;
+}
+
+function newId(existing: FavList[]): string {
+  let n = existing.length + 1;
+  let id = `l${n}`;
+  const has = (x: string) => existing.some((l) => l.id === x);
+  while (has(id)) { n += 1; id = `l${n}`; }
+  return id;
+}
+
+function useCollections(token: string | undefined): Collections {
+  const key = `showroom-collections-${token ?? 'default'}`;
+  const [lists, setLists] = useState<FavList[]>(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+      if (Array.isArray(parsed)) {
+        const clean = parsed
+          .filter((l): l is FavList => !!l && typeof (l as FavList).id === 'string' && typeof (l as FavList).name === 'string' && Array.isArray((l as FavList).ids))
+          .map((l) => ({ id: l.id, name: l.name, ids: l.ids.filter((x): x is number => typeof x === 'number') }));
+        if (clean.length) return clean;
+      }
+    } catch { /* ignore */ }
+    return [{ id: 'l1', name: 'Ma wishlist', ids: [] }];
+  });
+  const [activeId, setActiveId] = useState<string>(() => lists[0]?.id ?? 'l1');
+
+  useEffect(() => {
+    try { localStorage.setItem(key, JSON.stringify(lists)); } catch { /* quota / private mode */ }
+  }, [lists, key]);
+  useEffect(() => {
+    if (!lists.some((l) => l.id === activeId)) setActiveId(lists[0]?.id ?? 'l1');
+  }, [lists, activeId]);
+
+  const active = lists.find((l) => l.id === activeId) ?? lists[0] ?? null;
+  const totalFav = useMemo(() => new Set(lists.flatMap((l) => l.ids)).size, [lists]);
+
+  const toggleIn = useCallback((listId: string, vid: number) => {
+    setLists((prev) => prev.map((l) => (l.id === listId ? { ...l, ids: l.ids.includes(vid) ? l.ids.filter((x) => x !== vid) : [...l.ids, vid] } : l)));
+  }, []);
+  const toggleActive = useCallback((vid: number) => {
+    setLists((prev) => {
+      const target = prev.some((l) => l.id === activeId) ? activeId : prev[0]?.id;
+      if (!target) return prev;
+      return prev.map((l) => (l.id === target ? { ...l, ids: l.ids.includes(vid) ? l.ids.filter((x) => x !== vid) : [...l.ids, vid] } : l));
+    });
+  }, [activeId]);
+  const createList = useCallback((name: string) => {
+    const trimmed = name.trim().slice(0, 40) || 'Ma liste';
+    let created = '';
+    setLists((prev) => { const id = newId(prev); created = id; return [...prev, { id, name: trimmed, ids: [] }]; });
+    return created;
+  }, []);
+  const renameList = useCallback((listId: string, name: string) => {
+    const trimmed = name.trim().slice(0, 40);
+    if (!trimmed) return;
+    setLists((prev) => prev.map((l) => (l.id === listId ? { ...l, name: trimmed } : l)));
+  }, []);
+  const deleteList = useCallback((listId: string) => {
+    setLists((prev) => (prev.length <= 1 ? prev : prev.filter((l) => l.id !== listId)));
+  }, []);
+
+  return {
+    lists,
+    activeId: active?.id ?? '',
+    active,
+    totalFav,
+    isInActive: (vid) => !!active?.ids.includes(vid),
+    isInAny: (vid) => lists.some((l) => l.ids.includes(vid)),
+    toggleActive,
+    toggleIn,
+    setActive: setActiveId,
+    createList,
+    renameList,
+    deleteList,
+  };
+}
+
+function Heart({ active, className }: { active: boolean; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
+    </svg>
+  );
+}
+
+function FavButton({ active, onToggle, size = 'card' }: { active: boolean; onToggle: () => void; size?: 'card' | 'big' }) {
+  const big = size === 'big';
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={active ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+      onClick={(e) => { e.stopPropagation(); onToggle(); }}
+      className={`grid place-items-center rounded-full border backdrop-blur transition-all hover:scale-110 active:scale-95 ${big ? 'h-11 w-11' : 'h-9 w-9'} ${active ? 'border-rose-300 bg-rose-500/90 text-white shadow-lg shadow-rose-500/30' : 'border-emerald-900/10 bg-white/80 text-emerald-900/50 hover:text-rose-500'}`}
+    >
+      <Heart active={active} className={big ? 'h-5 w-5' : 'h-4 w-4'} />
+    </button>
+  );
+}
 
 function useReveal<T extends HTMLElement>() {
   const ref = useRef<T>(null);
@@ -63,6 +187,9 @@ export default function Showroom() {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
   const [type, setType] = useState<'all' | 'new' | 'used'>('all');
+  const [selected, setSelected] = useState<ShowroomVehicle | null>(null);
+  const [viewFavs, setViewFavs] = useState(false);
+  const col = useCollections(token);
   const catalogRef = useRef<HTMLDivElement>(null);
 
   const query = useQuery({
@@ -82,10 +209,14 @@ export default function Showroom() {
     () => [...vehicles].filter((v) => v.imageUrl).sort((a, b) => b.salePrice - a.salePrice).slice(0, 6),
     [vehicles],
   );
-  const filtered = useMemo(
-    () => vehicles.filter((v) => (type === 'all' || v.type === type) && (!cat || v.category === cat) && v.name.toLowerCase().includes(q.toLowerCase())),
-    [vehicles, type, cat, q],
-  );
+  const filtered = useMemo(() => {
+    const favIds = viewFavs ? (col.active?.ids ?? []) : null;
+    return vehicles.filter((v) =>
+      (!favIds || favIds.includes(v.id)) &&
+      (type === 'all' || v.type === type) &&
+      (!cat || v.category === cat) &&
+      v.name.toLowerCase().includes(q.toLowerCase()));
+  }, [vehicles, type, cat, q, viewFavs, col.active]);
   const grouped = useMemo(() => categories.map(([c]) => ({ cat: c, items: filtered.filter((v) => v.category === c) })).filter((g) => g.items.length), [categories, filtered]);
   const searching = q.trim().length > 0;
 
@@ -132,27 +263,43 @@ export default function Showroom() {
       <StickyNav
         q={q} setQ={setQ} type={type} setType={setType} cat={cat} setCat={setCat}
         categories={categories} total={vehicles.length}
+        col={col} viewFavs={viewFavs} setViewFavs={setViewFavs}
       />
 
       <div ref={catalogRef} className="relative z-10 mx-auto max-w-[1400px] px-5 pb-28 pt-10 sm:px-8">
-        {filtered.length === 0 ? (
+        {viewFavs ? (
+          filtered.length === 0 ? (
+            <div className="grid place-items-center gap-3 rounded-3xl border border-dashed border-emerald-900/15 bg-white/50 py-24 text-center backdrop-blur">
+              <Heart active={false} className="h-10 w-10 text-emerald-400" />
+              <div className="text-lg font-bold text-emerald-950">« {col.active?.name} » est vide</div>
+              <div className="text-sm text-emerald-900/50">Ajoute des véhicules avec le cœur ♥ sur les cartes.</div>
+            </div>
+          ) : (
+            <>
+              <SectionTitle label={`♥ ${col.active?.name ?? 'Mes favoris'}`} count={filtered.length} />
+              <Grid items={filtered} onOpen={setSelected} col={col} />
+            </>
+          )
+        ) : filtered.length === 0 ? (
           <div className="grid place-items-center rounded-3xl border border-emerald-900/10 bg-white/50 py-24 text-emerald-900/50 backdrop-blur">
             Aucun véhicule ne correspond.
           </div>
         ) : searching || cat ? (
           <>
             <SectionTitle label={cat || 'Résultats'} count={filtered.length} />
-            <Grid items={filtered} />
+            <Grid items={filtered} onOpen={setSelected} col={col} />
           </>
         ) : (
           grouped.map((g) => (
             <section key={g.cat} className="mb-16 scroll-mt-24" id={`cat-${g.cat}`}>
               <SectionTitle label={g.cat} count={g.items.length} />
-              <Grid items={g.items} />
+              <Grid items={g.items} onOpen={setSelected} col={col} />
             </section>
           ))
         )}
       </div>
+
+      {selected && <VehicleModal v={selected} onClose={() => setSelected(null)} col={col} />}
 
       <footer className="relative z-10 border-t border-emerald-900/10 bg-white/40 py-10 text-center backdrop-blur">
         <div className="text-lg font-black tracking-tight text-emerald-950">{company.name}</div>
@@ -264,15 +411,16 @@ function Stat({ n, l }: { n: number; l: string }) {
   );
 }
 
-function StickyNav({ q, setQ, type, setType, cat, setCat, categories, total }: {
+function StickyNav({ q, setQ, type, setType, cat, setCat, categories, total, col, viewFavs, setViewFavs }: {
   q: string; setQ: (v: string) => void; type: 'all' | 'new' | 'used'; setType: (v: 'all' | 'new' | 'used') => void;
   cat: string; setCat: (v: string) => void; categories: [string, number][]; total: number;
+  col: Collections; viewFavs: boolean; setViewFavs: (v: boolean) => void;
 }) {
   return (
     <div className="sticky top-0 z-30 border-y border-emerald-900/10 bg-white/70 backdrop-blur-xl">
       <div className="mx-auto max-w-[1400px] px-5 py-3 sm:px-8">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative flex-1 min-w-[180px]">
             <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-700/50">⌕</span>
             <input
               value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un modèle…"
@@ -287,12 +435,81 @@ function StickyNav({ q, setQ, type, setType, cat, setCat, categories, total }: {
               </button>
             ))}
           </div>
+          <button onClick={() => setViewFavs(!viewFavs)}
+            className={`inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition-all ${viewFavs ? 'border-rose-300 bg-rose-500 text-white shadow-md shadow-rose-500/25' : 'border-emerald-900/10 bg-white/70 text-emerald-900/70 hover:border-rose-300 hover:text-rose-500'}`}>
+            <Heart active={viewFavs} className="h-4 w-4" /> Favoris
+            <span className={`rounded-full px-1.5 text-[10px] ${viewFavs ? 'bg-white/25' : 'bg-rose-500/10 text-rose-500'}`}>{col.totalFav}</span>
+          </button>
+          <CollectionsMenu col={col} onView={() => setViewFavs(true)} />
         </div>
         <div className="sr-noscroll mt-3 flex gap-2 overflow-x-auto pb-1">
           <Pill active={!cat} onClick={() => setCat('')} label="Tout" n={total} />
           {categories.map(([c, n]) => <Pill key={c} active={cat === c} onClick={() => setCat(cat === c ? '' : c)} label={c} n={n} />)}
         </div>
       </div>
+    </div>
+  );
+}
+
+function CollectionsMenu({ col, onView }: { col: Collections; onView: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState('');
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+
+  const startEdit = (id: string, name: string) => { setEditId(id); setEditName(name); };
+  const commitEdit = () => { if (editId) col.renameList(editId, editName); setEditId(null); setEditName(''); };
+  const create = () => { const name = creating.trim(); if (!name) return; const id = col.createList(name); col.setActive(id); setCreating(''); };
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((o) => !o)}
+        className="inline-flex h-11 items-center gap-2 rounded-full border border-emerald-900/10 bg-white/70 px-4 text-sm font-semibold text-emerald-900/80 transition-colors hover:border-emerald-500/40">
+        <span className="max-w-[140px] truncate">{col.active?.name ?? 'Mes listes'}</span>
+        <span className="rounded-full bg-emerald-500/10 px-1.5 text-[10px] text-emerald-700">{col.active?.ids.length ?? 0}</span>
+        <span className="text-emerald-700/50">▾</span>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => { setOpen(false); setEditId(null); }} />
+          <div className="absolute right-0 z-50 mt-2 w-72 rounded-2xl border border-emerald-900/10 bg-white/95 p-2 shadow-xl backdrop-blur">
+            <div className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-600">Mes listes</div>
+            <div className="max-h-64 overflow-y-auto">
+              {col.lists.map((l) => (
+                <div key={l.id} className={`group flex items-center gap-1 rounded-xl px-1 ${col.activeId === l.id ? 'bg-emerald-500/10' : ''}`}>
+                  {editId === l.id ? (
+                    <input autoFocus value={editName} onChange={(e) => setEditName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditId(null); }}
+                      onBlur={commitEdit}
+                      className="my-1 h-8 w-full rounded-lg border border-emerald-500/40 bg-white px-2 text-sm outline-none" />
+                  ) : (
+                    <>
+                      <button onClick={() => { col.setActive(l.id); onView(); setOpen(false); }}
+                        className="flex flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left text-sm">
+                        <Heart active className={`h-3.5 w-3.5 ${col.activeId === l.id ? 'text-rose-500' : 'text-emerald-300'}`} />
+                        <span className="flex-1 truncate font-medium text-emerald-950">{l.name}</span>
+                        <span className="text-xs text-emerald-700/50">{l.ids.length}</span>
+                      </button>
+                      <button onClick={() => startEdit(l.id, l.name)} aria-label="Renommer" className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-emerald-700/40 opacity-0 hover:bg-emerald-500/10 hover:text-emerald-700 group-hover:opacity-100">✎</button>
+                      {col.lists.length > 1 && (
+                        <button onClick={() => col.deleteList(l.id)} aria-label="Supprimer" className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-emerald-700/40 opacity-0 hover:bg-rose-500/10 hover:text-rose-500 group-hover:opacity-100">×</button>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 flex items-center gap-2 border-t border-emerald-900/10 pt-2">
+              <input value={creating} onChange={(e) => setCreating(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') create(); }}
+                placeholder="Nouvelle liste…"
+                className="h-9 flex-1 rounded-lg border border-emerald-900/10 bg-white px-2.5 text-sm outline-none focus:border-emerald-500/50" />
+              <button onClick={create} disabled={!creating.trim()}
+                className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-950 text-white disabled:opacity-40">＋</button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -320,15 +537,15 @@ function SectionTitle({ label, count }: { label: string; count: number }) {
   );
 }
 
-function Grid({ items }: { items: ShowroomVehicle[] }) {
+function Grid({ items, onOpen, col }: { items: ShowroomVehicle[]; onOpen: (v: ShowroomVehicle) => void; col: Collections }) {
   return (
     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {items.map((v) => <TiltCard key={v.id} v={v} />)}
+      {items.map((v) => <TiltCard key={v.id} v={v} onOpen={onOpen} col={col} />)}
     </div>
   );
 }
 
-function TiltCard({ v }: { v: ShowroomVehicle }) {
+function TiltCard({ v, onOpen, col }: { v: ShowroomVehicle; onOpen: (v: ShowroomVehicle) => void; col: Collections }) {
   const wrapRef = useReveal<HTMLDivElement>();
   const tiltRef = useRef<HTMLDivElement>(null);
 
@@ -353,7 +570,11 @@ function TiltCard({ v }: { v: ShowroomVehicle }) {
   return (
     <div ref={wrapRef} className="sr-reveal sr-cardw [perspective:1100px]">
       <div ref={tiltRef} onPointerMove={onMove} onPointerLeave={onLeave}
-        className="sr-card sr-tilt group relative overflow-hidden rounded-3xl border border-emerald-900/10 bg-white/70 p-4 shadow-[0_10px_40px_-12px_rgba(6,78,59,.18)] backdrop-blur transition-shadow hover:shadow-[0_30px_60px_-18px_rgba(16,185,129,.4)]">
+        role="button" tabIndex={0}
+        onClick={() => onOpen(v)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(v); } }}
+        aria-label={`Voir ${v.name}`}
+        className="sr-card sr-tilt group relative overflow-hidden rounded-3xl border border-emerald-900/10 bg-white/70 p-4 shadow-[0_10px_40px_-12px_rgba(6,78,59,.18)] outline-none backdrop-blur transition-shadow hover:shadow-[0_30px_60px_-18px_rgba(16,185,129,.4)] focus-visible:ring-2 focus-visible:ring-emerald-500">
         <div className="relative aspect-[16/10] overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-50 to-lime-50">
           <div className="absolute inset-0 [background:radial-gradient(120%_80%_at_50%_120%,rgba(16,185,129,.18),transparent_60%)]" />
           {v.imageUrl
@@ -362,6 +583,9 @@ function TiltCard({ v }: { v: ShowroomVehicle }) {
           <span className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-bold ${v.type === 'used' ? 'bg-amber-400 text-amber-950' : 'bg-emerald-500 text-white'}`}>
             {v.type === 'used' ? 'Occasion' : 'Neuf'}
           </span>
+          <div className="absolute right-3 top-3">
+            <FavButton active={col.isInActive(v.id)} onToggle={() => col.toggleActive(v.id)} />
+          </div>
           <div className="sr-gloss" />
         </div>
         <div className="relative mt-4 flex items-end justify-between gap-3">
@@ -377,6 +601,105 @@ function TiltCard({ v }: { v: ShowroomVehicle }) {
         </div>
         <div className="pointer-events-none absolute inset-x-4 bottom-3 flex translate-y-3 items-center justify-center gap-1.5 rounded-full bg-emerald-950 py-2 text-xs font-semibold text-emerald-50 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
           Voir le véhicule →
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VehicleModal({ v, onClose, col }: { v: ShowroomVehicle; onClose: () => void; col: Collections }) {
+  const tiltRef = useRef<HTMLDivElement>(null);
+  const [creating, setCreating] = useState('');
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+
+  const onMove = (e: React.PointerEvent) => {
+    const el = tiltRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width - 0.5;
+    const py = (e.clientY - r.top) / r.height - 0.5;
+    el.style.setProperty('--ry', `${px * 12}deg`);
+    el.style.setProperty('--rx', `${-py * 10}deg`);
+  };
+  const onLeave = () => {
+    const el = tiltRef.current;
+    if (!el) return;
+    el.style.setProperty('--ry', '0deg');
+    el.style.setProperty('--rx', '0deg');
+  };
+  const create = () => {
+    const name = creating.trim();
+    if (!name) return;
+    const id = col.createList(name);
+    col.toggleIn(id, v.id);
+    setCreating('');
+  };
+
+  return (
+    <div className="sr-mbd fixed inset-0 z-[60] grid place-items-center bg-emerald-950/40 p-4 backdrop-blur-md" onClick={onClose}>
+      <div className="sr-mc relative max-h-[92vh] w-full max-w-4xl overflow-hidden overflow-y-auto rounded-[28px] border border-emerald-900/10 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <button type="button" onClick={onClose} aria-label="Fermer"
+          className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/80 text-emerald-900/60 shadow backdrop-blur transition-colors hover:bg-white hover:text-emerald-950">✕</button>
+        <div className="grid md:grid-cols-[1.15fr_1fr]">
+          <div className="relative grid min-h-[300px] place-items-center bg-gradient-to-br from-emerald-50 via-lime-50 to-white p-8 [perspective:1200px]" onPointerMove={onMove} onPointerLeave={onLeave}>
+            <div className="pointer-events-none absolute inset-0 [background:radial-gradient(80%_60%_at_50%_120%,rgba(16,185,129,.18),transparent_60%)]" />
+            <span className={`absolute left-5 top-5 rounded-full px-3 py-1 text-xs font-bold ${v.type === 'used' ? 'bg-amber-400 text-amber-950' : 'bg-emerald-500 text-white'}`}>
+              {v.type === 'used' ? 'Occasion' : 'Neuf'}
+            </span>
+            <div ref={tiltRef} className="sr-tilt grid h-full w-full place-items-center">
+              {v.imageUrl
+                ? <img src={v.imageUrl} alt={v.name} className="sr-float max-h-[46vh] w-full object-contain" style={{ filter: 'drop-shadow(0 26px 34px rgba(6,78,59,.32))' }} />
+                : <div className="text-7xl text-emerald-300">🚘</div>}
+            </div>
+          </div>
+
+          <div className="flex flex-col p-7">
+            <div className="text-[11px] font-bold uppercase tracking-widest text-emerald-600">{v.category}</div>
+            <h2 className="mt-1 text-3xl font-black leading-tight text-emerald-950">{v.name}</h2>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700">{v.type === 'used' ? 'Occasion' : 'Neuf'}</span>
+              <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700">{v.category}</span>
+              <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700">Disponible</span>
+            </div>
+            {v.description && <p className="mt-4 text-sm leading-relaxed text-emerald-900/60">{v.description}</p>}
+
+            <div className="mt-5 flex items-end justify-between rounded-2xl bg-emerald-950 px-5 py-4 text-white">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-300">Prix</div>
+                <div className="text-4xl font-black leading-none">{fmt(v.salePrice)} $</div>
+              </div>
+              <FavButton active={col.isInActive(v.id)} onToggle={() => col.toggleActive(v.id)} size="big" />
+            </div>
+
+            <div className="mt-6">
+              <div className="mb-2 text-[11px] font-bold uppercase tracking-widest text-emerald-600">Ajouter à une liste</div>
+              <div className="flex flex-wrap gap-2">
+                {col.lists.map((l) => {
+                  const inl = l.ids.includes(v.id);
+                  return (
+                    <button key={l.id} onClick={() => col.toggleIn(l.id, v.id)}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition-all ${inl ? 'border-rose-300 bg-rose-500 text-white' : 'border-emerald-900/10 bg-white text-emerald-900/70 hover:border-rose-300'}`}>
+                      <Heart active={inl} className="h-3.5 w-3.5" /> {l.name}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <input value={creating} onChange={(e) => setCreating(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') create(); }}
+                  placeholder="Créer une liste (ex. Mes SUV de rêve)…"
+                  className="h-9 flex-1 rounded-lg border border-emerald-900/10 bg-white px-2.5 text-sm outline-none focus:border-emerald-500/50" />
+                <button onClick={create} disabled={!creating.trim()} className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-950 text-white disabled:opacity-40">＋</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
