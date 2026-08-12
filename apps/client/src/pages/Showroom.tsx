@@ -199,10 +199,9 @@ export default function Showroom() {
   const [type, setType] = useState<'all' | 'new' | 'used'>('all');
   const [selected, setSelected] = useState<ShowroomVehicle | null>(null);
   const [viewFavs, setViewFavs] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(PAGE);
+  const [page, setPage] = useState(0);
   const col = useCollections(token);
   const catalogRef = useRef<HTMLDivElement>(null);
-  const sentinelRef = useRef<HTMLDivElement>(null);
 
   const query = useQuery({
     queryKey: ['showroom', token],
@@ -240,14 +239,9 @@ export default function Showroom() {
     return m;
   }, [ordered]);
 
-  useEffect(() => { setVisibleCount(PAGE); }, [q, cat, type, viewFavs, col.active]);
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver((es) => { if (es[0]?.isIntersecting) setVisibleCount((c) => c + PAGE); }, { rootMargin: '800px 0px' });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [visibleCount, ordered.length]);
+  const pageCount = Math.max(1, Math.ceil(ordered.length / PAGE));
+  useEffect(() => { setPage(0); }, [q, cat, type, viewFavs, col.active]);
+  useEffect(() => { if (page > pageCount - 1) setPage(pageCount - 1); }, [page, pageCount]);
 
   if (query.isLoading) {
     return (
@@ -276,6 +270,7 @@ export default function Showroom() {
 
   const company = query.data.company;
   const scrollToCatalog = () => catalogRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const goPage = (p: number) => { setPage(Math.max(0, Math.min(p, pageCount - 1))); catalogRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 
   return (
     <div className="sr-root relative min-h-screen overflow-x-clip">
@@ -295,7 +290,7 @@ export default function Showroom() {
         col={col} viewFavs={viewFavs} setViewFavs={setViewFavs}
       />
 
-      <div ref={catalogRef} className="relative z-10 mx-auto max-w-[1400px] px-5 pb-28 pt-10 sm:px-8">
+      <div ref={catalogRef} className="relative z-10 mx-auto max-w-[1400px] scroll-mt-28 px-5 pb-28 pt-10 sm:px-8">
         {viewFavs && filtered.length === 0 ? (
           <div className="grid place-items-center gap-3 rounded-3xl border border-dashed border-emerald-900/15 bg-white/60 py-24 text-center">
             <Heart active={false} className="h-10 w-10 text-emerald-400" />
@@ -307,12 +302,11 @@ export default function Showroom() {
             Aucun véhicule ne correspond.
           </div>
         ) : (
-          <Catalog ordered={ordered} visibleCount={visibleCount} catCounts={catCounts}
+          <Catalog ordered={ordered} page={page} pageSize={PAGE} pageCount={pageCount} catCounts={catCounts}
             headerLabel={cat ? cat : viewFavs ? `♥ ${col.active?.name ?? 'Favoris'}` : null}
             perCatHeaders={!cat && !viewFavs}
             total={filtered.length}
-            onOpen={setSelected} col={col}
-            onMore={() => setVisibleCount((c) => c + PAGE)} sentinelRef={sentinelRef} />
+            onOpen={setSelected} col={col} onPage={goPage} />
         )}
       </div>
 
@@ -457,7 +451,7 @@ function StickyNav({ q, setQ, type, setType, cat, setCat, categories, total, col
           </button>
           <CollectionsMenu col={col} onView={() => setViewFavs(true)} />
         </div>
-        <div className="sr-noscroll mt-3 flex gap-2 overflow-x-auto pb-1">
+        <div className="mt-3 flex flex-wrap gap-2">
           <Pill active={!cat} onClick={() => setCat('')} label="Tout" n={total} />
           {categories.map(([c, n]) => <Pill key={c} active={cat === c} onClick={() => setCat(cat === c ? '' : c)} label={c} n={n} />)}
         </div>
@@ -552,12 +546,23 @@ function SectionTitle({ label, count }: { label: string; count: number }) {
   );
 }
 
-function Catalog({ ordered, visibleCount, catCounts, headerLabel, perCatHeaders, total, onOpen, col, onMore, sentinelRef }: {
-  ordered: ShowroomVehicle[]; visibleCount: number; catCounts: Map<string, number>;
+function pageWindow(cur: number, count: number): number[] {
+  const pages = new Set<number>([0, count - 1]);
+  for (let i = cur - 1; i <= cur + 1; i += 1) if (i >= 0 && i < count) pages.add(i);
+  const sorted = [...pages].sort((a, b) => a - b);
+  const out: number[] = [];
+  let prev = -1;
+  for (const p of sorted) { if (prev >= 0 && p - prev > 1) out.push(-1); out.push(p); prev = p; }
+  return out;
+}
+
+function Catalog({ ordered, page, pageSize, pageCount, catCounts, headerLabel, perCatHeaders, total, onOpen, col, onPage }: {
+  ordered: ShowroomVehicle[]; page: number; pageSize: number; pageCount: number; catCounts: Map<string, number>;
   headerLabel: string | null; perCatHeaders: boolean; total: number;
-  onOpen: (v: ShowroomVehicle) => void; col: Collections; onMore: () => void; sentinelRef: React.RefObject<HTMLDivElement>;
+  onOpen: (v: ShowroomVehicle) => void; col: Collections; onPage: (p: number) => void;
 }) {
-  const slice = ordered.slice(0, visibleCount);
+  const start = page * pageSize;
+  const slice = ordered.slice(start, start + pageSize);
   const nodes: React.ReactNode[] = [];
   let lastCat: string | null = null;
   for (const v of slice) {
@@ -567,18 +572,23 @@ function Catalog({ ordered, visibleCount, catCounts, headerLabel, perCatHeaders,
     }
     nodes.push(<TiltCard key={v.id} v={v} onOpen={onOpen} col={col} />);
   }
-  const remaining = ordered.length - visibleCount;
   return (
     <>
       {headerLabel && <SectionTitle label={headerLabel} count={total} />}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{nodes}</div>
-      {remaining > 0 && (
-        <div className="mt-10 flex flex-col items-center gap-4">
-          <div ref={sentinelRef} className="h-px w-full" aria-hidden />
-          <button onClick={onMore}
-            className="inline-flex items-center gap-2 rounded-full border border-emerald-900/10 bg-white px-6 py-3 text-sm font-semibold text-emerald-900 shadow-sm transition-all hover:scale-105 hover:border-emerald-500/40">
-            Voir plus <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-700">{fmt(remaining)}</span>
-          </button>
+      {pageCount > 1 && (
+        <div className="mt-12 flex flex-col items-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-1.5">
+            <button type="button" disabled={page === 0} onClick={() => onPage(page - 1)} aria-label="Page précédente"
+              className="grid h-10 w-10 place-items-center rounded-xl bg-white text-emerald-900 shadow-sm transition-all enabled:hover:bg-emerald-500/10 disabled:opacity-40">←</button>
+            {pageWindow(page, pageCount).map((n, i) => n === -1
+              ? <span key={`e${i}`} className="px-1 text-emerald-900/40">…</span>
+              : <button key={n} type="button" onClick={() => onPage(n)}
+                  className={`h-10 min-w-10 rounded-xl px-3 text-sm font-bold transition-all ${n === page ? 'bg-emerald-950 text-white shadow-md' : 'bg-white text-emerald-900/70 shadow-sm hover:bg-emerald-500/10'}`}>{n + 1}</button>)}
+            <button type="button" disabled={page >= pageCount - 1} onClick={() => onPage(page + 1)} aria-label="Page suivante"
+              className="grid h-10 w-10 place-items-center rounded-xl bg-white text-emerald-900 shadow-sm transition-all enabled:hover:bg-emerald-500/10 disabled:opacity-40">→</button>
+          </div>
+          <div className="text-xs font-medium text-emerald-900/50">{start + 1}–{start + slice.length} sur {fmt(total)} · page {page + 1}/{pageCount}</div>
         </div>
       )}
     </>
