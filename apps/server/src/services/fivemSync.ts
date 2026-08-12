@@ -169,8 +169,8 @@ async function upsertMembership(companyId: number, userId: number, roleId: numbe
   }
 }
 
-async function deactivateOtherFivemMemberships(userId: number, keepCompanyIds: number[]): Promise<void> {
-  if (!keepCompanyIds.length) return;
+async function deactivateOtherFivemMemberships(userId: number, keepCompanyIds: number[], allowEmpty = false): Promise<void> {
+  if (!keepCompanyIds.length && !allowEmpty) return;
   const rows = await db
     .select({ id: memberships.id, companyId: memberships.companyId })
     .from(memberships)
@@ -233,7 +233,7 @@ async function syncPlayer(p: PlayerDef): Promise<void> {
     .where(and(eq(companies.fivemJob, p.job), isNull(companies.deletedAt)))
     .limit(1);
   const targetCompanyId = comp[0]?.managed ? comp[0].id : null;
-  await deactivateOtherFivemMemberships(userId, targetCompanyId !== null ? [targetCompanyId] : []);
+  await deactivateOtherFivemMemberships(userId, targetCompanyId !== null ? [targetCompanyId] : [], isUnemployedJob(p.job));
   if (targetCompanyId !== null) {
     const roleId = await roleIdForGrade(targetCompanyId, p.grade);
     await upsertMembership(targetCompanyId, userId, roleId);
@@ -374,7 +374,7 @@ export async function provisionAllCharacters(
     if (!keep.includes(companyId)) keep.push(companyId);
     if (selected && c.name === selected.name) selectedCompanyId = companyId;
   }
-  await deactivateOtherFivemMemberships(userId, keep);
+  await deactivateOtherFivemMemberships(userId, keep, characters.length > 0);
   await saveSelectedRoster(discord, selected ? toSelected(selected) : null);
   return { userId, companyIds: keep, selectedCompanyId, selected };
 }
