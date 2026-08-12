@@ -2,19 +2,7 @@ import { and, eq, lt, sql } from 'drizzle-orm';
 import { moduleConfigBool } from '@rp-compta/shared';
 import { db } from '../db';
 import { companyModules, exercices } from '../db/schema';
-
-function currentWeek(): { monday: string; sunday: string; label: string } {
-  const now = new Date();
-  const day = now.getUTCDay();
-  const monday = new Date(now);
-  monday.setUTCDate(now.getUTCDate() - (day === 0 ? 6 : day - 1));
-  const sunday = new Date(monday);
-  sunday.setUTCDate(monday.getUTCDate() + 6);
-  const monStr = monday.toISOString().slice(0, 10);
-  const sunStr = sunday.toISOString().slice(0, 10);
-  const label = `Semaine du ${monday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })} au ${sunday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}`;
-  return { monday: monStr, sunday: sunStr, label };
-}
+import { bizWeek } from './bizTime';
 
 export async function runWeeklyRollover(): Promise<{ created: number; closed: number }> {
   const mods = await db
@@ -31,7 +19,7 @@ export async function runWeeklyRollover(): Promise<{ created: number; closed: nu
     .map((m) => m.companyId);
   if (!companies.length) return { created: 0, closed: 0 };
 
-  const { monday, sunday, label } = currentWeek();
+  const { monday, sunday, label } = bizWeek();
   let created = 0;
   let closed = 0;
 

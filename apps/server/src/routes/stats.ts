@@ -14,6 +14,7 @@ import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import type { ModuleKey } from '@rp-compta/shared';
 import { getModuleAccess } from '../services/access';
+import { bizDayStr, bizToday, bizDayList } from '../services/bizTime';
 
 function parseId(value: string | undefined): number | null {
   const n = Number(value);
@@ -48,9 +49,9 @@ meStatsRouter.get(
       canView('declarations'),
     ]);
 
-    const since = new Date(Date.now() - 29 * 86_400_000);
-    const sinceStr = since.toISOString().slice(0, 10);
-    const dayExpr = sql<string>`DATE_FORMAT(${sales.createdAt}, '%Y-%m-%d')`;
+    const slots = bizDayList(30);
+    const sinceStr = slots[0] ?? bizToday();
+    const dayExpr = bizDayStr(sales.createdAt);
 
     const [decls, exps, subs, emps, salesAgg, dayRows, empRows, topRows, payRows] = await Promise.all([
       db.select().from(declarations).where(and(eq(declarations.companyId, companyId), isNull(declarations.archivedAt))).orderBy(asc(declarations.createdAt)),
@@ -150,11 +151,7 @@ meStatsRouter.get(
     };
 
     const dayMap = new Map(dayRows.map((r) => [r.date, Number(r.total)]));
-    const series: { date: string; total: number }[] = [];
-    for (let i = 0; i < 30; i += 1) {
-      const d = new Date(since.getTime() + i * 86_400_000).toISOString().slice(0, 10);
-      series.push({ date: d, total: round2(dayMap.get(d) ?? 0) });
-    }
+    const series: { date: string; total: number }[] = slots.map((d) => ({ date: d, total: round2(dayMap.get(d) ?? 0) }));
     const salesTotal = num(salesAgg[0]?.total ?? null);
     const salesCost = num(salesAgg[0]?.cost ?? null);
     const salesStat = {

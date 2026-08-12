@@ -14,6 +14,7 @@ import {
 } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
+import { bizDayStr, bizToday, bizDayList } from '../services/bizTime';
 import type { ModuleKey } from '@rp-compta/shared';
 import { getModuleAccess, isStaff } from '../services/access';
 
@@ -61,9 +62,9 @@ meDashboardRouter.get(
       can('exercices'),
     ]);
 
-    const since = new Date(Date.now() - 29 * 86_400_000);
-    const sinceStr = since.toISOString().slice(0, 10);
-    const dayExpr = sql<string>`DATE_FORMAT(${sales.createdAt}, '%Y-%m-%d')`;
+    const slots = bizDayList(30);
+    const sinceStr = slots[0] ?? bizToday();
+    const dayExpr = bizDayStr(sales.createdAt);
 
     const [salesAgg, dayRows, topRows, stockRows, lowRows, empRow, clientRow, openEx, garageRepDays, garageCustDays] = await Promise.all([
       db
@@ -131,32 +132,30 @@ meDashboardRouter.get(
         .from(exercices)
         .where(and(eq(exercices.companyId, companyId), eq(exercices.status, 'open'))),
       db
-        .select({ date: sql<string>`DATE_FORMAT(${garageRepairs.createdAt}, '%Y-%m-%d')`, total: sql<string>`COALESCE(SUM(${garageRepairs.total}), 0)` })
+        .select({ date: bizDayStr(garageRepairs.createdAt), total: sql<string>`COALESCE(SUM(${garageRepairs.total}), 0)` })
         .from(garageRepairs)
-        .where(and(eq(garageRepairs.companyId, companyId), gte(sql`DATE_FORMAT(${garageRepairs.createdAt}, '%Y-%m-%d')`, sinceStr)))
-        .groupBy(sql`DATE_FORMAT(${garageRepairs.createdAt}, '%Y-%m-%d')`),
+        .where(and(eq(garageRepairs.companyId, companyId), gte(bizDayStr(garageRepairs.createdAt), sinceStr)))
+        .groupBy(bizDayStr(garageRepairs.createdAt)),
       db
-        .select({ date: sql<string>`DATE_FORMAT(${garageCustoms.createdAt}, '%Y-%m-%d')`, total: sql<string>`COALESCE(SUM(${garageCustoms.finalPrice}), 0)` })
+        .select({ date: bizDayStr(garageCustoms.createdAt), total: sql<string>`COALESCE(SUM(${garageCustoms.finalPrice}), 0)` })
         .from(garageCustoms)
-        .where(and(eq(garageCustoms.companyId, companyId), gte(sql`DATE_FORMAT(${garageCustoms.createdAt}, '%Y-%m-%d')`, sinceStr)))
-        .groupBy(sql`DATE_FORMAT(${garageCustoms.createdAt}, '%Y-%m-%d')`),
+        .where(and(eq(garageCustoms.companyId, companyId), gte(bizDayStr(garageCustoms.createdAt), sinceStr)))
+        .groupBy(bizDayStr(garageCustoms.createdAt)),
     ]);
 
     const [garageCostRep, garageCostCust] = await Promise.all([
       db
         .select({ c: sql<string>`COALESCE(SUM(${garageRepairs.commissionAmount}), 0)` })
         .from(garageRepairs)
-        .where(and(eq(garageRepairs.companyId, companyId), gte(sql`DATE_FORMAT(${garageRepairs.createdAt}, '%Y-%m-%d')`, sinceStr))),
+        .where(and(eq(garageRepairs.companyId, companyId), gte(bizDayStr(garageRepairs.createdAt), sinceStr))),
       db
         .select({ c: sql<string>`COALESCE(SUM(${garageCustoms.commissionAmount} + ${garageCustoms.costPrice}), 0)` })
         .from(garageCustoms)
-        .where(and(eq(garageCustoms.companyId, companyId), gte(sql`DATE_FORMAT(${garageCustoms.createdAt}, '%Y-%m-%d')`, sinceStr))),
+        .where(and(eq(garageCustoms.companyId, companyId), gte(bizDayStr(garageCustoms.createdAt), sinceStr))),
     ]);
     const garageCost = Number(garageCostRep[0]?.c ?? 0) + Number(garageCostCust[0]?.c ?? 0);
 
     const dayMap = new Map(dayRows.map((r) => [r.date, Number(r.total)]));
-    const slots: string[] = [];
-    for (let i = 0; i < 30; i += 1) slots.push(new Date(since.getTime() + i * 86_400_000).toISOString().slice(0, 10));
     const slotSet = new Set(slots);
     let garageTotal = 0;
     for (const r of [...garageRepDays, ...garageCustDays]) {

@@ -20,6 +20,7 @@ import {
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, isStaff } from '../services/access';
+import { bizDate, bizWeek } from '../services/bizTime';
 
 function parseId(v: string | undefined): number | null {
   const n = Number(v);
@@ -155,18 +156,13 @@ meGarageRouter.get('/billing', asyncHandler(async (req, res) => {
   const g = await gate(req, companyId);
   if (g.error) return res.status(g.error).json({ error: 'forbidden' });
 
-  const now = new Date();
-  const day = now.getUTCDay();
-  const mon = new Date(now);
-  mon.setUTCDate(now.getUTCDate() - (day === 0 ? 6 : day - 1));
-  const sun = new Date(mon);
-  sun.setUTCDate(mon.getUTCDate() + 6);
+  const { monday: mon, sunday: sun } = bizWeek();
   const dateRe = /^\d{4}-\d{2}-\d{2}$/;
-  const fromQ = typeof req.query.from === 'string' && dateRe.test(req.query.from) ? req.query.from : mon.toISOString().slice(0, 10);
-  const toQ = typeof req.query.to === 'string' && dateRe.test(req.query.to) ? req.query.to : sun.toISOString().slice(0, 10);
+  const fromQ = typeof req.query.from === 'string' && dateRe.test(req.query.from) ? req.query.from : mon;
+  const toQ = typeof req.query.to === 'string' && dateRe.test(req.query.to) ? req.query.to : sun;
 
-  const repWhere = and(eq(garageRepairs.companyId, companyId), sql`${garageRepairs.contractId} IS NOT NULL`, sql`${garageRepairs.createdAt} >= ${fromQ + ' 00:00:00'}`, sql`${garageRepairs.createdAt} <= ${toQ + ' 23:59:59'}`);
-  const cusWhere = and(eq(garageCustoms.companyId, companyId), sql`${garageCustoms.contractId} IS NOT NULL`, sql`${garageCustoms.createdAt} >= ${fromQ + ' 00:00:00'}`, sql`${garageCustoms.createdAt} <= ${toQ + ' 23:59:59'}`);
+  const repWhere = and(eq(garageRepairs.companyId, companyId), sql`${garageRepairs.contractId} IS NOT NULL`, gte(bizDate(garageRepairs.createdAt), fromQ), lte(bizDate(garageRepairs.createdAt), toQ));
+  const cusWhere = and(eq(garageCustoms.companyId, companyId), sql`${garageCustoms.contractId} IS NOT NULL`, gte(bizDate(garageCustoms.createdAt), fromQ), lte(bizDate(garageCustoms.createdAt), toQ));
 
   const [rep, cus, contracts] = await Promise.all([
     db.select({ contractId: garageRepairs.contractId, count: sql<number>`COUNT(*)`, total: sql<string>`COALESCE(SUM(${garageRepairs.total}),0)` }).from(garageRepairs).where(repWhere).groupBy(garageRepairs.contractId),

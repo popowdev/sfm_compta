@@ -32,6 +32,7 @@ import { getModuleAccess, actionDenied, type PermAction } from '../services/acce
 import { computeTaxes } from '../services/declarations';
 import { emitInvalidate } from '../realtime/socket';
 import { recordAudit } from '../services/audit';
+import { bizDate, bizDayStr, bizWeek, bizPeakMinutes } from '../services/bizTime';
 
 function methodAction(method: string): PermAction {
   return method === 'POST' ? 'create' : method === 'PUT' ? 'edit' : method === 'DELETE' ? 'delete' : 'view';
@@ -45,30 +46,6 @@ function parseId(value: string | undefined): number | null {
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const blank = (v: string | null | undefined) => (v ? v : null);
 
-const PEAK_START_HOUR = 21;
-function entryToMs(s: string): number {
-  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):?(\d{2})?/.exec(s);
-  if (!m) return NaN;
-  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6] ?? 0));
-}
-function peakMinutes(inStr: string, outStr: string): number {
-  const start = entryToMs(inStr);
-  const end = entryToMs(outStr);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
-  const DAY = 86_400_000;
-  const HOUR = 3_600_000;
-  const d = new Date(start);
-  let day = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-  let total = 0;
-  for (; day < end; day += DAY) {
-    const winStart = day + PEAK_START_HOUR * HOUR;
-    const winEnd = day + DAY;
-    const s = Math.max(start, winStart);
-    const e = Math.min(end, winEnd);
-    if (e > s) total += (e - s) / 60_000;
-  }
-  return total;
-}
 const isDate = (v: string) => {
   const d = new Date(`${v}T00:00:00Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
@@ -197,16 +174,7 @@ meExercicesRouter.post(
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     const offset = parsed.data.offset ?? 0;
 
-    const now = new Date();
-    now.setUTCDate(now.getUTCDate() + offset * 7);
-    const day = now.getUTCDay();
-    const monday = new Date(now);
-    monday.setUTCDate(now.getUTCDate() - (day === 0 ? 6 : day - 1));
-    const sunday = new Date(monday);
-    sunday.setUTCDate(monday.getUTCDate() + 6);
-    const startStr = monday.toISOString().slice(0, 10);
-    const endStr = sunday.toISOString().slice(0, 10);
-    const label = `Semaine du ${monday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })} au ${sunday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}`;
+    const { monday: startStr, sunday: endStr, label } = bizWeek(new Date(), offset);
 
     const existing = await db
       .select({ id: exercices.id })
@@ -415,8 +383,8 @@ meExercicesRouter.get(
           eq(timeEntries.employeeId, companyEmployees.id),
           eq(timeEntries.companyId, companyId),
           isNotNull(timeEntries.clockOut),
-          gte(sql`DATE(${timeEntries.clockIn})`, ex.startDate),
-          lte(sql`DATE(${timeEntries.clockIn})`, ex.endDate),
+          gte(bizDate(timeEntries.clockIn), ex.startDate),
+          lte(bizDate(timeEntries.clockIn), ex.endDate),
         ),
       )
       .leftJoin(companyRoles, eq(companyEmployees.companyRoleId, companyRoles.id))
@@ -435,13 +403,13 @@ meExercicesRouter.get(
           and(
             eq(timeEntries.companyId, companyId),
             isNotNull(timeEntries.clockOut),
-            gte(sql`DATE(${timeEntries.clockIn})`, ex.startDate),
-            lte(sql`DATE(${timeEntries.clockIn})`, ex.endDate),
+            gte(bizDate(timeEntries.clockIn), ex.startDate),
+            lte(bizDate(timeEntries.clockIn), ex.endDate),
           ),
         );
       for (const e of rawEntries) {
         if (!e.clockOut) continue;
-        const pm = peakMinutes(e.clockIn, e.clockOut);
+        const pm = bizPeakMinutes(e.clockIn, e.clockOut);
         if (pm > 0) peakMinByEmp.set(e.employeeId, (peakMinByEmp.get(e.employeeId) ?? 0) + pm);
       }
     }
@@ -453,15 +421,15 @@ meExercicesRouter.get(
 
     const salesWhere = and(
       eq(sales.companyId, companyId),
-      gte(sql`DATE(${sales.createdAt})`, ex.startDate),
-      lte(sql`DATE(${sales.createdAt})`, ex.endDate),
+      gte(bizDate(sales.createdAt), ex.startDate),
+      lte(bizDate(sales.createdAt), ex.endDate),
     );
     const itemsWhere = and(
       eq(saleItems.companyId, companyId),
-      gte(sql`DATE(${sales.createdAt})`, ex.startDate),
-      lte(sql`DATE(${sales.createdAt})`, ex.endDate),
+      gte(bizDate(sales.createdAt), ex.startDate),
+      lte(bizDate(sales.createdAt), ex.endDate),
     );
-    const dayExpr = sql<string>`DATE_FORMAT(${sales.createdAt}, '%Y-%m-%d')`;
+    const dayExpr = bizDayStr(sales.createdAt);
 
     const [aggRows, dayRows, payRowsAgg, perfRows, topRows, listRows, purchRows] = await Promise.all([
       db
@@ -537,8 +505,8 @@ meExercicesRouter.get(
             eq(stockMovements.companyId, companyId),
             eq(stockMovements.type, 'in'),
             isNotNull(stockMovements.unitCost),
-            gte(sql`DATE(${stockMovements.createdAt})`, ex.startDate),
-            lte(sql`DATE(${stockMovements.createdAt})`, ex.endDate),
+            gte(bizDate(stockMovements.createdAt), ex.startDate),
+            lte(bizDate(stockMovements.createdAt), ex.endDate),
           ),
         ),
     ]);
@@ -553,16 +521,16 @@ meExercicesRouter.get(
     if (garageEnabled) {
       const repWhere = and(
         eq(garageRepairs.companyId, companyId),
-        gte(sql`DATE(${garageRepairs.createdAt})`, ex.startDate),
-        lte(sql`DATE(${garageRepairs.createdAt})`, ex.endDate),
+        gte(bizDate(garageRepairs.createdAt), ex.startDate),
+        lte(bizDate(garageRepairs.createdAt), ex.endDate),
       );
       const custWhere = and(
         eq(garageCustoms.companyId, companyId),
-        gte(sql`DATE(${garageCustoms.createdAt})`, ex.startDate),
-        lte(sql`DATE(${garageCustoms.createdAt})`, ex.endDate),
+        gte(bizDate(garageCustoms.createdAt), ex.startDate),
+        lte(bizDate(garageCustoms.createdAt), ex.endDate),
       );
-      const gRepDay = sql<string>`DATE_FORMAT(${garageRepairs.createdAt}, '%Y-%m-%d')`;
-      const gCustDay = sql<string>`DATE_FORMAT(${garageCustoms.createdAt}, '%Y-%m-%d')`;
+      const gRepDay = bizDayStr(garageRepairs.createdAt);
+      const gCustDay = bizDayStr(garageCustoms.createdAt);
       const [repByUser, custByUser, custTot, empUserRows, repDay, custDay] = await Promise.all([
         db
           .select({
@@ -629,7 +597,7 @@ meExercicesRouter.get(
       const rows = await db
         .select({ employeeId: companyRuns.employeeId, comm: sql<string>`COALESCE(SUM(${companyRuns.commission}),0)`, total: sql<string>`COALESCE(SUM(${companyRuns.total}),0)` })
         .from(companyRuns)
-        .where(and(eq(companyRuns.companyId, companyId), gte(sql`DATE(${companyRuns.createdAt})`, ex.startDate), lte(sql`DATE(${companyRuns.createdAt})`, ex.endDate)))
+        .where(and(eq(companyRuns.companyId, companyId), gte(bizDate(companyRuns.createdAt), ex.startDate), lte(bizDate(companyRuns.createdAt), ex.endDate)))
         .groupBy(companyRuns.employeeId);
       for (const r of rows) {
         if (r.employeeId != null) runsCommByEmp.set(r.employeeId, Number(r.comm));
@@ -654,12 +622,12 @@ meExercicesRouter.get(
       const empByUser = new Map<number, number>();
       for (const e of empRows) if (e.userId != null) empByUser.set(e.userId, e.id);
       const [txCit, txCon, txVip, pawnSell, chasseSell, concessionSell] = await Promise.all([
-        db.select({ userId: taxiCitoyens.driverUserId, total: sql<string>`COALESCE(SUM(${taxiCitoyens.total}),0)` }).from(taxiCitoyens).where(and(eq(taxiCitoyens.companyId, companyId), gte(sql`DATE(${taxiCitoyens.createdAt})`, ex.startDate), lte(sql`DATE(${taxiCitoyens.createdAt})`, ex.endDate))).groupBy(taxiCitoyens.driverUserId),
-        db.select({ userId: taxiConcitoyens.driverUserId, total: sql<string>`COALESCE(SUM(${taxiConcitoyens.total}),0)` }).from(taxiConcitoyens).where(and(eq(taxiConcitoyens.companyId, companyId), gte(sql`DATE(${taxiConcitoyens.createdAt})`, ex.startDate), lte(sql`DATE(${taxiConcitoyens.createdAt})`, ex.endDate))).groupBy(taxiConcitoyens.driverUserId),
-        db.select({ userId: taxiVip.driverUserId, total: sql<string>`COALESCE(SUM(${taxiVip.total}),0)` }).from(taxiVip).where(and(eq(taxiVip.companyId, companyId), gte(sql`DATE(${taxiVip.createdAt})`, ex.startDate), lte(sql`DATE(${taxiVip.createdAt})`, ex.endDate))).groupBy(taxiVip.driverUserId),
-        db.select({ userId: pawnshopTransactions.createdByUserId, total: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.type, 'sell'), gte(sql`DATE(${pawnshopTransactions.createdAt})`, ex.startDate), lte(sql`DATE(${pawnshopTransactions.createdAt})`, ex.endDate))).groupBy(pawnshopTransactions.createdByUserId),
-        db.select({ userId: chasseTransactions.createdByUserId, total: sql<string>`COALESCE(SUM(${chasseTransactions.total}),0)` }).from(chasseTransactions).where(and(eq(chasseTransactions.companyId, companyId), eq(chasseTransactions.type, 'sell'), gte(sql`DATE(${chasseTransactions.createdAt})`, ex.startDate), lte(sql`DATE(${chasseTransactions.createdAt})`, ex.endDate))).groupBy(chasseTransactions.createdByUserId),
-        db.select({ userId: concessionSales.createdByUserId, comm: sql<string>`COALESCE(SUM(${concessionSales.commission}),0)`, total: sql<string>`COALESCE(SUM(${concessionSales.salePrice}),0)` }).from(concessionSales).where(and(eq(concessionSales.companyId, companyId), gte(sql`DATE(${concessionSales.createdAt})`, ex.startDate), lte(sql`DATE(${concessionSales.createdAt})`, ex.endDate))).groupBy(concessionSales.createdByUserId),
+        db.select({ userId: taxiCitoyens.driverUserId, total: sql<string>`COALESCE(SUM(${taxiCitoyens.total}),0)` }).from(taxiCitoyens).where(and(eq(taxiCitoyens.companyId, companyId), gte(bizDate(taxiCitoyens.createdAt), ex.startDate), lte(bizDate(taxiCitoyens.createdAt), ex.endDate))).groupBy(taxiCitoyens.driverUserId),
+        db.select({ userId: taxiConcitoyens.driverUserId, total: sql<string>`COALESCE(SUM(${taxiConcitoyens.total}),0)` }).from(taxiConcitoyens).where(and(eq(taxiConcitoyens.companyId, companyId), gte(bizDate(taxiConcitoyens.createdAt), ex.startDate), lte(bizDate(taxiConcitoyens.createdAt), ex.endDate))).groupBy(taxiConcitoyens.driverUserId),
+        db.select({ userId: taxiVip.driverUserId, total: sql<string>`COALESCE(SUM(${taxiVip.total}),0)` }).from(taxiVip).where(and(eq(taxiVip.companyId, companyId), gte(bizDate(taxiVip.createdAt), ex.startDate), lte(bizDate(taxiVip.createdAt), ex.endDate))).groupBy(taxiVip.driverUserId),
+        db.select({ userId: pawnshopTransactions.createdByUserId, total: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.type, 'sell'), gte(bizDate(pawnshopTransactions.createdAt), ex.startDate), lte(bizDate(pawnshopTransactions.createdAt), ex.endDate))).groupBy(pawnshopTransactions.createdByUserId),
+        db.select({ userId: chasseTransactions.createdByUserId, total: sql<string>`COALESCE(SUM(${chasseTransactions.total}),0)` }).from(chasseTransactions).where(and(eq(chasseTransactions.companyId, companyId), eq(chasseTransactions.type, 'sell'), gte(bizDate(chasseTransactions.createdAt), ex.startDate), lte(bizDate(chasseTransactions.createdAt), ex.endDate))).groupBy(chasseTransactions.createdByUserId),
+        db.select({ userId: concessionSales.createdByUserId, comm: sql<string>`COALESCE(SUM(${concessionSales.commission}),0)`, total: sql<string>`COALESCE(SUM(${concessionSales.salePrice}),0)` }).from(concessionSales).where(and(eq(concessionSales.companyId, companyId), gte(bizDate(concessionSales.createdAt), ex.startDate), lte(bizDate(concessionSales.createdAt), ex.endDate))).groupBy(concessionSales.createdByUserId),
       ]);
       const addRev = (map: Map<number, number>, userId: number | null, total: number) => {
         if (userId == null) return;

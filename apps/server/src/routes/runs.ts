@@ -8,6 +8,7 @@ import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, canManageCompany, type PermAction } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
+import { bizDate, bizWeek } from '../services/bizTime';
 
 function parseId(v: string | undefined): number | null {
   const n = Number(v);
@@ -50,17 +51,8 @@ meRunsRouter.get(
     const config = await runsConfig(companyId);
 
     const offset = Number.isFinite(Number(req.query.offset)) ? Math.min(0, Math.trunc(Number(req.query.offset))) : 0;
-    const now = new Date();
-    now.setUTCDate(now.getUTCDate() + offset * 7);
-    const dow = now.getUTCDay();
-    const monday = new Date(now);
-    monday.setUTCDate(now.getUTCDate() - (dow === 0 ? 6 : dow - 1));
-    const sunday = new Date(monday);
-    sunday.setUTCDate(monday.getUTCDate() + 6);
-    const weekStart = monday.toISOString().slice(0, 10);
-    const weekEnd = sunday.toISOString().slice(0, 10);
-    const weekLabel = `Semaine du ${monday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })} au ${sunday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}`;
-    const inWeek = and(gte(sql`DATE(${companyRuns.createdAt})`, weekStart), lte(sql`DATE(${companyRuns.createdAt})`, weekEnd));
+    const { monday: weekStart, sunday: weekEnd, label: weekLabel } = bizWeek(new Date(), offset);
+    const inWeek = and(gte(bizDate(companyRuns.createdAt), weekStart), lte(bizDate(companyRuns.createdAt), weekEnd));
 
     const employees = await db
       .select({ id: companyEmployees.id, name: companyEmployees.name })

@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNotNull, lte, ne, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, lte, ne, sql, type AnyColumn, type SQL } from 'drizzle-orm';
 import { moduleConfigBool, moduleConfigNumber } from '@rp-compta/shared';
 import { db } from '../db';
 import {
@@ -6,28 +6,9 @@ import {
   sales, garageRepairs, garageCustoms, taxiCitoyens, taxiConcitoyens, taxiVip,
   pawnshopTransactions, chasseTransactions, companyRuns, concessionSales,
 } from '../db/schema';
+import { bizDate, bizPeakMinutes } from './bizTime';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
-
-function entryToMs(s: string): number {
-  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):?(\d{2})?/.exec(s);
-  if (!m) return NaN;
-  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6] ?? 0));
-}
-function peakMinutes(inStr: string, outStr: string): number {
-  const start = entryToMs(inStr), end = entryToMs(outStr);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
-  const DAY = 86_400_000, HOUR = 3_600_000;
-  const d = new Date(start);
-  let day = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-  let total = 0;
-  for (; day < end; day += DAY) {
-    const s = Math.max(start, day + 21 * HOUR);
-    const e = Math.min(end, day + DAY);
-    if (e > s) total += (e - s) / 60_000;
-  }
-  return total;
-}
 
 export interface WeeklyCharges {
   caNet: number;
@@ -41,7 +22,7 @@ export interface WeeklyCharges {
 // semaine SANS exercice : hoursCap = 0, pas de plafond salaire, pas d'ajustements
 // (prime/retenue). À GARDER EN PHASE avec la paie de exercices.ts.
 export async function computeWeeklyCharges(companyId: number, start: string, end: string): Promise<WeeklyCharges> {
-  const inDay = (col: unknown) => and(gte(sql`DATE(${col})`, start), lte(sql`DATE(${col})`, end));
+  const inDay = (col: AnyColumn | SQL) => and(gte(bizDate(col), start), lte(bizDate(col), end));
 
   const modConfigRows = await db
     .select({ moduleKey: companyModules.moduleKey, config: companyModules.config })
@@ -143,7 +124,7 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
   const peakMinByEmp = new Map<number, number>();
   for (const e of rawPeak) {
     if (!e.clockOut) continue;
-    const pm = peakMinutes(e.clockIn, e.clockOut);
+    const pm = bizPeakMinutes(e.clockIn, e.clockOut);
     if (pm > 0) peakMinByEmp.set(e.employeeId, (peakMinByEmp.get(e.employeeId) ?? 0) + pm);
   }
 

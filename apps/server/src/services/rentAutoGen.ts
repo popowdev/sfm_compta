@@ -5,13 +5,11 @@ import { env } from '../env';
 import { logger } from '../logger';
 import { emitInvalidate } from '../realtime/socket';
 import { sendDiscordDM, buildRentReminderEmbed, buildRentOverdueEmbed } from './discordBot';
+import { bizWeek } from './bizTime';
 
 // Lundi (00:00) de la semaine courante, au format YYYY-MM-DD.
 function currentWeekMonday(): string {
-  const d = new Date();
-  const day = (d.getDay() + 6) % 7;
-  d.setDate(d.getDate() - day);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return bizWeek().monday;
 }
 
 // Génère le loyer de la semaine courante pour toutes les locations en auto-génération.

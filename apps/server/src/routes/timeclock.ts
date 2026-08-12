@@ -8,6 +8,7 @@ import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
+import { bizDate, bizWeek, bizToday } from '../services/bizTime';
 
 type Entry = typeof timeEntries.$inferSelect;
 
@@ -23,11 +24,8 @@ function nowStr(): string {
 }
 
 function weekBounds(): { from: string; to: string } {
-  const now = new Date();
-  const dow = (now.getUTCDay() + 6) % 7;
-  const mon = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dow));
-  const sun = new Date(mon.getTime() + 6 * 86_400_000);
-  return { from: mon.toISOString().slice(0, 10), to: sun.toISOString().slice(0, 10) };
+  const { monday, sunday } = bizWeek();
+  return { from: monday, to: sunday };
 }
 
 async function weeklyHoursCapFor(companyId: number): Promise<number> {
@@ -53,8 +51,8 @@ async function weekWorkedHours(companyId: number, employeeId: number): Promise<n
         eq(timeEntries.companyId, companyId),
         eq(timeEntries.employeeId, employeeId),
         isNotNull(timeEntries.clockOut),
-        gte(sql`DATE(${timeEntries.clockIn})`, from),
-        lte(sql`DATE(${timeEntries.clockIn})`, to),
+        gte(bizDate(timeEntries.clockIn), from),
+        lte(bizDate(timeEntries.clockIn), to),
       ),
     );
   return Number(rows[0]?.mins ?? 0) / 60;
@@ -267,7 +265,7 @@ meTimeclockRouter.get(
       let totalSalary = 0;
       const list = raw.map((t) => {
         const c = computeEntry(t, rate, now);
-        days.add(t.clockIn.slice(0, 10));
+        days.add(bizToday(new Date(t.clockIn.replace(' ', 'T') + 'Z')));
         totalMin += c.workedMinutes;
         totalSalary += c.salary;
         return c;

@@ -1,5 +1,5 @@
 import { Router, type Request } from 'express';
-import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNotNull, lte, sql, type AnyColumn, type SQL } from 'drizzle-orm';
 import { moduleConfigBool, moduleConfigNumber } from '@rp-compta/shared';
 import { db } from '../db';
 import {
@@ -9,31 +9,12 @@ import {
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess } from '../services/access';
+import { bizDate, bizWeek, bizPeakMinutes } from '../services/bizTime';
 
 function parseId(v: string | undefined): number | null {
   const n = Number(v);
   return Number.isInteger(n) && n > 0 ? n : null;
 }
-function entryToMs(s: string): number {
-  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):?(\d{2})?/.exec(s);
-  if (!m) return NaN;
-  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6] ?? 0));
-}
-function peakMinutes(inStr: string, outStr: string): number {
-  const start = entryToMs(inStr), end = entryToMs(outStr);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
-  const DAY = 86_400_000, HOUR = 3_600_000;
-  const d = new Date(start);
-  let day = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-  let total = 0;
-  for (; day < end; day += DAY) {
-    const s = Math.max(start, day + 21 * HOUR);
-    const e = Math.min(end, day + DAY);
-    if (e > s) total += (e - s) / 60_000;
-  }
-  return total;
-}
-
 export const meMyPayRouter = Router({ mergeParams: true });
 meMyPayRouter.use(requireAuth);
 
@@ -76,16 +57,7 @@ meMyPayRouter.get(
     const baseSalary = g ? Number(g.baseSalary) : 0;
 
     const weekWindow = (offset: number) => {
-      const now = new Date();
-      now.setUTCDate(now.getUTCDate() + offset * 7);
-      const dow = now.getUTCDay();
-      const monday = new Date(now);
-      monday.setUTCDate(now.getUTCDate() - (dow === 0 ? 6 : dow - 1));
-      const sunday = new Date(monday);
-      sunday.setUTCDate(monday.getUTCDate() + 6);
-      const start = monday.toISOString().slice(0, 10);
-      const end = sunday.toISOString().slice(0, 10);
-      const label = `Semaine du ${monday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })} au ${sunday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}`;
+      const { monday: start, sunday: end, label } = bizWeek(new Date(), offset);
       return { start, end, label };
     };
     const windows = Array.from({ length: 8 }, (_, i) => weekWindow(-i));
@@ -103,7 +75,7 @@ meMyPayRouter.get(
       const w = windows[wi]!;
       const ex = exByRange.get(`${w.start}|${w.end}`) ?? null;
       const start = w.start, end = w.end;
-      const inRange = (col: unknown) => and(gte(sql`DATE(${col})`, start), lte(sql`DATE(${col})`, end));
+      const inRange = (col: AnyColumn | SQL) => and(gte(bizDate(col), start), lte(bizDate(col), end));
       const [teRows, caisseAgg, garComm, garRev, garCustComm, garCustRev, taxiC, taxiCo, taxiV, pawnAgg, chasseAgg, runsAgg, concessionAgg] = await Promise.all([
         db.select({ clockIn: timeEntries.clockIn, clockOut: timeEntries.clockOut, workedMin: sql<string>`GREATEST(0, TIMESTAMPDIFF(MINUTE, ${timeEntries.clockIn}, ${timeEntries.clockOut}) - ${timeEntries.pauseMinutes})` }).from(timeEntries).where(and(eq(timeEntries.companyId, companyId), eq(timeEntries.employeeId, emp.id), isNotNull(timeEntries.clockOut), inRange(timeEntries.clockIn))),
         db.select({ ca: sql<string>`COALESCE(SUM(${sales.total}),0)`, cnt: sql<number>`COUNT(*)` }).from(sales).where(and(eq(sales.companyId, companyId), eq(sales.employeeId, emp.id), inRange(sales.createdAt))),
@@ -139,7 +111,7 @@ meMyPayRouter.get(
       const runsCommission = Math.round(Number(runsAgg[0]?.c ?? 0));
       const concessionCommission = Math.round(Number(concessionAgg[0]?.c ?? 0));
       let peakMin = 0;
-      if (peakEnabled && peakMultiplier > 1) for (const t of teRows) if (t.clockOut) peakMin += peakMinutes(t.clockIn, t.clockOut);
+      if (peakEnabled && peakMultiplier > 1) for (const t of teRows) if (t.clockOut) peakMin += bizPeakMinutes(t.clockIn, t.clockOut);
       const peakHours = peakEnabled ? Math.min(peakMin / 60, cappedHours) : 0;
       const peakBonus = peakHours > 0 && peakMultiplier > 1 ? Math.round(peakHours * rate * (peakMultiplier - 1)) : 0;
       const o = override[0];

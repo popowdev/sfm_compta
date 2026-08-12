@@ -19,6 +19,7 @@ import { computeTaxes } from '../services/declarations';
 import { computeWeeklyCharges } from '../services/weeklyCharges';
 import { emitInvalidate } from '../realtime/socket';
 import { recordAudit } from '../services/audit';
+import { bizWeek } from '../services/bizTime';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -85,16 +86,7 @@ meDeclarationsRouter.get(
     if (!acc.canView) return res.status(403).json({ error: 'forbidden' });
 
     const offset = Number.isFinite(Number(req.query.offset)) ? Number(req.query.offset) : 0;
-    const now = new Date();
-    now.setUTCDate(now.getUTCDate() + offset * 7);
-    const day = now.getUTCDay();
-    const monday = new Date(now);
-    monday.setUTCDate(now.getUTCDate() - (day === 0 ? 6 : day - 1));
-    const sunday = new Date(monday);
-    sunday.setUTCDate(monday.getUTCDate() + 6);
-    const start = monday.toISOString().slice(0, 10);
-    const end = sunday.toISOString().slice(0, 10);
-    const weekLabel = `Semaine du ${monday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })} au ${sunday.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}`;
+    const { monday: start, sunday: end, label: weekLabel } = bizWeek(new Date(), offset);
 
     const { caNet, expenses, payroll, charges, benefit } = await computeWeeklyCharges(companyId, start, end);
     res.json({ weekLabel, caNet, expenses, payroll, charges, benefit });
