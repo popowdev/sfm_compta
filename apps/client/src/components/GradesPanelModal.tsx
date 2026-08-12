@@ -73,7 +73,7 @@ export function GradesPanelModal({
     onError: () => toast('Échec de la création du grade.', 'error'),
   });
   const patch = useMutation({
-    mutationFn: (v: { rid: number; body: { name?: string; canManage?: boolean } }) => patchMyGrade(companyId, v.rid, v.body),
+    mutationFn: (v: { rid: number; body: { name?: string; nickname?: string; canManage?: boolean } }) => patchMyGrade(companyId, v.rid, v.body),
     onSuccess: refresh,
     onError: () => toast('Au moins un grade doit rester « Accès total ».', 'error'),
   });
@@ -151,7 +151,7 @@ export function GradesPanelModal({
               {grades.map((g) => (
                 <button key={g.id} type="button" onClick={() => setSelected(g.id)}
                   className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${g.id === selected ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
-                  {g.name}{g.canManage && <ShieldCheck className="h-3.5 w-3.5" />}
+                  {g.nickname ? `${g.nickname} (${g.name})` : g.name}{g.canManage && <ShieldCheck className="h-3.5 w-3.5" />}
                 </button>
               ))}
               {!onlyModule && (
@@ -179,6 +179,18 @@ export function GradesPanelModal({
                           <Trash2 className="h-3.5 w-3.5" /> Supprimer
                         </Button>
                       )}
+                    </div>
+                  )}
+
+                  {!onlyModule && (
+                    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border p-3">
+                      <div className="min-w-0 text-sm">
+                        <span className="font-semibold">Surnom du grade</span>
+                        <span className="block text-xs text-muted-foreground">Renomme l'affichage sur le site. Le nom du jeu reste « {grade.name} ».</span>
+                      </div>
+                      <input key={grade.id} defaultValue={grade.nickname ?? ''} placeholder="ex. Patron"
+                        onBlur={(e) => { const v = e.target.value.trim(); if (v !== (grade.nickname ?? '')) patch.mutate({ rid: grade.id, body: { nickname: v } }); }}
+                        className="ml-auto h-8 w-44 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring" />
                     </div>
                   )}
 

@@ -79,6 +79,7 @@ gradesRouter.post(
 
 const patchSchema = z.object({
   name: z.string().trim().min(1).max(60).optional(),
+  nickname: z.string().trim().max(60).optional(),
   rank: z.number().int().optional(),
   canManage: z.boolean().optional(),
 });

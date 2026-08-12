@@ -116,6 +116,7 @@ export async function getGradesWithPermissions(companyId: number) {
       return {
         id: g.id,
         name: g.name,
+        nickname: g.nickname,
         rank: g.rank,
         isDefault: g.isDefault,
         canManage: g.canManage,

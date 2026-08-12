@@ -71,7 +71,7 @@ async function createRole(companyId: number, name: string, grade: number, canMan
 async function ensureRolesForGrades(
   companyId: number,
   grades: { grade: number; label?: string }[],
-  partial = false,
+  _partial = false,
 ): Promise<void> {
   if (!grades.length) return;
   const existing = await db
@@ -79,11 +79,9 @@ async function ensureRolesForGrades(
     .from(companyRoles)
     .where(eq(companyRoles.companyId, companyId));
   const have = new Set(existing.map((r) => r.fivemGrade).filter((g): g is number => g !== null));
-  const top = grades.reduce((m, g) => Math.max(m, g.grade), 0);
   for (const g of grades) {
     if (have.has(g.grade)) continue;
-    const manager = isManagerGrade(g.label) || (!partial && g.grade === top);
-    await createRole(companyId, g.label ?? `Grade ${g.grade}`, g.grade, manager);
+    await createRole(companyId, g.label ?? `Grade ${g.grade}`, g.grade, false);
   }
 }
 

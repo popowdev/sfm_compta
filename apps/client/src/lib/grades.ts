@@ -9,6 +9,7 @@ export interface GradePermission {
 export interface Grade {
   id: number;
   name: string;
+  nickname: string | null;
   rank: number;
   isDefault: boolean;
   permissions: Record<string, GradePermission>;
@@ -56,6 +57,7 @@ export interface GradePermFine {
 export interface GradeFine {
   id: number;
   name: string;
+  nickname: string | null;
   rank: number;
   isDefault: boolean;
   canManage: boolean;
@@ -80,7 +82,7 @@ export const createMyGrade = (companyId: number, name: string) =>
 export const patchMyGrade = (
   companyId: number,
   rid: number,
-  body: { name?: string; canManage?: boolean },
+  body: { name?: string; nickname?: string; canManage?: boolean },
 ) =>
   apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/grades/${rid}`, {
     method: 'PATCH',

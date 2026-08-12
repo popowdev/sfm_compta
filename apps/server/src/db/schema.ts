@@ -143,6 +143,7 @@ export const companyRoles = mysqlTable('company_roles', {
     .notNull()
     .references(() => companies.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 60 }).notNull(),
+  nickname: varchar('nickname', { length: 60 }),
   rank: int('rank').notNull().default(0),
   isDefault: boolean('is_default').notNull().default(false),
   canManage: boolean('can_manage').notNull().default(false),

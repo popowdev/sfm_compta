@@ -103,7 +103,7 @@ adminUsersRouter.get(
         : Promise.resolve([]),
       ids.length
         ? db
-            .select({ userId: memberships.userId, companyName: companies.name, grade: companyRoles.name })
+            .select({ userId: memberships.userId, companyName: companies.name, grade: sql<string | null>`CASE WHEN ${companyRoles.nickname} IS NOT NULL AND ${companyRoles.nickname} <> '' THEN CONCAT(${companyRoles.nickname}, ' (', ${companyRoles.name}, ')') ELSE ${companyRoles.name} END` })
             .from(memberships)
             .innerJoin(companies, eq(memberships.companyId, companies.id))
             .leftJoin(companyRoles, eq(memberships.companyRoleId, companyRoles.id))
