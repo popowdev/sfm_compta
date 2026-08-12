@@ -27,15 +27,21 @@ export interface ConcessionShowroom {
   enabled: boolean;
   token: string | null;
 }
+export interface PastClient {
+  clientId: number | null;
+  name: string;
+}
 export interface ConcessionOverview {
   canWrite: boolean;
   vehicles: ConcessionVehicle[];
   summary: ConcessionSummary;
   showroom: ConcessionShowroom;
+  pastClients: PastClient[];
 }
 export interface ConcessionSale {
   id: number;
   vehicleId: number | null;
+  clientId: number | null;
   vehicleName: string;
   clientName: string | null;
   plate: string | null;
@@ -73,6 +79,7 @@ export const deleteVehicle = (c: number, id: number) => del(`${base(c)}/vehicles
 
 export interface SaleInput {
   vehicleId?: number | null;
+  clientId?: number | null;
   vehicleName: string;
   clientName?: string;
   plate?: string;

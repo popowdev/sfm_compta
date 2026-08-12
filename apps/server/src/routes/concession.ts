@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { moduleConfigBool, moduleConfigNumber } from '@rp-compta/shared';
 import { db } from '../db';
-import { concessionVehicles, concessionSales, companies, companyModules, companyEmployees, users } from '../db/schema';
+import { concessionVehicles, concessionSales, companies, companyModules, companyEmployees, companyClients, users } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
@@ -114,6 +114,15 @@ meConcessionRouter.get(
     const cost = Math.round(Number(salesAgg[0]?.cost ?? 0));
     const commissionsPaid = Math.round(Number(salesAgg[0]?.commission ?? 0));
 
+    const pastClientRows = await db
+      .select({ clientId: sql<number | null>`MAX(${concessionSales.clientId})`, name: concessionSales.clientName })
+      .from(concessionSales)
+      .where(and(eq(concessionSales.companyId, companyId), sql`${concessionSales.clientName} IS NOT NULL AND ${concessionSales.clientName} <> ''`))
+      .groupBy(concessionSales.clientName)
+      .orderBy(sql`MAX(${concessionSales.id}) DESC`)
+      .limit(500);
+    const pastClients = pastClientRows.map((r) => ({ clientId: r.clientId ?? null, name: r.name ?? '' })).filter((c) => c.name);
+
     const cfg = await readModuleConfig(companyId);
     const showroomEnabled = moduleConfigBool(cfg, 'concession', 'publicShowroom');
     const companyRow = await db.select({ token: companies.showroomToken }).from(companies).where(eq(companies.id, companyId)).limit(1);
@@ -136,6 +145,7 @@ meConcessionRouter.get(
         commissionsPaid,
       },
       showroom: { enabled: showroomEnabled, token: showroomEnabled ? token : null },
+      pastClients,
     });
   }),
 );
@@ -243,6 +253,7 @@ meConcessionRouter.get(
       .select({
         id: concessionSales.id,
         vehicleId: concessionSales.vehicleId,
+        clientId: concessionSales.clientId,
         vehicleName: concessionSales.vehicleName,
         clientName: concessionSales.clientName,
         plate: concessionSales.plate,
@@ -273,6 +284,7 @@ meConcessionRouter.get(
 
 const saleCreate = z.object({
   vehicleId: z.coerce.number().int().positive().nullish(),
+  clientId: z.coerce.number().int().positive().nullish(),
   vehicleName: z.string().trim().min(1).max(150),
   clientName: z.string().trim().max(120).optional(),
   plate: z.string().trim().max(20).optional(),
@@ -297,6 +309,13 @@ meConcessionRouter.post(
       if (v[0]) vehicleId = v[0].id;
     }
 
+    let clientId: number | null = null;
+    let clientName = p.data.clientName || null;
+    if (p.data.clientId) {
+      const c = await db.select({ id: companyClients.id, name: companyClients.name }).from(companyClients).where(and(eq(companyClients.id, p.data.clientId), eq(companyClients.companyId, companyId))).limit(1);
+      if (c[0]) { clientId = c[0].id; clientName = c[0].name; }
+    }
+
     const cfg = await readModuleConfig(companyId);
     const salePrice = Math.round(p.data.salePrice);
     const purchasePrice = Math.round(p.data.purchasePrice);
@@ -306,8 +325,9 @@ meConcessionRouter.post(
     await db.insert(concessionSales).values({
       companyId,
       vehicleId,
+      clientId,
       vehicleName: p.data.vehicleName,
-      clientName: p.data.clientName || null,
+      clientName,
       plate: p.data.plate ? p.data.plate.toUpperCase() : null,
       purchasePrice: String(purchasePrice),
       salePrice: String(salePrice),

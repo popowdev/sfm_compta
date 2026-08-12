@@ -1,9 +1,9 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { LOYALTY_TIERS, LOYALTY_TIER_KEYS, moduleConfigBool } from '@rp-compta/shared';
 import { db } from '../db';
-import { companyClients, clientLoyaltyTiers, companyModules } from '../db/schema';
+import { companyClients, clientLoyaltyTiers, companyModules, concessionSales, users } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import {
@@ -99,6 +99,34 @@ meClientsRouter.get(
       .where(eq(companyClients.companyId, companyId))
       .orderBy(asc(companyClients.name));
     res.json({ canWrite: g.canWrite, clients: rows.map(serialize) });
+  }),
+);
+
+meClientsRouter.get(
+  '/:id/purchases',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const id = parseId(req.params.id);
+    if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    const rows = await db
+      .select({
+        id: concessionSales.id,
+        vehicleName: concessionSales.vehicleName,
+        plate: concessionSales.plate,
+        salePrice: concessionSales.salePrice,
+        sellerName: users.displayName,
+        createdAt: concessionSales.createdAt,
+      })
+      .from(concessionSales)
+      .leftJoin(users, eq(concessionSales.createdByUserId, users.id))
+      .where(and(eq(concessionSales.companyId, companyId), eq(concessionSales.clientId, id)))
+      .orderBy(desc(concessionSales.id))
+      .limit(100);
+    res.json({
+      purchases: rows.map((r) => ({ ...r, salePrice: Math.round(Number(r.salePrice)) })),
+    });
   }),
 );
 

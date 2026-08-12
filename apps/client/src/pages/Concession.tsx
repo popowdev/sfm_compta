@@ -12,10 +12,41 @@ import {
   getConcessionOverview, getConcessionSales,
   addVehicle, updateVehicle, deleteVehicle,
   addSale, deleteSale, regenerateShowroomToken,
-  type ConcessionVehicle, type ConcessionSale, type ConcessionShowroom, type VehicleType,
+  type ConcessionVehicle, type ConcessionSale, type ConcessionShowroom, type VehicleType, type PastClient,
 } from '@/lib/concession';
+import { getClients } from '@/lib/clients';
 
 const inputCls = 'h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
+
+function Autocomplete<T>({ value, onChange, onPick, placeholder, options, getLabel, getKey, renderRight, autoFocus, emptyHint }: {
+  value: string; onChange: (v: string) => void; onPick: (o: T) => void;
+  placeholder?: string; options: T[]; getLabel: (o: T) => string; getKey: (o: T) => string | number;
+  renderRight?: (o: T) => React.ReactNode; autoFocus?: boolean; emptyHint?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const q = value.trim().toLowerCase();
+  const matches = q ? options.filter((o) => getLabel(o).toLowerCase().includes(q)).slice(0, 8) : [];
+  return (
+    <div className="relative">
+      <input className={inputCls} value={value} autoFocus={autoFocus} placeholder={placeholder}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)} onBlur={() => window.setTimeout(() => setOpen(false), 120)} />
+      {open && q.length > 0 && (
+        <div className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-popover p-1 shadow-lg">
+          {matches.length === 0 ? (
+            <div className="px-2 py-2 text-xs text-muted-foreground">{emptyHint ?? 'Aucun résultat — saisie libre conservée.'}</div>
+          ) : matches.map((o) => (
+            <button type="button" key={getKey(o)} onMouseDown={(e) => { e.preventDefault(); onPick(o); setOpen(false); }}
+              className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent">
+              <span className="truncate">{getLabel(o)}</span>
+              {renderRight && <span className="shrink-0 text-xs text-muted-foreground">{renderRight(o)}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 const money = (n: number) => `${fmtInt(n)} $`;
 const fmtDay = (s: string) => new Date(String(s).replace(' ', 'T')).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 
@@ -29,7 +60,7 @@ export default function Concession() {
   if (isLoading || q.isLoading) return <div className="space-y-4"><Skeleton className="h-24 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
   if (!q.data) return <EmptyState icon={CarFront} title="Concession auto" hint="Module indisponible." />;
 
-  const { vehicles, summary, canWrite, showroom } = q.data;
+  const { vehicles, summary, canWrite, showroom, pastClients } = q.data;
   const s = summary;
 
   const TabBtn = ({ k, label, icon: Icon }: { k: Tab; label: string; icon: typeof CarFront }) => (
@@ -56,7 +87,7 @@ export default function Concession() {
       </div>
 
       {tab === 'catalogue' && <CatalogueTab companyId={companyId} vehicles={vehicles} canWrite={canWrite} />}
-      {tab === 'ventes' && <VentesTab companyId={companyId} vehicles={vehicles} canWrite={canWrite} />}
+      {tab === 'ventes' && <VentesTab companyId={companyId} vehicles={vehicles} canWrite={canWrite} pastClients={pastClients} />}
     </div>
   );
 }
@@ -265,7 +296,7 @@ function VehicleModal({ companyId, edit, categories, onClose, onSaved }: { compa
   );
 }
 
-function VentesTab({ companyId, vehicles, canWrite }: { companyId: number; vehicles: ConcessionVehicle[]; canWrite: boolean }) {
+function VentesTab({ companyId, vehicles, canWrite, pastClients }: { companyId: number; vehicles: ConcessionVehicle[]; canWrite: boolean; pastClients: PastClient[] }) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -322,27 +353,43 @@ function VentesTab({ companyId, vehicles, canWrite }: { companyId: number; vehic
           </table>
         </div>
       )}
-      {modal && <SaleModal companyId={companyId} vehicles={vehicles} onClose={() => setModal(false)} onSaved={inv} />}
+      {modal && <SaleModal companyId={companyId} vehicles={vehicles} pastClients={pastClients} onClose={() => setModal(false)} onSaved={inv} />}
     </div>
   );
 }
 
-function SaleModal({ companyId, vehicles, onClose, onSaved }: { companyId: number; vehicles: ConcessionVehicle[]; onClose: () => void; onSaved: () => void }) {
+interface ClientOption { id: number | null; name: string; hint: string }
+
+function SaleModal({ companyId, vehicles, pastClients, onClose, onSaved }: { companyId: number; vehicles: ConcessionVehicle[]; pastClients: PastClient[]; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
-  const available = vehicles.filter((v) => v.available);
-  const [vehicleId, setVehicleId] = useState<number | ''>('');
+  const available = useMemo(() => vehicles.filter((v) => v.available), [vehicles]);
+  const clientsQuery = useQuery({ queryKey: ['clients', companyId], queryFn: () => getClients(companyId), enabled: !!companyId, retry: false });
+  const clientOptions = useMemo<ClientOption[]>(() => {
+    const seen = new Set<string>();
+    const out: ClientOption[] = [];
+    for (const c of clientsQuery.data?.clients ?? []) {
+      const k = c.name.trim().toLowerCase();
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      out.push({ id: c.id, name: c.name, hint: c.phone || 'fiche client' });
+    }
+    for (const p of pastClients) {
+      const k = p.name.trim().toLowerCase();
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      out.push({ id: p.clientId, name: p.name, hint: 'client précédent' });
+    }
+    return out;
+  }, [clientsQuery.data, pastClients]);
+
+  const [vehicleId, setVehicleId] = useState<number | null>(null);
   const [vehicleName, setVehicleName] = useState('');
   const [buy, setBuy] = useState('');
   const [sell, setSell] = useState('');
-  const [client, setClient] = useState('');
+  const [clientId, setClientId] = useState<number | null>(null);
+  const [clientName, setClientName] = useState('');
   const [plate, setPlate] = useState('');
   const [note, setNote] = useState('');
-
-  const pick = (id: number | '') => {
-    setVehicleId(id);
-    const v = vehicles.find((x) => x.id === id);
-    if (v) { setVehicleName(v.name); setBuy(String(v.purchasePrice)); setSell(String(v.salePrice)); }
-  };
 
   const buyN = Math.max(0, Math.round(Number(buy) || 0));
   const sellN = Math.max(0, Math.round(Number(sell) || 0));
@@ -351,9 +398,10 @@ function SaleModal({ companyId, vehicles, onClose, onSaved }: { companyId: numbe
 
   const save = useMutation({
     mutationFn: () => addSale(companyId, {
-      vehicleId: vehicleId === '' ? null : (vehicleId as number),
+      vehicleId,
+      clientId,
       vehicleName: vehicleName.trim(),
-      clientName: client.trim() || undefined,
+      clientName: clientName.trim() || undefined,
       plate: plate.trim() || undefined,
       purchasePrice: buyN,
       salePrice: sellN,
@@ -367,19 +415,28 @@ function SaleModal({ companyId, vehicles, onClose, onSaved }: { companyId: numbe
     <ModalShell title="Nouvelle vente de véhicule" onClose={onClose}>
       <form className="space-y-3 p-5" onSubmit={(e) => { e.preventDefault(); if (valid && !save.isPending) save.mutate(); }}>
         <label className="block text-sm">
-          <span className="mb-1 block text-xs text-muted-foreground">Véhicule du catalogue (optionnel)</span>
-          <select className={inputCls} value={vehicleId} onChange={(e) => pick(e.target.value ? Number(e.target.value) : '')} autoFocus>
-            <option value="">— Saisie libre —</option>
-            {available.map((v) => <option key={v.id} value={v.id}>{v.name} ({money(v.salePrice)})</option>)}
-          </select>
+          <span className="mb-1 block text-xs text-muted-foreground">Véhicule {vehicleId ? '· lié au catalogue' : ''}</span>
+          <Autocomplete<ConcessionVehicle>
+            value={vehicleName} placeholder="Tape pour rechercher un modèle…" autoFocus
+            options={available} getLabel={(v) => v.name} getKey={(v) => v.id} renderRight={(v) => money(v.salePrice)}
+            onChange={(v) => { setVehicleName(v); setVehicleId(null); }}
+            onPick={(v) => { setVehicleId(v.id); setVehicleName(v.name); setBuy(String(v.purchasePrice)); setSell(String(v.salePrice)); }}
+            emptyHint="Aucun modèle — le nom saisi sera utilisé tel quel." />
         </label>
-        <label className="block text-sm"><span className="mb-1 block text-xs text-muted-foreground">Nom du véhicule vendu</span><input className={inputCls} value={vehicleName} onChange={(e) => setVehicleName(e.target.value)} placeholder="Modèle" /></label>
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-sm"><span className="mb-1 block text-xs text-muted-foreground">Prix d'achat</span><input type="number" min="0" step="1" className={inputCls} value={buy} onChange={(e) => setBuy(e.target.value)} placeholder="0" /></label>
           <label className="block text-sm"><span className="mb-1 block text-xs text-muted-foreground">Prix de vente</span><input type="number" min="0" step="1" className={inputCls} value={sell} onChange={(e) => setSell(e.target.value)} placeholder="0" /></label>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <label className="block text-sm"><span className="mb-1 block text-xs text-muted-foreground">Client (optionnel)</span><input className={inputCls} value={client} onChange={(e) => setClient(e.target.value)} placeholder="Nom du client" /></label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs text-muted-foreground">Client {clientId ? '· fiche liée' : '(optionnel)'}</span>
+            <Autocomplete<ClientOption>
+              value={clientName} placeholder="Rechercher / taper un client…"
+              options={clientOptions} getLabel={(c) => c.name} getKey={(c) => c.id ?? `p:${c.name}`} renderRight={(c) => c.hint}
+              onChange={(v) => { setClientName(v); setClientId(null); }}
+              onPick={(c) => { setClientId(c.id); setClientName(c.name); }}
+              emptyHint="Nouveau client — le nom saisi sera enregistré." />
+          </label>
           <label className="block text-sm"><span className="mb-1 block text-xs text-muted-foreground">Plaque (optionnel)</span><input className={inputCls} value={plate} onChange={(e) => setPlate(e.target.value)} placeholder="ABC 123" /></label>
         </div>
         <label className="block text-sm"><span className="mb-1 block text-xs text-muted-foreground">Note (optionnel)</span><input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} /></label>

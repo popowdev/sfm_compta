@@ -212,7 +212,7 @@ export default function CompanySettings() {
                             <div className="truncate text-xs text-muted-foreground">{MODULE_DESC[m.key]}</div>
                           )}
                         </div>
-                        {on && !staffLocked && (MODULE_CONFIG[m.key]?.length ?? 0) > 0 && (
+                        {on && (MODULE_CONFIG[m.key]?.length ?? 0) > 0 && (
                           <button
                             type="button"
                             onClick={() => setConfigModule(m)}

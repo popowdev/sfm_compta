@@ -255,8 +255,6 @@ meRouter.put(
     if (!(await canManageCompany(req.user!.id, id))) return res.status(403).json({ error: 'forbidden' });
     const moduleKey = key as ModuleKey;
     if (await isModuleBlocked(moduleKey)) return res.status(409).json({ error: 'module_blocked' });
-    const staffOnlyCfg = MODULES.find((m) => m.key === moduleKey)?.staffOnly ?? false;
-    if (staffOnlyCfg && !(await isStaff(req.user!.id))) return res.status(403).json({ error: 'staff_only_module' });
     const fields = MODULE_CONFIG[moduleKey] ?? [];
     if (fields.length === 0) return res.status(400).json({ error: 'no_config' });
     const body = (req.body ?? {}) as Record<string, unknown>;

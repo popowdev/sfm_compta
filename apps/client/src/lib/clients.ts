@@ -28,6 +28,17 @@ export interface ClientInput {
   creditLimit?: number;
 }
 
+export interface ClientPurchase {
+  id: number;
+  vehicleName: string;
+  plate: string | null;
+  salePrice: number;
+  sellerName: string | null;
+  createdAt: string;
+}
+export const getClientPurchases = (companyId: number, clientId: number) =>
+  apiFetch<{ purchases: ClientPurchase[] }>(`/api/me/companies/${companyId}/clients/${clientId}/purchases`);
+
 export const getClients = (companyId: number) =>
   apiFetch<{ canWrite: boolean; clients: Client[] }>(`/api/me/companies/${companyId}/clients`);
 

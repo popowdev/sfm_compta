@@ -1398,6 +1398,7 @@ export const concessionSales = mysqlTable('concession_sales', {
   id: int('id').autoincrement().primaryKey(),
   companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
   vehicleId: int('vehicle_id').references(() => concessionVehicles.id, { onDelete: 'set null' }),
+  clientId: int('client_id').references(() => companyClients.id, { onDelete: 'set null' }),
   vehicleName: varchar('vehicle_name', { length: 150 }).notNull(),
   clientName: varchar('client_name', { length: 120 }),
   plate: varchar('plate', { length: 20 }),

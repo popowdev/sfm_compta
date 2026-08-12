@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, X, Phone, Mail, Search, Wallet, Users, Coins } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Phone, Mail, Search, Wallet, Users, Coins, CarFront } from 'lucide-react';
 import { LOYALTY_TIERS, moduleConfigBool, type LoyaltyTier } from '@rp-compta/shared';
 import { Button } from '@/components/ui/button';
 import { Kpi, KpiSkeleton } from '@/components/ui/kpi';
@@ -16,6 +16,7 @@ import {
   deleteClient,
   getLoyaltyTiers,
   adjustClientBalance,
+  getClientPurchases,
   TIER_CLS,
   type Client,
   type ClientInput,
@@ -58,6 +59,7 @@ export default function Clients() {
     tiersQ.data?.tiers.find((x) => x.tier === t)?.name ?? TIER_LABEL[t] ?? t;
 
   const [balanceClient, setBalanceClient] = useState<Client | null>(null);
+  const [purchasesClient, setPurchasesClient] = useState<Client | null>(null);
   const [delta, setDelta] = useState('');
   const adjust = useMutation({
     mutationFn: (v: { id: number; delta: number }) => adjustClientBalance(companyId, v.id, v.delta),
@@ -224,6 +226,14 @@ export default function Clients() {
               </div>
               {(canEdit || canDelete || (showCredit && canAdjustBalance)) && (
                 <div className="flex shrink-0 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPurchasesClient(c)}
+                    title="Véhicules achetés (concession)"
+                    className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  >
+                    <CarFront className="h-4 w-4" />
+                  </button>
                   {showCredit && canAdjustBalance && (
                     <button
                       type="button"
@@ -456,6 +466,52 @@ export default function Clients() {
           </div>
         </div>
       )}
+
+      {purchasesClient && (
+        <PurchasesModal companyId={companyId} client={purchasesClient} onClose={() => setPurchasesClient(null)} />
+      )}
+    </div>
+  );
+}
+
+function PurchasesModal({ companyId, client, onClose }: { companyId: number; client: Client; onClose: () => void }) {
+  const q = useQuery({ queryKey: ['client-purchases', companyId, client.id], queryFn: () => getClientPurchases(companyId, client.id) });
+  const purchases = q.data?.purchases ?? [];
+  const fmtDay = (s: string) => new Date(String(s).replace(' ', 'T')).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  const total = purchases.reduce((a, p) => a + p.salePrice, 0);
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b px-5 py-4">
+          <h2 className="flex items-center gap-2 truncate text-sm font-semibold"><CarFront className="h-4 w-4 text-primary" /> Véhicules achetés · {client.name}</h2>
+          <button type="button" onClick={onClose} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="p-5">
+          {q.isLoading ? (
+            <Skeleton className="h-24 rounded-lg" />
+          ) : purchases.length === 0 ? (
+            <EmptyState icon={CarFront} title="Aucun achat" hint="Ce client n'a pas encore acheté de véhicule à la concession." />
+          ) : (
+            <>
+              <div className="mb-3 flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">{purchases.length} véhicule{purchases.length > 1 ? 's' : ''}</span>
+                <span className="font-semibold text-emerald-400">{fmtMoney(total)}</span>
+              </div>
+              <div className="divide-y rounded-lg border">
+                {purchases.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">{p.vehicleName}</div>
+                      <div className="text-xs text-muted-foreground">{fmtDay(p.createdAt)}{p.plate ? ` · ${p.plate}` : ''}{p.sellerName ? ` · ${p.sellerName}` : ''}</div>
+                    </div>
+                    <div className="shrink-0 text-sm font-semibold text-emerald-400">{fmtMoney(p.salePrice)}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
