@@ -405,7 +405,7 @@ export default function Showroom() {
       )}
       {compareOpen && <CompareModal vehicles={compareVehicles} onClose={() => setCompareOpen(false)} cmp={cmp} />}
 
-      {selected && <VehicleModal v={selected} onClose={() => setSelected(null)} col={col} />}
+      {selected && <VehicleModal v={selected} onClose={() => setSelected(null)} col={col} cmp={cmp} />}
 
       <footer className="relative z-10 border-t border-emerald-900/10 bg-white/40 py-10 text-center backdrop-blur">
         <div className="text-lg font-black tracking-tight text-emerald-950">{company.name}</div>
@@ -757,7 +757,7 @@ function TiltCard({ v, onOpen, col, cmp }: { v: ShowroomVehicle; onOpen: (v: Sho
   );
 }
 
-function VehicleModal({ v, onClose, col }: { v: ShowroomVehicle; onClose: () => void; col: Collections }) {
+function VehicleModal({ v, onClose, col, cmp }: { v: ShowroomVehicle; onClose: () => void; col: Collections; cmp: Compare }) {
   const tiltRef = useRef<HTMLDivElement>(null);
   const [creating, setCreating] = useState('');
 
@@ -820,6 +820,32 @@ function VehicleModal({ v, onClose, col }: { v: ShowroomVehicle; onClose: () => 
             </div>
             {v.description && <p className="mt-4 text-sm leading-relaxed text-emerald-900/60">{v.description}</p>}
 
+            {(() => {
+              const st = statsFor(v.name);
+              return (
+                <div className="mt-5">
+                  <div className="mb-2 text-[11px] font-bold uppercase tracking-widest text-emerald-600">Performances d'origine</div>
+                  {st ? (
+                    <div className="space-y-2">
+                      {STAT_META.map((s) => (
+                        <div key={s.key}>
+                          <div className="mb-0.5 flex items-center justify-between text-[11px]">
+                            <span className="font-medium text-emerald-900/60">{s.label}</span>
+                            <span className="font-bold text-emerald-900/70">{st[s.key]}</span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-emerald-900/10">
+                            <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-lime-400" style={{ width: `${st[s.key]}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-emerald-900/15 px-3 py-2 text-[11px] text-emerald-900/40">Stats de perf indisponibles pour ce modèle.</div>
+                  )}
+                </div>
+              );
+            })()}
+
             <div className="mt-5 flex items-end justify-between rounded-2xl bg-emerald-950 px-5 py-4 text-white">
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-300">Prix</div>
@@ -827,6 +853,11 @@ function VehicleModal({ v, onClose, col }: { v: ShowroomVehicle; onClose: () => 
               </div>
               <FavButton active={col.isInActive(v.id)} onToggle={() => col.toggleActive(v.id)} size="big" />
             </div>
+
+            <button type="button" onClick={() => cmp.toggle(v)}
+              className={`mt-3 inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all ${cmp.has(v.id) ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-emerald-900/10 bg-white text-emerald-900/70 hover:border-emerald-500/50'}`}>
+              <CompareIcon className="h-4 w-4" /> {cmp.has(v.id) ? 'Dans le comparatif ✓' : 'Ajouter au comparatif'}
+            </button>
 
             <div className="mt-6">
               <div className="mb-2 text-[11px] font-bold uppercase tracking-widest text-emerald-600">Ajouter à une liste</div>
