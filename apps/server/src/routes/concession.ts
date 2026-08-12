@@ -63,6 +63,7 @@ async function seedIfEmpty(companyId: number) {
     type: v.type,
     purchasePrice: String(Math.round(v.purchasePrice)),
     salePrice: String(Math.round(v.salePrice)),
+    imageUrl: v.imageUrl,
     sortOrder: i,
   }));
   for (let i = 0; i < rows.length; i += 200) {
