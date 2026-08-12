@@ -46,6 +46,7 @@ export interface ModuleDef {
   group: string;
   defaultEnabled: boolean;
   companyPage: boolean;
+  staffOnly?: boolean;
 }
 
 export interface EffectiveModule {
@@ -81,7 +82,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'pawnshop', label: 'Prêteur sur gages', group: 'Commerce', defaultEnabled: false, companyPage: true },
   { key: 'runs', label: 'Runs / livraisons', group: 'Commerce', defaultEnabled: false, companyPage: true },
   { key: 'chasse', label: 'Chasse', group: 'Commerce', defaultEnabled: false, companyPage: true },
-  { key: 'concession', label: 'Concession auto', group: 'Commerce', defaultEnabled: false, companyPage: true },
+  { key: 'concession', label: 'Concession auto', group: 'Commerce', defaultEnabled: false, companyPage: true, staffOnly: true },
 ];
 
 export interface ModuleConfigBoolField {

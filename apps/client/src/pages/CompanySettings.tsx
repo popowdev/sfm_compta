@@ -6,6 +6,7 @@ import { MODULES, MODULE_CONFIG, moduleConfigBool, type ModuleKey } from '@rp-co
 import { toggleMyModule, uploadMyCompanyLogo, type MyModule } from '@/lib/me';
 import { useCompany } from '@/lib/useCompany';
 import { moduleIcon } from '@/lib/moduleIcons';
+import { useAuth } from '@/auth/AuthContext';
 import { Switch } from '@/components/ui/switch';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -88,6 +89,9 @@ export default function CompanySettings() {
   const { company: mine, companyId, isLoading } = useCompany();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const { user } = useAuth();
+  const isStaff = (user?.appRoles ?? []).includes('staff');
+  const staffOnlyKeys = new Set(MODULES.filter((m) => m.staffOnly).map((m) => m.key));
 
   const upload = useMutation({
     mutationFn: (file: File) => uploadMyCompanyLogo(companyId, file),
@@ -97,6 +101,7 @@ export default function CompanySettings() {
   const toggle = useMutation({
     mutationFn: (v: { key: MyModule['key']; enabled: boolean }) => toggleMyModule(companyId, v.key, v.enabled),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['my-companies'] }),
+    onError: (e: unknown) => toast((e as { info?: { error?: string } })?.info?.error === 'staff_only_module' ? 'Ce module est réservé au staff IRS.' : "Échec de l'activation.", 'error'),
   });
   const [configModule, setConfigModule] = useState<MyModule | null>(null);
   const [tiersOpen, setTiersOpen] = useState(false);
@@ -177,6 +182,7 @@ export default function CompanySettings() {
                   {g.items.map((m, i) => {
                     const Icon = moduleIcon(m.key);
                     const on = m.enabled && !m.blocked;
+                    const staffLocked = staffOnlyKeys.has(m.key) && !isStaff;
                     return (
                       <div key={m.key} className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? 'border-t' : ''}`}>
                         <div
@@ -196,12 +202,17 @@ export default function CompanySettings() {
                                 maintenance
                               </span>
                             )}
+                            {staffLocked && (
+                              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">
+                                réservé staff
+                              </span>
+                            )}
                           </div>
                           {MODULE_DESC[m.key] && (
                             <div className="truncate text-xs text-muted-foreground">{MODULE_DESC[m.key]}</div>
                           )}
                         </div>
-                        {on && (MODULE_CONFIG[m.key]?.length ?? 0) > 0 && (
+                        {on && !staffLocked && (MODULE_CONFIG[m.key]?.length ?? 0) > 0 && (
                           <button
                             type="button"
                             onClick={() => setConfigModule(m)}
@@ -214,7 +225,7 @@ export default function CompanySettings() {
                         )}
                         <Switch
                           checked={on}
-                          disabled={toggle.isPending || m.blocked}
+                          disabled={toggle.isPending || m.blocked || staffLocked}
                           ariaLabel={`Activer ${m.label}`}
                           onChange={() => toggle.mutate({ key: m.key, enabled: !m.enabled })}
                         />

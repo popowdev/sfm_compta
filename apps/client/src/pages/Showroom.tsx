@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getShowroom, type ShowroomVehicle } from '@/lib/concession';
 
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n);
+const PAGE = 24;
 
 const STYLES = `
 .sr-root{--g1:#10b981;--g2:#84cc16;--g3:#2dd4bf;--ink:#0b1a12;color:var(--ink);background:#eefbf3;}
@@ -12,7 +13,7 @@ const STYLES = `
   radial-gradient(55% 45% at 92% 12%,rgba(132,204,22,.22),transparent 60%),
   radial-gradient(70% 60% at 50% 108%,rgba(45,212,191,.20),transparent 60%),
   linear-gradient(180deg,#f2fdf6,#e9fbf1 40%,#f4fdf8);}
-.sr-blob{position:absolute;border-radius:50%;filter:blur(60px);opacity:.55;mix-blend-mode:multiply;}
+.sr-blob{position:absolute;border-radius:50%;filter:blur(48px);opacity:.42;}
 .sr-b1{width:46vw;height:46vw;left:-8vw;top:-10vw;background:radial-gradient(circle,#34d399,transparent 70%);animation:srDrift1 22s ease-in-out infinite;}
 .sr-b2{width:38vw;height:38vw;right:-6vw;top:2vw;background:radial-gradient(circle,#a3e635,transparent 70%);animation:srDrift2 26s ease-in-out infinite;}
 .sr-b3{width:52vw;height:52vw;left:20vw;bottom:-24vw;background:radial-gradient(circle,#2dd4bf,transparent 70%);animation:srDrift3 30s ease-in-out infinite;}
@@ -28,7 +29,8 @@ const STYLES = `
 @keyframes srFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
 .sr-bounce{animation:srBounce 1.8s ease-in-out infinite;}
 @keyframes srBounce{0%,100%{transform:translateY(0);opacity:.7}50%{transform:translateY(8px);opacity:1}}
-.sr-tilt{transform:perspective(1000px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .5s cubic-bezier(.2,.8,.2,1),box-shadow .4s;transform-style:preserve-3d;will-change:transform;}
+.sr-tilt{transform:perspective(1000px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .5s cubic-bezier(.2,.8,.2,1),box-shadow .4s;transform-style:preserve-3d;}
+.sr-card:hover{will-change:transform;}
 .sr-pop{transform:translateZ(46px);transition:transform .5s cubic-bezier(.2,.8,.2,1);}
 .sr-gloss{position:absolute;inset:0;border-radius:inherit;opacity:0;transition:opacity .4s;background:radial-gradient(240px 240px at var(--gx,50%) var(--gy,0%),rgba(255,255,255,.55),transparent 60%);}
 .sr-card:hover .sr-gloss{opacity:1;}
@@ -165,19 +167,27 @@ function FavButton({ active, onToggle, size = 'card' }: { active: boolean; onTog
   );
 }
 
+let revealIO: IntersectionObserver | null = null;
+function revealObserver(): IntersectionObserver | null {
+  if (typeof IntersectionObserver === 'undefined') return null;
+  if (!revealIO) {
+    revealIO = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); revealIO?.unobserve(e.target); }
+      },
+      { threshold: 0.1, rootMargin: '0px 0px -6% 0px' },
+    );
+  }
+  return revealIO;
+}
 function useReveal<T extends HTMLElement>() {
   const ref = useRef<T>(null);
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
-      },
-      { threshold: 0.12, rootMargin: '0px 0px -8% 0px' },
-    );
+    const io = revealObserver();
+    if (!el || !io) return;
     io.observe(el);
-    return () => io.disconnect();
+    return () => io.unobserve(el);
   }, []);
   return ref;
 }
@@ -189,8 +199,10 @@ export default function Showroom() {
   const [type, setType] = useState<'all' | 'new' | 'used'>('all');
   const [selected, setSelected] = useState<ShowroomVehicle | null>(null);
   const [viewFavs, setViewFavs] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PAGE);
   const col = useCollections(token);
   const catalogRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   const query = useQuery({
     queryKey: ['showroom', token],
@@ -217,8 +229,25 @@ export default function Showroom() {
       (!cat || v.category === cat) &&
       v.name.toLowerCase().includes(q.toLowerCase()));
   }, [vehicles, type, cat, q, viewFavs, col.active]);
-  const grouped = useMemo(() => categories.map(([c]) => ({ cat: c, items: filtered.filter((v) => v.category === c) })).filter((g) => g.items.length), [categories, filtered]);
-  const searching = q.trim().length > 0;
+  const catRank = useMemo(() => new Map(categories.map(([c], i) => [c, i])), [categories]);
+  const ordered = useMemo(
+    () => [...filtered].sort((a, b) => (catRank.get(a.category) ?? 99) - (catRank.get(b.category) ?? 99)),
+    [filtered, catRank],
+  );
+  const catCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const v of ordered) m.set(v.category, (m.get(v.category) ?? 0) + 1);
+    return m;
+  }, [ordered]);
+
+  useEffect(() => { setVisibleCount(PAGE); }, [q, cat, type, viewFavs, col.active]);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver((es) => { if (es[0]?.isIntersecting) setVisibleCount((c) => c + PAGE); }, { rootMargin: '800px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visibleCount, ordered.length]);
 
   if (query.isLoading) {
     return (
@@ -267,35 +296,23 @@ export default function Showroom() {
       />
 
       <div ref={catalogRef} className="relative z-10 mx-auto max-w-[1400px] px-5 pb-28 pt-10 sm:px-8">
-        {viewFavs ? (
-          filtered.length === 0 ? (
-            <div className="grid place-items-center gap-3 rounded-3xl border border-dashed border-emerald-900/15 bg-white/50 py-24 text-center backdrop-blur">
-              <Heart active={false} className="h-10 w-10 text-emerald-400" />
-              <div className="text-lg font-bold text-emerald-950">« {col.active?.name} » est vide</div>
-              <div className="text-sm text-emerald-900/50">Ajoute des véhicules avec le cœur ♥ sur les cartes.</div>
-            </div>
-          ) : (
-            <>
-              <SectionTitle label={`♥ ${col.active?.name ?? 'Mes favoris'}`} count={filtered.length} />
-              <Grid items={filtered} onOpen={setSelected} col={col} />
-            </>
-          )
+        {viewFavs && filtered.length === 0 ? (
+          <div className="grid place-items-center gap-3 rounded-3xl border border-dashed border-emerald-900/15 bg-white/60 py-24 text-center">
+            <Heart active={false} className="h-10 w-10 text-emerald-400" />
+            <div className="text-lg font-bold text-emerald-950">« {col.active?.name} » est vide</div>
+            <div className="text-sm text-emerald-900/50">Ajoute des véhicules avec le cœur ♥ sur les cartes.</div>
+          </div>
         ) : filtered.length === 0 ? (
-          <div className="grid place-items-center rounded-3xl border border-emerald-900/10 bg-white/50 py-24 text-emerald-900/50 backdrop-blur">
+          <div className="grid place-items-center rounded-3xl border border-emerald-900/10 bg-white/60 py-24 text-emerald-900/50">
             Aucun véhicule ne correspond.
           </div>
-        ) : searching || cat ? (
-          <>
-            <SectionTitle label={cat || 'Résultats'} count={filtered.length} />
-            <Grid items={filtered} onOpen={setSelected} col={col} />
-          </>
         ) : (
-          grouped.map((g) => (
-            <section key={g.cat} className="mb-16 scroll-mt-24" id={`cat-${g.cat}`}>
-              <SectionTitle label={g.cat} count={g.items.length} />
-              <Grid items={g.items} onOpen={setSelected} col={col} />
-            </section>
-          ))
+          <Catalog ordered={ordered} visibleCount={visibleCount} catCounts={catCounts}
+            headerLabel={cat ? cat : viewFavs ? `♥ ${col.active?.name ?? 'Favoris'}` : null}
+            perCatHeaders={!cat && !viewFavs}
+            total={filtered.length}
+            onOpen={setSelected} col={col}
+            onMore={() => setVisibleCount((c) => c + PAGE)} sentinelRef={sentinelRef} />
         )}
       </div>
 
@@ -338,11 +355,9 @@ function Hero({ company, featured, count, cats, onExplore }: { company: { name: 
 
   return (
     <header className="relative z-10 mx-auto flex min-h-[92vh] max-w-[1400px] flex-col px-5 sm:px-8">
-      <div className="flex items-center gap-3 pt-8">
-        {company.logoUrl
-          ? <img src={company.logoUrl} alt="" className="h-11 w-11 rounded-xl object-cover ring-1 ring-emerald-900/10" />
-          : <div className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-500/15 text-xl">🚗</div>}
-        <div className="text-sm font-bold tracking-[0.28em] text-emerald-800">{company.name.toUpperCase()}</div>
+      <div className="flex items-center gap-2.5 pt-8">
+        <img src="/logo.png" alt="RP Compta" className="h-9 w-9 rounded-xl object-contain" />
+        <div className="text-lg font-black tracking-tight text-emerald-950">RP Compta</div>
       </div>
 
       <div className="grid flex-1 items-center gap-6 lg:grid-cols-2">
@@ -417,7 +432,7 @@ function StickyNav({ q, setQ, type, setType, cat, setCat, categories, total, col
   col: Collections; viewFavs: boolean; setViewFavs: (v: boolean) => void;
 }) {
   return (
-    <div className="sticky top-0 z-30 border-y border-emerald-900/10 bg-white/70 backdrop-blur-xl">
+    <div className="sticky top-0 z-30 border-y border-emerald-900/10 bg-white/90 backdrop-blur-md">
       <div className="mx-auto max-w-[1400px] px-5 py-3 sm:px-8">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[180px]">
@@ -537,11 +552,36 @@ function SectionTitle({ label, count }: { label: string; count: number }) {
   );
 }
 
-function Grid({ items, onOpen, col }: { items: ShowroomVehicle[]; onOpen: (v: ShowroomVehicle) => void; col: Collections }) {
+function Catalog({ ordered, visibleCount, catCounts, headerLabel, perCatHeaders, total, onOpen, col, onMore, sentinelRef }: {
+  ordered: ShowroomVehicle[]; visibleCount: number; catCounts: Map<string, number>;
+  headerLabel: string | null; perCatHeaders: boolean; total: number;
+  onOpen: (v: ShowroomVehicle) => void; col: Collections; onMore: () => void; sentinelRef: React.RefObject<HTMLDivElement>;
+}) {
+  const slice = ordered.slice(0, visibleCount);
+  const nodes: React.ReactNode[] = [];
+  let lastCat: string | null = null;
+  for (const v of slice) {
+    if (perCatHeaders && v.category !== lastCat) {
+      lastCat = v.category;
+      nodes.push(<div key={`h-${v.category}`} className="col-span-full"><SectionTitle label={v.category} count={catCounts.get(v.category) ?? 0} /></div>);
+    }
+    nodes.push(<TiltCard key={v.id} v={v} onOpen={onOpen} col={col} />);
+  }
+  const remaining = ordered.length - visibleCount;
   return (
-    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {items.map((v) => <TiltCard key={v.id} v={v} onOpen={onOpen} col={col} />)}
-    </div>
+    <>
+      {headerLabel && <SectionTitle label={headerLabel} count={total} />}
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{nodes}</div>
+      {remaining > 0 && (
+        <div className="mt-10 flex flex-col items-center gap-4">
+          <div ref={sentinelRef} className="h-px w-full" aria-hidden />
+          <button onClick={onMore}
+            className="inline-flex items-center gap-2 rounded-full border border-emerald-900/10 bg-white px-6 py-3 text-sm font-semibold text-emerald-900 shadow-sm transition-all hover:scale-105 hover:border-emerald-500/40">
+            Voir plus <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-700">{fmt(remaining)}</span>
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -574,7 +614,7 @@ function TiltCard({ v, onOpen, col }: { v: ShowroomVehicle; onOpen: (v: Showroom
         onClick={() => onOpen(v)}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(v); } }}
         aria-label={`Voir ${v.name}`}
-        className="sr-card sr-tilt group relative overflow-hidden rounded-3xl border border-emerald-900/10 bg-white/70 p-4 shadow-[0_10px_40px_-12px_rgba(6,78,59,.18)] outline-none backdrop-blur transition-shadow hover:shadow-[0_30px_60px_-18px_rgba(16,185,129,.4)] focus-visible:ring-2 focus-visible:ring-emerald-500">
+        className="sr-card sr-tilt group relative overflow-hidden rounded-3xl border border-emerald-900/10 bg-white p-4 shadow-[0_10px_40px_-12px_rgba(6,78,59,.18)] outline-none transition-shadow hover:shadow-[0_30px_60px_-18px_rgba(16,185,129,.4)] focus-visible:ring-2 focus-visible:ring-emerald-500">
         <div className="relative aspect-[16/10] overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-50 to-lime-50">
           <div className="absolute inset-0 [background:radial-gradient(120%_80%_at_50%_120%,rgba(16,185,129,.18),transparent_60%)]" />
           {v.imageUrl
