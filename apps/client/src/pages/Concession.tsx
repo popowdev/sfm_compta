@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useCompany } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CarFront, Plus, Trash2, Boxes, Receipt, TrendingUp, Coins, X, MoreVertical, Search, ExternalLink, Copy, RefreshCw, Tag } from 'lucide-react';
+import { CarFront, Plus, Trash2, Boxes, Receipt, TrendingUp, Coins, X, MoreVertical, Search, ExternalLink, Copy, RefreshCw, Tag, Upload } from 'lucide-react';
 import { fmtInt } from '@/lib/declarations';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -10,7 +10,7 @@ import { useToast } from '@/components/ui/toast';
 import { useConfirm } from '@/components/ui/confirm';
 import {
   getConcessionOverview, getConcessionSales,
-  addVehicle, updateVehicle, deleteVehicle,
+  addVehicle, updateVehicle, deleteVehicle, uploadVehicleImage,
   addSale, deleteSale, regenerateShowroomToken,
   type ConcessionVehicle, type ConcessionSale, type ConcessionShowroom, type VehicleType, type PastClient,
 } from '@/lib/concession';
@@ -250,7 +250,24 @@ function VehicleModal({ companyId, edit, categories, onClose, onSaved }: { compa
   const [description, setDescription] = useState(edit?.description ?? '');
   const [showroom, setShowroom] = useState(edit?.showroom ?? true);
   const [available, setAvailable] = useState(edit?.available ?? true);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const valid = name.trim().length > 0;
+
+  const onFile = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadVehicleImage(companyId, file);
+      setImageUrl(url);
+      toast('Image importée.', 'success');
+    } catch {
+      toast("Échec de l'import (image trop lourde ou format non supporté).", 'error');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
   const save = useMutation({
     mutationFn: () => {
       const body = {
@@ -281,7 +298,24 @@ function VehicleModal({ companyId, edit, categories, onClose, onSaved }: { compa
           <label className="block text-sm"><span className="mb-1 block text-xs text-muted-foreground">Prix d'achat (concession)</span><input type="number" min="0" step="1" className={inputCls} value={buy} onChange={(e) => setBuy(e.target.value)} placeholder="0" /></label>
           <label className="block text-sm"><span className="mb-1 block text-xs text-muted-foreground">Prix de vente (client)</span><input type="number" min="0" step="1" className={inputCls} value={sell} onChange={(e) => setSell(e.target.value)} placeholder="0" /></label>
         </div>
-        <label className="block text-sm"><span className="mb-1 block text-xs text-muted-foreground">Image (URL)</span><input className={inputCls} value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://…" /></label>
+        <div className="block text-sm">
+          <span className="mb-1 block text-xs text-muted-foreground">Image du véhicule</span>
+          <div className="flex items-center gap-3">
+            <div className="grid h-14 w-20 shrink-0 place-items-center overflow-hidden rounded-md border bg-muted">
+              {imageUrl ? <img src={imageUrl} alt="" className="h-full w-full object-cover" /> : <CarFront className="h-5 w-5 text-muted-foreground" />}
+            </div>
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <div className="flex gap-2">
+                <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
+                <Button type="button" size="sm" variant="outline" disabled={uploading} onClick={() => fileRef.current?.click()}>
+                  <Upload className="h-4 w-4" /> {uploading ? 'Import…' : 'Choisir un fichier'}
+                </Button>
+                {imageUrl && <Button type="button" size="sm" variant="outline" onClick={() => setImageUrl('')}>Retirer</Button>}
+              </div>
+              <input className={`${inputCls} h-8 text-xs`} value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="…ou colle une URL" />
+            </div>
+          </div>
+        </div>
         <label className="block text-sm"><span className="mb-1 block text-xs text-muted-foreground">Description (optionnel)</span><textarea className={`${inputCls} h-20 py-2`} value={description} onChange={(e) => setDescription(e.target.value)} /></label>
         <div className="grid grid-cols-2 gap-3">
           <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border bg-background/50 p-3 text-sm"><span className="font-medium">En vitrine</span><input type="checkbox" className="h-4 w-4 accent-primary" checked={showroom} onChange={(e) => setShowroom(e.target.checked)} /></label>

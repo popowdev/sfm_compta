@@ -103,3 +103,17 @@ export const documentUpload = multer({
 });
 
 export const documentFileUrl = (filename: string) => `/uploads/documents/${filename}`;
+
+const CONCESSION_IMG_DIR = path.join(env.UPLOAD_DIR, 'concession');
+mkdirSync(CONCESSION_IMG_DIR, { recursive: true });
+
+export const concessionImageUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, CONCESSION_IMG_DIR),
+    filename: (_req, file, cb) => cb(null, safeName(file.mimetype)),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => cb(null, IMAGE_MIMES.includes(file.mimetype)),
+});
+
+export const concessionImageUrl = (filename: string) => `/uploads/concession/${filename}`;

@@ -9,6 +9,7 @@ import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
+import { concessionImageUpload, concessionImageUrl } from '../services/upload';
 import { DEFAULT_CONCESSION_VEHICLES } from '../data/concessionDefaults';
 
 function parseId(v: string | undefined): number | null {
@@ -279,6 +280,20 @@ meConcessionRouter.get(
         margin: Math.round(Number(r.salePrice)) - Math.round(Number(r.purchasePrice)),
       })),
     });
+  }),
+);
+
+meConcessionRouter.post(
+  '/vehicles/image',
+  concessionImageUpload.single('image'),
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    if (!req.file) return res.status(400).json({ error: 'invalid_file' });
+    res.json({ url: concessionImageUrl(req.file.filename) });
   }),
 );
 

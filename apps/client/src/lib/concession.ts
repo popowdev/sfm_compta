@@ -73,6 +73,14 @@ export interface VehicleInput {
   showroom?: boolean;
   available?: boolean;
 }
+export async function uploadVehicleImage(c: number, file: File): Promise<string> {
+  const fd = new FormData();
+  fd.append('image', file);
+  const res = await fetch(`${base(c)}/vehicles/image`, { method: 'POST', credentials: 'include', body: fd });
+  if (!res.ok) throw new Error(`upload_failed_${res.status}`);
+  const data = (await res.json()) as { url: string };
+  return data.url;
+}
 export const addVehicle = (c: number, b: VehicleInput) => post(`${base(c)}/vehicles`, b);
 export const updateVehicle = (c: number, id: number, b: Partial<VehicleInput>) => patch(`${base(c)}/vehicles/${id}`, b);
 export const deleteVehicle = (c: number, id: number) => del(`${base(c)}/vehicles/${id}`);
