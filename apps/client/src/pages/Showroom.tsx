@@ -2,6 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getShowroom, type ShowroomVehicle } from '@/lib/concession';
+import { statsFor } from '@/lib/gtaStats';
+
+interface Compare { ids: number[]; has: (id: number) => boolean; toggle: (v: ShowroomVehicle) => void; clear: () => void }
+const STAT_META: { key: 0 | 1 | 2 | 3; label: string }[] = [
+  { key: 0, label: 'Vitesse' },
+  { key: 1, label: 'Accélération' },
+  { key: 2, label: 'Freinage' },
+  { key: 3, label: 'Tenue de route' },
+];
 
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n);
 const PAGE = 24;
@@ -162,6 +171,71 @@ function FavButton({ active, onToggle, size = 'card' }: { active: boolean; onTog
   );
 }
 
+function CompareIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 20V11M12 20V4M19 20v-7" />
+    </svg>
+  );
+}
+
+function CompareModal({ vehicles, onClose, cmp }: { vehicles: ShowroomVehicle[]; onClose: () => void; cmp: Compare }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+  const rows = vehicles.map((v) => ({ v, stats: statsFor(v.name) }));
+  const bestOf = (i: 0 | 1 | 2 | 3) => Math.max(0, ...rows.map((r) => (r.stats ? r.stats[i] : 0)));
+  const cheapest = Math.min(...vehicles.map((v) => v.salePrice));
+  const multi = vehicles.length > 1;
+  return (
+    <div className="sr-mbd fixed inset-0 z-[70] grid place-items-center bg-emerald-950/45 p-4 backdrop-blur-md" onClick={onClose}>
+      <div className="sr-mc relative max-h-[92vh] w-full max-w-5xl overflow-auto rounded-[28px] border border-emerald-900/10 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-emerald-900/10 bg-white/95 px-6 py-4 backdrop-blur">
+          <h2 className="text-xl font-black text-emerald-950">Comparatif · {vehicles.length} véhicules</h2>
+          <button type="button" onClick={onClose} aria-label="Fermer" className="grid h-9 w-9 place-items-center rounded-full bg-emerald-500/10 text-emerald-900/60 hover:bg-emerald-500/20">✕</button>
+        </div>
+        <div className="grid gap-4 p-6" style={{ gridTemplateColumns: `repeat(${vehicles.length}, minmax(0,1fr))` }}>
+          {rows.map(({ v, stats }) => (
+            <div key={v.id} className="rounded-2xl border border-emerald-900/10 bg-white p-4">
+              <div className="relative mb-3 aspect-[16/10] overflow-hidden rounded-xl bg-gradient-to-br from-emerald-50 to-lime-50">
+                {v.imageUrl ? <img src={v.imageUrl} alt="" className="h-full w-full object-contain p-1" /> : <div className="grid h-full w-full place-items-center text-4xl">🚘</div>}
+                <button type="button" onClick={() => cmp.toggle(v)} aria-label="Retirer" className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-white/85 text-emerald-900/50 backdrop-blur hover:text-rose-500">✕</button>
+              </div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">{v.category} · {v.type === 'used' ? 'Occasion' : 'Neuf'}</div>
+              <div className="truncate text-base font-black text-emerald-950">{v.name}</div>
+              <div className={`mt-1 text-lg font-black ${v.salePrice === cheapest && multi ? 'text-emerald-600' : 'text-emerald-900/70'}`}>{fmt(v.salePrice)} $</div>
+              {v.salePrice === cheapest && multi && <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-500">le moins cher ★</div>}
+              <div className="mt-4 space-y-2.5">
+                {STAT_META.map((s) => {
+                  const val = stats ? stats[s.key] : null;
+                  const win = multi && val != null && val === bestOf(s.key) && bestOf(s.key) > 0;
+                  return (
+                    <div key={s.key}>
+                      <div className="mb-0.5 flex items-center justify-between text-[11px]">
+                        <span className="font-medium text-emerald-900/60">{s.label}</span>
+                        <span className={`font-bold ${win ? 'text-emerald-600' : 'text-emerald-900/70'}`}>{val != null ? val : '—'}{win ? ' ★' : ''}</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-emerald-900/10">
+                        <div className={`h-full rounded-full ${win ? 'bg-gradient-to-r from-emerald-400 to-lime-400' : 'bg-emerald-500/60'}`} style={{ width: `${val ?? 0}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+                {!stats && <div className="pt-1 text-[11px] text-emerald-900/40">Stats de perf indisponibles pour ce modèle.</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="px-6 pb-5 text-center text-[11px] text-emerald-900/40">Performances d'origine (stock, sans améliorations) · indices relatifs 0–100.</div>
+      </div>
+    </div>
+  );
+}
+
 let revealIO: IntersectionObserver | null = null;
 function revealObserver(): IntersectionObserver | null {
   if (typeof IntersectionObserver === 'undefined') return null;
@@ -195,6 +269,8 @@ export default function Showroom() {
   const [selected, setSelected] = useState<ShowroomVehicle | null>(null);
   const [viewFavs, setViewFavs] = useState(false);
   const [page, setPage] = useState(0);
+  const [compareIds, setCompareIds] = useState<number[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
   const col = useCollections(token);
   const catalogRef = useRef<HTMLDivElement>(null);
 
@@ -206,6 +282,13 @@ export default function Showroom() {
   });
 
   const vehicles = useMemo(() => query.data?.vehicles ?? [], [query.data]);
+  const cmp = useMemo<Compare>(() => ({
+    ids: compareIds,
+    has: (id) => compareIds.includes(id),
+    toggle: (v) => setCompareIds((prev) => (prev.includes(v.id) ? prev.filter((x) => x !== v.id) : prev.length >= 4 ? prev : [...prev, v.id])),
+    clear: () => setCompareIds([]),
+  }), [compareIds]);
+  const compareVehicles = useMemo(() => compareIds.map((id) => vehicles.find((v) => v.id === id)).filter((v): v is ShowroomVehicle => !!v), [compareIds, vehicles]);
   const categories = useMemo(() => {
     const m = new Map<string, number>();
     for (const v of vehicles) m.set(v.category, (m.get(v.category) ?? 0) + 1);
@@ -299,9 +382,28 @@ export default function Showroom() {
             headerLabel={cat ? cat : viewFavs ? `♥ ${col.active?.name ?? 'Favoris'}` : null}
             perCatHeaders={!cat && !viewFavs}
             total={filtered.length}
-            onOpen={setSelected} col={col} onPage={goPage} />
+            onOpen={setSelected} col={col} cmp={cmp} onPage={goPage} />
         )}
       </div>
+
+      {compareVehicles.length > 0 && (
+        <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
+          <div className="sr-mc flex items-center gap-3 rounded-2xl border border-emerald-900/10 bg-white/95 px-4 py-2.5 shadow-xl backdrop-blur">
+            <div className="flex -space-x-2">
+              {compareVehicles.map((v) => (
+                <div key={v.id} className="grid h-9 w-12 place-items-center overflow-hidden rounded-md border border-white bg-emerald-50">
+                  {v.imageUrl ? <img src={v.imageUrl} alt="" className="h-full w-full object-cover" /> : <span className="text-xs">🚘</span>}
+                </div>
+              ))}
+            </div>
+            <span className="text-sm font-semibold text-emerald-950">{compareVehicles.length}/4</span>
+            <button type="button" onClick={() => setCompareOpen(true)} disabled={compareVehicles.length < 2}
+              className="rounded-full bg-emerald-950 px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40">Comparer</button>
+            <button type="button" onClick={() => cmp.clear()} className="text-sm text-emerald-900/50 hover:text-emerald-900">Vider</button>
+          </div>
+        </div>
+      )}
+      {compareOpen && <CompareModal vehicles={compareVehicles} onClose={() => setCompareOpen(false)} cmp={cmp} />}
 
       {selected && <VehicleModal v={selected} onClose={() => setSelected(null)} col={col} />}
 
@@ -549,10 +651,10 @@ function pageWindow(cur: number, count: number): number[] {
   return out;
 }
 
-function Catalog({ ordered, page, pageSize, pageCount, catCounts, headerLabel, perCatHeaders, total, onOpen, col, onPage }: {
+function Catalog({ ordered, page, pageSize, pageCount, catCounts, headerLabel, perCatHeaders, total, onOpen, col, cmp, onPage }: {
   ordered: ShowroomVehicle[]; page: number; pageSize: number; pageCount: number; catCounts: Map<string, number>;
   headerLabel: string | null; perCatHeaders: boolean; total: number;
-  onOpen: (v: ShowroomVehicle) => void; col: Collections; onPage: (p: number) => void;
+  onOpen: (v: ShowroomVehicle) => void; col: Collections; cmp: Compare; onPage: (p: number) => void;
 }) {
   const start = page * pageSize;
   const slice = ordered.slice(start, start + pageSize);
@@ -563,7 +665,7 @@ function Catalog({ ordered, page, pageSize, pageCount, catCounts, headerLabel, p
       lastCat = v.category;
       nodes.push(<div key={`h-${v.category}`} className="col-span-full"><SectionTitle label={v.category} count={catCounts.get(v.category) ?? 0} /></div>);
     }
-    nodes.push(<TiltCard key={v.id} v={v} onOpen={onOpen} col={col} />);
+    nodes.push(<TiltCard key={v.id} v={v} onOpen={onOpen} col={col} cmp={cmp} />);
   }
   return (
     <>
@@ -588,7 +690,7 @@ function Catalog({ ordered, page, pageSize, pageCount, catCounts, headerLabel, p
   );
 }
 
-function TiltCard({ v, onOpen, col }: { v: ShowroomVehicle; onOpen: (v: ShowroomVehicle) => void; col: Collections }) {
+function TiltCard({ v, onOpen, col, cmp }: { v: ShowroomVehicle; onOpen: (v: ShowroomVehicle) => void; col: Collections; cmp: Compare }) {
   const wrapRef = useReveal<HTMLDivElement>();
   const tiltRef = useRef<HTMLDivElement>(null);
 
@@ -626,7 +728,12 @@ function TiltCard({ v, onOpen, col }: { v: ShowroomVehicle; onOpen: (v: Showroom
           <span className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-bold ${v.type === 'used' ? 'bg-amber-400 text-amber-950' : 'bg-emerald-500 text-white'}`}>
             {v.type === 'used' ? 'Occasion' : 'Neuf'}
           </span>
-          <div className="absolute right-3 top-3">
+          <div className="absolute right-3 top-3 flex gap-1.5">
+            <button type="button" aria-pressed={cmp.has(v.id)} aria-label="Comparer"
+              onClick={(e) => { e.stopPropagation(); cmp.toggle(v); }}
+              className={`grid h-9 w-9 place-items-center rounded-full border backdrop-blur transition-all hover:scale-110 ${cmp.has(v.id) ? 'border-emerald-300 bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'border-emerald-900/10 bg-white/80 text-emerald-900/50 hover:text-emerald-600'}`}>
+              <CompareIcon className="h-4 w-4" />
+            </button>
             <FavButton active={col.isInActive(v.id)} onToggle={() => col.toggleActive(v.id)} />
           </div>
           <div className="sr-gloss" />
