@@ -97,6 +97,23 @@ export function bizOffsetMs(instant: Date): number {
   return bizWallMs(instant) - instant.getTime();
 }
 
+export function bizWallToUtc(parisWall: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/.exec(parisWall);
+  if (!m) return parisWall;
+  const wall = Date.UTC(
+    Number(m[1] ?? '0'),
+    Number(m[2] ?? '1') - 1,
+    Number(m[3] ?? '1'),
+    Number(m[4] ?? '0'),
+    Number(m[5] ?? '0'),
+    Number(m[6] ?? '0'),
+  );
+  let offset = bizOffsetMs(new Date(wall));
+  offset = bizOffsetMs(new Date(wall - offset));
+  const t = new Date(wall - offset);
+  return `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())} ${pad2(t.getUTCHours())}:${pad2(t.getUTCMinutes())}:${pad2(t.getUTCSeconds())}`;
+}
+
 function utcStrToDate(s: string): Date | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):?(\d{2})?/.exec(s);
   if (!m) return null;

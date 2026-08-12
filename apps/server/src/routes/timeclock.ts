@@ -8,7 +8,7 @@ import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
 import { emitInvalidate } from '../realtime/socket';
-import { bizDate, bizWeek, bizToday } from '../services/bizTime';
+import { bizDate, bizWeek, bizToday, bizWallToUtc } from '../services/bizTime';
 
 type Entry = typeof timeEntries.$inferSelect;
 
@@ -323,11 +323,11 @@ meTimeclockRouter.post(
       .limit(1);
     if (!emp[0]) return res.status(404).json({ error: 'employee_not_found' });
 
-    const clockIn = `${d.date} ${d.clockIn}:00`;
+    const clockIn = bizWallToUtc(`${d.date} ${d.clockIn}:00`);
     let clockOut: string | null = null;
     if (d.clockOut) {
       const outDate = d.clockOut < d.clockIn ? addDay(d.date) : d.date;
-      clockOut = `${outDate} ${d.clockOut}:00`;
+      clockOut = bizWallToUtc(`${outDate} ${d.clockOut}:00`);
     }
     await db.insert(timeEntries).values({ companyId, employeeId: d.employeeId, clockIn, clockOut });
     emitInvalidate(['irs', `company:${companyId}`], [['timeclock', companyId]]);
@@ -356,11 +356,11 @@ meTimeclockRouter.patch(
       .limit(1);
     if (!existing[0]) return res.status(404).json({ error: 'not_found' });
 
-    const clockIn = `${d.date} ${d.clockIn}:00`;
+    const clockIn = bizWallToUtc(`${d.date} ${d.clockIn}:00`);
     let clockOut: string | null = null;
     if (d.clockOut) {
       const outDate = d.clockOut < d.clockIn ? addDay(d.date) : d.date;
-      clockOut = `${outDate} ${d.clockOut}:00`;
+      clockOut = bizWallToUtc(`${outDate} ${d.clockOut}:00`);
     }
     await db
       .update(timeEntries)
