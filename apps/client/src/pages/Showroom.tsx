@@ -16,12 +16,14 @@ const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n);
 const PAGE = 24;
 
 const STYLES = `
-.sr-root{--ink:#0b1a12;color:var(--ink);background:#eefbf3;}
+.sr-root{--bg:#eefbf3;--srf:#ffffff;--srf2:#ecfdf3;--tx:#052e1a;--mut:#3f5c4c;--mut2:#6b8a78;--bd:rgba(6,78,59,.10);--track:rgba(6,78,59,.10);--aur:linear-gradient(180deg,#f2fdf6,#e9fbf1 45%,#f4fdf8);
+  color:var(--tx);background:var(--bg);}
+.sr-root[data-theme="dark"]{--bg:#07120d;--srf:#101d16;--srf2:#0c1712;--tx:#e9fcef;--mut:#9cc4ad;--mut2:#6f9583;--bd:rgba(170,225,195,.13);--track:rgba(180,235,205,.13);--aur:linear-gradient(180deg,#08150e,#06110c 45%,#081410);}
 .sr-aurora{position:fixed;inset:0;z-index:0;pointer-events:none;background:
   radial-gradient(58% 48% at 12% 6%,rgba(16,185,129,.20),transparent 60%),
   radial-gradient(52% 42% at 92% 12%,rgba(132,204,22,.16),transparent 60%),
   radial-gradient(68% 58% at 50% 106%,rgba(45,212,191,.15),transparent 60%),
-  linear-gradient(180deg,#f2fdf6,#e9fbf1 45%,#f4fdf8);}
+  var(--aur);}
 .sr-glow{position:fixed;z-index:0;pointer-events:none;border-radius:50%;will-change:transform;contain:strict;}
 .sr-g1{width:68vw;height:68vw;left:-12vw;top:-24vw;background:radial-gradient(circle,rgba(16,185,129,.16),transparent 60%);animation:srG1 26s ease-in-out infinite;}
 .sr-g2{width:54vw;height:54vw;right:-14vw;top:6vw;background:radial-gradient(circle,rgba(132,204,22,.14),transparent 62%);animation:srG2 32s ease-in-out infinite;}
@@ -164,7 +166,7 @@ function FavButton({ active, onToggle, size = 'card' }: { active: boolean; onTog
       aria-pressed={active}
       aria-label={active ? 'Retirer des favoris' : 'Ajouter aux favoris'}
       onClick={(e) => { e.stopPropagation(); onToggle(); }}
-      className={`grid place-items-center rounded-full border backdrop-blur transition-all hover:scale-110 active:scale-95 ${big ? 'h-11 w-11' : 'h-9 w-9'} ${active ? 'border-rose-300 bg-rose-500/90 text-white shadow-lg shadow-rose-500/30' : 'border-emerald-900/10 bg-white/80 text-emerald-900/50 hover:text-rose-500'}`}
+      className={`grid place-items-center rounded-full border backdrop-blur transition-all hover:scale-110 active:scale-95 ${big ? 'h-11 w-11' : 'h-9 w-9'} ${active ? 'border-rose-300 bg-rose-500/90 text-white shadow-lg shadow-rose-500/30' : 'border-[var(--bd)] bg-[var(--srf)] text-[var(--mut2)] hover:text-rose-500'}`}
     >
       <Heart active={active} className={big ? 'h-5 w-5' : 'h-4 w-4'} />
     </button>
@@ -193,21 +195,21 @@ function CompareModal({ vehicles, onClose, cmp }: { vehicles: ShowroomVehicle[];
   const multi = vehicles.length > 1;
   return (
     <div className="sr-mbd fixed inset-0 z-[70] grid place-items-center bg-emerald-950/45 p-4 backdrop-blur-md" onClick={onClose}>
-      <div className="sr-mc relative max-h-[92vh] w-full max-w-5xl overflow-auto rounded-[28px] border border-emerald-900/10 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-emerald-900/10 bg-white/95 px-6 py-4 backdrop-blur">
-          <h2 className="text-xl font-black text-emerald-950">Comparatif · {vehicles.length} véhicules</h2>
-          <button type="button" onClick={onClose} aria-label="Fermer" className="grid h-9 w-9 place-items-center rounded-full bg-emerald-500/10 text-emerald-900/60 hover:bg-emerald-500/20">✕</button>
+      <div className="sr-mc relative max-h-[92vh] w-full max-w-5xl overflow-auto rounded-[28px] border border-[var(--bd)] bg-[var(--srf)] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--bd)] bg-[var(--srf)] px-6 py-4 backdrop-blur">
+          <h2 className="text-xl font-black text-[var(--tx)]">Comparatif · {vehicles.length} véhicules</h2>
+          <button type="button" onClick={onClose} aria-label="Fermer" className="grid h-9 w-9 place-items-center rounded-full bg-[var(--srf2)]0/10 text-[var(--mut)] hover:bg-[var(--srf2)]0/20">✕</button>
         </div>
         <div className="grid gap-4 p-6" style={{ gridTemplateColumns: `repeat(${vehicles.length}, minmax(0,1fr))` }}>
           {rows.map(({ v, stats }) => (
-            <div key={v.id} className="rounded-2xl border border-emerald-900/10 bg-white p-4">
-              <div className="relative mb-3 aspect-[16/10] overflow-hidden rounded-xl bg-gradient-to-br from-emerald-50 to-lime-50">
+            <div key={v.id} className="rounded-2xl border border-[var(--bd)] bg-[var(--srf)] p-4">
+              <div className="relative mb-3 aspect-[16/10] overflow-hidden rounded-xl bg-gradient-to-br from-[var(--srf2)] to-[var(--srf2)]">
                 {v.imageUrl ? <img src={v.imageUrl} alt="" className="h-full w-full object-contain p-1" /> : <div className="grid h-full w-full place-items-center text-4xl">🚘</div>}
-                <button type="button" onClick={() => cmp.toggle(v)} aria-label="Retirer" className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-white/85 text-emerald-900/50 backdrop-blur hover:text-rose-500">✕</button>
+                <button type="button" onClick={() => cmp.toggle(v)} aria-label="Retirer" className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-[var(--srf)] text-[var(--mut2)] backdrop-blur hover:text-rose-500">✕</button>
               </div>
               <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">{v.category} · {v.type === 'used' ? 'Occasion' : 'Neuf'}</div>
-              <div className="truncate text-base font-black text-emerald-950">{v.name}</div>
-              <div className={`mt-1 text-lg font-black ${v.salePrice === cheapest && multi ? 'text-emerald-600' : 'text-emerald-900/70'}`}>{fmt(v.salePrice)} $</div>
+              <div className="truncate text-base font-black text-[var(--tx)]">{v.name}</div>
+              <div className={`mt-1 text-lg font-black ${v.salePrice === cheapest && multi ? 'text-emerald-600' : 'text-[var(--mut)]'}`}>{fmt(v.salePrice)} $</div>
               {v.salePrice === cheapest && multi && <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-500">le moins cher ★</div>}
               <div className="mt-4 space-y-2.5">
                 {STAT_META.map((s) => {
@@ -216,21 +218,21 @@ function CompareModal({ vehicles, onClose, cmp }: { vehicles: ShowroomVehicle[];
                   return (
                     <div key={s.key}>
                       <div className="mb-0.5 flex items-center justify-between text-[11px]">
-                        <span className="font-medium text-emerald-900/60">{s.label}</span>
-                        <span className={`font-bold ${win ? 'text-emerald-600' : 'text-emerald-900/70'}`}>{val != null ? val : '—'}{win ? ' ★' : ''}</span>
+                        <span className="font-medium text-[var(--mut)]">{s.label}</span>
+                        <span className={`font-bold ${win ? 'text-emerald-600' : 'text-[var(--mut)]'}`}>{val != null ? val : '—'}{win ? ' ★' : ''}</span>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-emerald-900/10">
-                        <div className={`h-full rounded-full ${win ? 'bg-gradient-to-r from-emerald-400 to-lime-400' : 'bg-emerald-500/60'}`} style={{ width: `${val ?? 0}%` }} />
+                      <div className="h-2 overflow-hidden rounded-full bg-[var(--track)]">
+                        <div className={`h-full rounded-full ${win ? 'bg-gradient-to-r from-emerald-400 to-lime-400' : 'bg-[var(--srf2)]0/60'}`} style={{ width: `${val ?? 0}%` }} />
                       </div>
                     </div>
                   );
                 })}
-                {!stats && <div className="pt-1 text-[11px] text-emerald-900/40">Stats de perf indisponibles pour ce modèle.</div>}
+                {!stats && <div className="pt-1 text-[11px] text-[var(--mut2)]">Stats de perf indisponibles pour ce modèle.</div>}
               </div>
             </div>
           ))}
         </div>
-        <div className="px-6 pb-5 text-center text-[11px] text-emerald-900/40">Performances d'origine (stock, sans améliorations) · indices relatifs 0–100.</div>
+        <div className="px-6 pb-5 text-center text-[11px] text-[var(--mut2)]">Performances d'origine (stock, sans améliorations) · indices relatifs 0–100.</div>
       </div>
     </div>
   );
@@ -271,6 +273,10 @@ export default function Showroom() {
   const [page, setPage] = useState(0);
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    try { return localStorage.getItem('showroom-theme') === 'dark' ? 'dark' : 'light'; } catch { return 'light'; }
+  });
+  useEffect(() => { try { localStorage.setItem('showroom-theme', theme); } catch { /* ignore */ } }, [theme]);
   const col = useCollections(token);
   const catalogRef = useRef<HTMLDivElement>(null);
 
@@ -323,7 +329,7 @@ export default function Showroom() {
 
   if (query.isLoading) {
     return (
-      <div className="sr-root grid min-h-screen place-items-center">
+      <div className="sr-root grid min-h-screen place-items-center" data-theme={theme}>
         <style>{STYLES}</style>
         <div className="sr-aurora" />
         <div className="relative z-10 flex flex-col items-center gap-4">
@@ -335,11 +341,11 @@ export default function Showroom() {
   }
   if (query.isError || !query.data) {
     return (
-      <div className="sr-root grid min-h-screen place-items-center px-6 text-center">
+      <div className="sr-root grid min-h-screen place-items-center px-6 text-center" data-theme={theme}>
         <style>{STYLES}</style>
         <div className="sr-aurora" />
         <div className="relative z-10">
-          <div className="text-3xl font-black tracking-tight text-emerald-950">Showroom introuvable</div>
+          <div className="text-3xl font-black tracking-tight text-[var(--tx)]">Showroom introuvable</div>
           <p className="mt-2 text-sm text-emerald-800/70">Ce lien n'est plus valide ou la vitrine a été désactivée.</p>
         </div>
       </div>
@@ -351,7 +357,7 @@ export default function Showroom() {
   const goPage = (p: number) => { setPage(Math.max(0, Math.min(p, pageCount - 1))); catalogRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 
   return (
-    <div className="sr-root relative min-h-screen overflow-x-clip">
+    <div className="sr-root relative min-h-screen overflow-x-clip" data-theme={theme}>
       <style>{STYLES}</style>
       <div className="sr-aurora" />
       <div className="sr-glow sr-g1" />
@@ -364,17 +370,18 @@ export default function Showroom() {
         q={q} setQ={setQ} type={type} setType={setType} cat={cat} setCat={setCat}
         categories={categories} total={vehicles.length}
         col={col} viewFavs={viewFavs} setViewFavs={setViewFavs}
+        theme={theme} onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
       />
 
       <div ref={catalogRef} className="relative z-10 mx-auto max-w-[1400px] scroll-mt-28 px-5 pb-28 pt-10 sm:px-8">
         {viewFavs && filtered.length === 0 ? (
-          <div className="grid place-items-center gap-3 rounded-3xl border border-dashed border-emerald-900/15 bg-white/60 py-24 text-center">
+          <div className="grid place-items-center gap-3 rounded-3xl border border-dashed border-[var(--bd)] bg-[var(--srf2)] py-24 text-center">
             <Heart active={false} className="h-10 w-10 text-emerald-400" />
-            <div className="text-lg font-bold text-emerald-950">« {col.active?.name} » est vide</div>
-            <div className="text-sm text-emerald-900/50">Ajoute des véhicules avec le cœur ♥ sur les cartes.</div>
+            <div className="text-lg font-bold text-[var(--tx)]">« {col.active?.name} » est vide</div>
+            <div className="text-sm text-[var(--mut2)]">Ajoute des véhicules avec le cœur ♥ sur les cartes.</div>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="grid place-items-center rounded-3xl border border-emerald-900/10 bg-white/60 py-24 text-emerald-900/50">
+          <div className="grid place-items-center rounded-3xl border border-[var(--bd)] bg-[var(--srf2)] py-24 text-[var(--mut2)]">
             Aucun véhicule ne correspond.
           </div>
         ) : (
@@ -388,18 +395,18 @@ export default function Showroom() {
 
       {compareVehicles.length > 0 && (
         <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
-          <div className="sr-mc flex items-center gap-3 rounded-2xl border border-emerald-900/10 bg-white/95 px-4 py-2.5 shadow-xl backdrop-blur">
+          <div className="sr-mc flex items-center gap-3 rounded-2xl border border-[var(--bd)] bg-[var(--srf)] px-4 py-2.5 shadow-xl backdrop-blur">
             <div className="flex -space-x-2">
               {compareVehicles.map((v) => (
-                <div key={v.id} className="grid h-9 w-12 place-items-center overflow-hidden rounded-md border border-white bg-emerald-50">
+                <div key={v.id} className="grid h-9 w-12 place-items-center overflow-hidden rounded-md border border-white bg-[var(--srf2)]">
                   {v.imageUrl ? <img src={v.imageUrl} alt="" className="h-full w-full object-cover" /> : <span className="text-xs">🚘</span>}
                 </div>
               ))}
             </div>
-            <span className="text-sm font-semibold text-emerald-950">{compareVehicles.length}/4</span>
+            <span className="text-sm font-semibold text-[var(--tx)]">{compareVehicles.length}/4</span>
             <button type="button" onClick={() => setCompareOpen(true)} disabled={compareVehicles.length < 2}
               className="rounded-full bg-emerald-950 px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40">Comparer</button>
-            <button type="button" onClick={() => cmp.clear()} className="text-sm text-emerald-900/50 hover:text-emerald-900">Vider</button>
+            <button type="button" onClick={() => cmp.clear()} className="text-sm text-[var(--mut2)] hover:text-emerald-900">Vider</button>
           </div>
         </div>
       )}
@@ -407,8 +414,8 @@ export default function Showroom() {
 
       {selected && <VehicleModal v={selected} onClose={() => setSelected(null)} col={col} cmp={cmp} />}
 
-      <footer className="relative z-10 border-t border-emerald-900/10 bg-white/40 py-10 text-center backdrop-blur">
-        <div className="text-lg font-black tracking-tight text-emerald-950">{company.name}</div>
+      <footer className="relative z-10 border-t border-[var(--bd)] bg-[var(--srf2)] py-10 text-center backdrop-blur">
+        <div className="text-lg font-black tracking-tight text-[var(--tx)]">{company.name}</div>
         <div className="mt-1 text-xs font-medium tracking-[0.3em] text-emerald-700/60">SHOWROOM · CATALOGUE EN TEMPS RÉEL</div>
       </footer>
     </div>
@@ -446,19 +453,19 @@ function Hero({ company, featured, count, cats, onExplore }: { company: { name: 
     <header className="relative z-10 mx-auto flex min-h-[92vh] max-w-[1400px] flex-col px-5 sm:px-8">
       <div className="flex items-center gap-2.5 pt-8">
         <img src="/logo.png" alt="RP Compta" className="h-9 w-9 rounded-xl object-contain" />
-        <div className="text-lg font-black tracking-tight text-emerald-950">RP Compta</div>
+        <div className="text-lg font-black tracking-tight text-[var(--tx)]">RP Compta</div>
       </div>
 
       <div className="grid flex-1 items-center gap-6 lg:grid-cols-2">
         <div className="max-w-xl">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-white/60 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-emerald-700 backdrop-blur">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> Concession en ligne
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-[var(--srf2)] px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-emerald-700 backdrop-blur">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--srf2)]0" /> Concession en ligne
           </div>
           <h1 className="text-[13vw] font-black leading-[0.92] tracking-tighter sm:text-6xl lg:text-7xl">
-            <span className="block text-emerald-950">Roulez vers</span>
+            <span className="block text-[var(--tx)]">Roulez vers</span>
             <span className="sr-shine block">l'exception.</span>
           </h1>
-          <p className="mt-5 max-w-md text-base text-emerald-900/60">
+          <p className="mt-5 max-w-md text-base text-[var(--mut)]">
             {count} véhicules d'exception, {cats} univers. Une collection triée sur le volet — trouvez celui qui vous ressemble.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -476,7 +483,7 @@ function Hero({ company, featured, count, cats, onExplore }: { company: { name: 
         <div className="relative h-[46vh] min-h-[320px] [perspective:1400px]" onPointerMove={onMove} onPointerLeave={onLeave}>
           {car && (
             <div ref={stageRef} className="sr-tilt absolute inset-0 grid place-items-center">
-              <div className="absolute bottom-[14%] h-24 w-3/4 rounded-[50%] bg-emerald-500/25 blur-2xl" />
+              <div className="absolute bottom-[14%] h-24 w-3/4 rounded-[50%] bg-[var(--srf2)]0/25 blur-2xl" />
               <div className="sr-float relative w-full [transform-style:preserve-3d]">
                 {featured.map((f, i) => (
                   <img
@@ -490,9 +497,9 @@ function Hero({ company, featured, count, cats, onExplore }: { company: { name: 
                 ))}
               </div>
               {car && (
-                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-2xl border border-emerald-900/10 bg-white/70 px-5 py-2.5 text-center backdrop-blur">
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-2xl border border-[var(--bd)] bg-[var(--srf)] px-5 py-2.5 text-center backdrop-blur">
                   <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">{car.category} · vedette</div>
-                  <div className="text-sm font-black text-emerald-950">{car.name}</div>
+                  <div className="text-sm font-black text-[var(--tx)]">{car.name}</div>
                   <div className="text-lg font-black text-emerald-600">{fmt(car.salePrice)} $</div>
                 </div>
               )}
@@ -501,7 +508,7 @@ function Hero({ company, featured, count, cats, onExplore }: { company: { name: 
         </div>
       </div>
 
-      <button onClick={onExplore} className="sr-bounce mx-auto mb-6 mt-2 grid h-10 w-10 place-items-center rounded-full border border-emerald-900/15 text-emerald-700" aria-label="Descendre">↓</button>
+      <button onClick={onExplore} className="sr-bounce mx-auto mb-6 mt-2 grid h-10 w-10 place-items-center rounded-full border border-[var(--bd)] text-emerald-700" aria-label="Descendre">↓</button>
     </header>
   );
 }
@@ -509,42 +516,55 @@ function Hero({ company, featured, count, cats, onExplore }: { company: { name: 
 function Stat({ n, l }: { n: number; l: string }) {
   return (
     <div>
-      <div className="text-2xl font-black leading-none text-emerald-950">{fmt(n)}</div>
+      <div className="text-2xl font-black leading-none text-[var(--tx)]">{fmt(n)}</div>
       <div className="text-[11px] font-medium uppercase tracking-wider text-emerald-700/60">{l}</div>
     </div>
   );
 }
 
-function StickyNav({ q, setQ, type, setType, cat, setCat, categories, total, col, viewFavs, setViewFavs }: {
+function ThemeToggle({ theme, onToggle }: { theme: 'light' | 'dark'; onToggle: () => void }) {
+  return (
+    <button type="button" onClick={onToggle} aria-label="Basculer clair/sombre"
+      className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[var(--bd)] bg-[var(--srf)] text-[var(--mut)] transition-colors hover:text-emerald-500">
+      {theme === 'dark'
+        ? <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6L19 19M19 5l-1.4 1.4M6.4 17.6L5 19" /></svg>
+        : <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>}
+    </button>
+  );
+}
+
+function StickyNav({ q, setQ, type, setType, cat, setCat, categories, total, col, viewFavs, setViewFavs, theme, onToggleTheme }: {
   q: string; setQ: (v: string) => void; type: 'all' | 'new' | 'used'; setType: (v: 'all' | 'new' | 'used') => void;
   cat: string; setCat: (v: string) => void; categories: [string, number][]; total: number;
   col: Collections; viewFavs: boolean; setViewFavs: (v: boolean) => void;
+  theme: 'light' | 'dark'; onToggleTheme: () => void;
 }) {
   return (
-    <div className="sticky top-0 z-30 border-y border-emerald-900/10 bg-white shadow-sm">
+    <div className="sticky top-0 z-30 border-y border-[var(--bd)] bg-[var(--srf)] shadow-sm">
       <div className="mx-auto max-w-[1400px] px-5 py-3 sm:px-8">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[180px]">
             <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-700/50">⌕</span>
             <input
               value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un modèle…"
-              className="h-11 w-full rounded-full border border-emerald-900/10 bg-white/80 pl-10 pr-4 text-sm text-emerald-950 outline-none transition-colors placeholder:text-emerald-900/35 focus:border-emerald-500/60"
+              className="h-11 w-full rounded-full border border-[var(--bd)] bg-[var(--srf)] pl-10 pr-4 text-sm text-[var(--tx)] outline-none transition-colors placeholder:text-[var(--mut2)] focus:border-emerald-500/60"
             />
           </div>
-          <div className="flex overflow-hidden rounded-full border border-emerald-900/10 bg-white/60">
+          <div className="flex overflow-hidden rounded-full border border-[var(--bd)] bg-[var(--srf2)]">
             {(['all', 'new', 'used'] as const).map((t) => (
               <button key={t} onClick={() => setType(t)}
-                className={`px-4 py-2.5 text-sm font-semibold transition-colors ${type === t ? 'bg-emerald-500 text-white' : 'text-emerald-900/70 hover:bg-emerald-500/10'}`}>
+                className={`px-4 py-2.5 text-sm font-semibold transition-colors ${type === t ? 'bg-[var(--srf2)]0 text-white' : 'text-[var(--mut)] hover:bg-[var(--srf2)]0/10'}`}>
                 {t === 'all' ? 'Tout' : t === 'new' ? 'Neuf' : 'Occasion'}
               </button>
             ))}
           </div>
           <button onClick={() => setViewFavs(!viewFavs)}
-            className={`inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition-all ${viewFavs ? 'border-rose-300 bg-rose-500 text-white shadow-md shadow-rose-500/25' : 'border-emerald-900/10 bg-white/70 text-emerald-900/70 hover:border-rose-300 hover:text-rose-500'}`}>
+            className={`inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition-all ${viewFavs ? 'border-rose-300 bg-rose-500 text-white shadow-md shadow-rose-500/25' : 'border-[var(--bd)] bg-[var(--srf)] text-[var(--mut)] hover:border-rose-300 hover:text-rose-500'}`}>
             <Heart active={viewFavs} className="h-4 w-4" /> Favoris
-            <span className={`rounded-full px-1.5 text-[10px] ${viewFavs ? 'bg-white/25' : 'bg-rose-500/10 text-rose-500'}`}>{col.totalFav}</span>
+            <span className={`rounded-full px-1.5 text-[10px] ${viewFavs ? 'bg-[rgba(255,255,255,0.22)]' : 'bg-rose-500/10 text-rose-500'}`}>{col.totalFav}</span>
           </button>
           <CollectionsMenu col={col} onView={() => setViewFavs(true)} />
+          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <Pill active={!cat} onClick={() => setCat('')} label="Tout" n={total} />
@@ -568,33 +588,33 @@ function CollectionsMenu({ col, onView }: { col: Collections; onView: () => void
   return (
     <div className="relative">
       <button onClick={() => setOpen((o) => !o)}
-        className="inline-flex h-11 items-center gap-2 rounded-full border border-emerald-900/10 bg-white/70 px-4 text-sm font-semibold text-emerald-900/80 transition-colors hover:border-emerald-500/40">
+        className="inline-flex h-11 items-center gap-2 rounded-full border border-[var(--bd)] bg-[var(--srf)] px-4 text-sm font-semibold text-[var(--tx)] transition-colors hover:border-emerald-500/40">
         <span className="max-w-[140px] truncate">{col.active?.name ?? 'Mes listes'}</span>
-        <span className="rounded-full bg-emerald-500/10 px-1.5 text-[10px] text-emerald-700">{col.active?.ids.length ?? 0}</span>
+        <span className="rounded-full bg-[var(--srf2)]0/10 px-1.5 text-[10px] text-emerald-700">{col.active?.ids.length ?? 0}</span>
         <span className="text-emerald-700/50">▾</span>
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => { setOpen(false); setEditId(null); }} />
-          <div className="absolute right-0 z-50 mt-2 w-72 rounded-2xl border border-emerald-900/10 bg-white/95 p-2 shadow-xl backdrop-blur">
+          <div className="absolute right-0 z-50 mt-2 w-72 rounded-2xl border border-[var(--bd)] bg-[var(--srf)] p-2 shadow-xl backdrop-blur">
             <div className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-600">Mes listes</div>
             <div className="max-h-64 overflow-y-auto">
               {col.lists.map((l) => (
-                <div key={l.id} className={`group flex items-center gap-1 rounded-xl px-1 ${col.activeId === l.id ? 'bg-emerald-500/10' : ''}`}>
+                <div key={l.id} className={`group flex items-center gap-1 rounded-xl px-1 ${col.activeId === l.id ? 'bg-[var(--srf2)]0/10' : ''}`}>
                   {editId === l.id ? (
                     <input autoFocus value={editName} onChange={(e) => setEditName(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditId(null); }}
                       onBlur={commitEdit}
-                      className="my-1 h-8 w-full rounded-lg border border-emerald-500/40 bg-white px-2 text-sm outline-none" />
+                      className="my-1 h-8 w-full rounded-lg border border-emerald-500/40 bg-[var(--srf)] px-2 text-sm outline-none" />
                   ) : (
                     <>
                       <button onClick={() => { col.setActive(l.id); onView(); setOpen(false); }}
                         className="flex flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left text-sm">
                         <Heart active className={`h-3.5 w-3.5 ${col.activeId === l.id ? 'text-rose-500' : 'text-emerald-300'}`} />
-                        <span className="flex-1 truncate font-medium text-emerald-950">{l.name}</span>
+                        <span className="flex-1 truncate font-medium text-[var(--tx)]">{l.name}</span>
                         <span className="text-xs text-emerald-700/50">{l.ids.length}</span>
                       </button>
-                      <button onClick={() => startEdit(l.id, l.name)} aria-label="Renommer" className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-emerald-700/40 opacity-0 hover:bg-emerald-500/10 hover:text-emerald-700 group-hover:opacity-100">✎</button>
+                      <button onClick={() => startEdit(l.id, l.name)} aria-label="Renommer" className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-emerald-700/40 opacity-0 hover:bg-[var(--srf2)]0/10 hover:text-emerald-700 group-hover:opacity-100">✎</button>
                       {col.lists.length > 1 && (
                         <button onClick={() => col.deleteList(l.id)} aria-label="Supprimer" className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-emerald-700/40 opacity-0 hover:bg-rose-500/10 hover:text-rose-500 group-hover:opacity-100">×</button>
                       )}
@@ -603,11 +623,11 @@ function CollectionsMenu({ col, onView }: { col: Collections; onView: () => void
                 </div>
               ))}
             </div>
-            <div className="mt-2 flex items-center gap-2 border-t border-emerald-900/10 pt-2">
+            <div className="mt-2 flex items-center gap-2 border-t border-[var(--bd)] pt-2">
               <input value={creating} onChange={(e) => setCreating(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') create(); }}
                 placeholder="Nouvelle liste…"
-                className="h-9 flex-1 rounded-lg border border-emerald-900/10 bg-white px-2.5 text-sm outline-none focus:border-emerald-500/50" />
+                className="h-9 flex-1 rounded-lg border border-[var(--bd)] bg-[var(--srf)] px-2.5 text-sm outline-none focus:border-emerald-500/50" />
               <button onClick={create} disabled={!creating.trim()}
                 className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-950 text-white disabled:opacity-40">＋</button>
             </div>
@@ -621,9 +641,9 @@ function CollectionsMenu({ col, onView }: { col: Collections; onView: () => void
 function Pill({ active, onClick, label, n }: { active: boolean; onClick: () => void; label: string; n: number }) {
   return (
     <button onClick={onClick}
-      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-all hover:scale-105 ${active ? 'border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/25' : 'border-emerald-900/10 bg-white/70 text-emerald-900/70 hover:border-emerald-500/40'}`}>
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-all hover:scale-105 ${active ? 'border-emerald-500 bg-[var(--srf2)]0 text-white shadow-md shadow-emerald-500/25' : 'border-[var(--bd)] bg-[var(--srf)] text-[var(--mut)] hover:border-emerald-500/40'}`}>
       {label}
-      <span className={`rounded-full px-1.5 text-[10px] ${active ? 'bg-white/25' : 'bg-emerald-500/10 text-emerald-700'}`}>{n}</span>
+      <span className={`rounded-full px-1.5 text-[10px] ${active ? 'bg-[rgba(255,255,255,0.22)]' : 'bg-[var(--srf2)]0/10 text-emerald-700'}`}>{n}</span>
     </button>
   );
 }
@@ -634,7 +654,7 @@ function SectionTitle({ label, count }: { label: string; count: number }) {
     <div ref={ref} className="sr-reveal mb-6 flex items-end justify-between gap-4">
       <div className="flex items-center gap-3">
         <div className="h-8 w-1.5 rounded-full bg-gradient-to-b from-emerald-400 to-lime-400" />
-        <h2 className="text-3xl font-black tracking-tight text-emerald-950 sm:text-4xl">{label}</h2>
+        <h2 className="text-3xl font-black tracking-tight text-[var(--tx)] sm:text-4xl">{label}</h2>
       </div>
       <div className="mb-1 text-sm font-semibold text-emerald-700/60">{count} modèle{count > 1 ? 's' : ''}</div>
     </div>
@@ -675,15 +695,15 @@ function Catalog({ ordered, page, pageSize, pageCount, catCounts, headerLabel, p
         <div className="mt-12 flex flex-col items-center gap-3">
           <div className="flex flex-wrap items-center justify-center gap-1.5">
             <button type="button" disabled={page === 0} onClick={() => onPage(page - 1)} aria-label="Page précédente"
-              className="grid h-10 w-10 place-items-center rounded-xl bg-white text-emerald-900 shadow-sm transition-all enabled:hover:bg-emerald-500/10 disabled:opacity-40">←</button>
+              className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--srf)] text-emerald-900 shadow-sm transition-all enabled:hover:bg-[var(--srf2)]0/10 disabled:opacity-40">←</button>
             {pageWindow(page, pageCount).map((n, i) => n === -1
-              ? <span key={`e${i}`} className="px-1 text-emerald-900/40">…</span>
+              ? <span key={`e${i}`} className="px-1 text-[var(--mut2)]">…</span>
               : <button key={n} type="button" onClick={() => onPage(n)}
-                  className={`h-10 min-w-10 rounded-xl px-3 text-sm font-bold transition-all ${n === page ? 'bg-emerald-950 text-white shadow-md' : 'bg-white text-emerald-900/70 shadow-sm hover:bg-emerald-500/10'}`}>{n + 1}</button>)}
+                  className={`h-10 min-w-10 rounded-xl px-3 text-sm font-bold transition-all ${n === page ? 'bg-emerald-950 text-white shadow-md' : 'bg-[var(--srf)] text-[var(--mut)] shadow-sm hover:bg-[var(--srf2)]0/10'}`}>{n + 1}</button>)}
             <button type="button" disabled={page >= pageCount - 1} onClick={() => onPage(page + 1)} aria-label="Page suivante"
-              className="grid h-10 w-10 place-items-center rounded-xl bg-white text-emerald-900 shadow-sm transition-all enabled:hover:bg-emerald-500/10 disabled:opacity-40">→</button>
+              className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--srf)] text-emerald-900 shadow-sm transition-all enabled:hover:bg-[var(--srf2)]0/10 disabled:opacity-40">→</button>
           </div>
-          <div className="text-xs font-medium text-emerald-900/50">{start + 1}–{start + slice.length} sur {fmt(total)} · page {page + 1}/{pageCount}</div>
+          <div className="text-xs font-medium text-[var(--mut2)]">{start + 1}–{start + slice.length} sur {fmt(total)} · page {page + 1}/{pageCount}</div>
         </div>
       )}
     </>
@@ -719,19 +739,19 @@ function TiltCard({ v, onOpen, col, cmp }: { v: ShowroomVehicle; onOpen: (v: Sho
         onClick={() => onOpen(v)}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(v); } }}
         aria-label={`Voir ${v.name}`}
-        className="sr-card sr-tilt group relative overflow-hidden rounded-3xl border border-emerald-900/10 bg-white p-4 shadow-[0_10px_40px_-12px_rgba(6,78,59,.18)] outline-none transition-shadow hover:shadow-[0_30px_60px_-18px_rgba(16,185,129,.4)] focus-visible:ring-2 focus-visible:ring-emerald-500">
-        <div className="relative aspect-[16/10] overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-50 to-lime-50">
+        className="sr-card sr-tilt group relative overflow-hidden rounded-3xl border border-[var(--bd)] bg-[var(--srf)] p-4 shadow-[0_10px_40px_-12px_rgba(6,78,59,.18)] outline-none transition-shadow hover:shadow-[0_30px_60px_-18px_rgba(16,185,129,.4)] focus-visible:ring-2 focus-visible:ring-emerald-500">
+        <div className="relative aspect-[16/10] overflow-hidden rounded-2xl bg-gradient-to-br from-[var(--srf2)] to-[var(--srf2)]">
           <div className="absolute inset-0 [background:radial-gradient(120%_80%_at_50%_120%,rgba(16,185,129,.18),transparent_60%)]" />
           {v.imageUrl
             ? <img src={v.imageUrl} alt={v.name} loading="lazy" decoding="async" className="sr-pop absolute inset-0 h-full w-full object-contain p-2" style={{ filter: 'drop-shadow(0 16px 20px rgba(6,78,59,.28))' }} />
             : <div className="grid h-full w-full place-items-center text-5xl text-emerald-300">🚘</div>}
-          <span className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-bold ${v.type === 'used' ? 'bg-amber-400 text-amber-950' : 'bg-emerald-500 text-white'}`}>
+          <span className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-bold ${v.type === 'used' ? 'bg-amber-400 text-amber-950' : 'bg-[var(--srf2)]0 text-white'}`}>
             {v.type === 'used' ? 'Occasion' : 'Neuf'}
           </span>
           <div className="absolute right-3 top-3 flex gap-1.5">
             <button type="button" aria-pressed={cmp.has(v.id)} aria-label="Comparer"
               onClick={(e) => { e.stopPropagation(); cmp.toggle(v); }}
-              className={`grid h-9 w-9 place-items-center rounded-full border backdrop-blur transition-all hover:scale-110 ${cmp.has(v.id) ? 'border-emerald-300 bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'border-emerald-900/10 bg-white/80 text-emerald-900/50 hover:text-emerald-600'}`}>
+              className={`grid h-9 w-9 place-items-center rounded-full border backdrop-blur transition-all hover:scale-110 ${cmp.has(v.id) ? 'border-emerald-300 bg-[var(--srf2)]0 text-white shadow-lg shadow-emerald-500/30' : 'border-[var(--bd)] bg-[var(--srf)] text-[var(--mut2)] hover:text-emerald-600'}`}>
               <CompareIcon className="h-4 w-4" />
             </button>
             <FavButton active={col.isInActive(v.id)} onToggle={() => col.toggleActive(v.id)} />
@@ -741,8 +761,8 @@ function TiltCard({ v, onOpen, col, cmp }: { v: ShowroomVehicle; onOpen: (v: Sho
         <div className="relative mt-4 flex items-end justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">{v.category}</div>
-            <div className="truncate text-lg font-black text-emerald-950">{v.name}</div>
-            {v.description && <p className="mt-0.5 line-clamp-1 text-xs text-emerald-900/50">{v.description}</p>}
+            <div className="truncate text-lg font-black text-[var(--tx)]">{v.name}</div>
+            {v.description && <p className="mt-0.5 line-clamp-1 text-xs text-[var(--mut2)]">{v.description}</p>}
           </div>
           <div className="shrink-0 text-right">
             <div className="text-xl font-black leading-none text-emerald-600">{fmt(v.salePrice)}</div>
@@ -794,13 +814,13 @@ function VehicleModal({ v, onClose, col, cmp }: { v: ShowroomVehicle; onClose: (
 
   return (
     <div className="sr-mbd fixed inset-0 z-[60] grid place-items-center bg-emerald-950/40 p-4 backdrop-blur-md" onClick={onClose}>
-      <div className="sr-mc relative max-h-[92vh] w-full max-w-4xl overflow-hidden overflow-y-auto rounded-[28px] border border-emerald-900/10 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="sr-mc relative max-h-[92vh] w-full max-w-4xl overflow-hidden overflow-y-auto rounded-[28px] border border-[var(--bd)] bg-[var(--srf)] shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <button type="button" onClick={onClose} aria-label="Fermer"
-          className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/80 text-emerald-900/60 shadow backdrop-blur transition-colors hover:bg-white hover:text-emerald-950">✕</button>
+          className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-[var(--srf)] text-[var(--mut)] shadow backdrop-blur transition-colors hover:bg-[var(--srf)] hover:text-[var(--tx)]">✕</button>
         <div className="grid md:grid-cols-[1.15fr_1fr]">
-          <div className="relative grid min-h-[300px] place-items-center bg-gradient-to-br from-emerald-50 via-lime-50 to-white p-8 [perspective:1200px]" onPointerMove={onMove} onPointerLeave={onLeave}>
+          <div className="relative grid min-h-[300px] place-items-center bg-gradient-to-br from-[var(--srf2)] via-[var(--srf2)] to-[var(--srf)] p-8 [perspective:1200px]" onPointerMove={onMove} onPointerLeave={onLeave}>
             <div className="pointer-events-none absolute inset-0 [background:radial-gradient(80%_60%_at_50%_120%,rgba(16,185,129,.18),transparent_60%)]" />
-            <span className={`absolute left-5 top-5 rounded-full px-3 py-1 text-xs font-bold ${v.type === 'used' ? 'bg-amber-400 text-amber-950' : 'bg-emerald-500 text-white'}`}>
+            <span className={`absolute left-5 top-5 rounded-full px-3 py-1 text-xs font-bold ${v.type === 'used' ? 'bg-amber-400 text-amber-950' : 'bg-[var(--srf2)]0 text-white'}`}>
               {v.type === 'used' ? 'Occasion' : 'Neuf'}
             </span>
             <div ref={tiltRef} className="sr-tilt grid h-full w-full place-items-center">
@@ -812,13 +832,13 @@ function VehicleModal({ v, onClose, col, cmp }: { v: ShowroomVehicle; onClose: (
 
           <div className="flex flex-col p-7">
             <div className="text-[11px] font-bold uppercase tracking-widest text-emerald-600">{v.category}</div>
-            <h2 className="mt-1 text-3xl font-black leading-tight text-emerald-950">{v.name}</h2>
+            <h2 className="mt-1 text-3xl font-black leading-tight text-[var(--tx)]">{v.name}</h2>
             <div className="mt-3 flex flex-wrap gap-2">
-              <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700">{v.type === 'used' ? 'Occasion' : 'Neuf'}</span>
-              <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700">{v.category}</span>
-              <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700">Disponible</span>
+              <span className="rounded-full bg-[var(--srf2)]0/10 px-3 py-1 text-xs font-semibold text-emerald-700">{v.type === 'used' ? 'Occasion' : 'Neuf'}</span>
+              <span className="rounded-full bg-[var(--srf2)]0/10 px-3 py-1 text-xs font-semibold text-emerald-700">{v.category}</span>
+              <span className="rounded-full bg-[var(--srf2)]0/10 px-3 py-1 text-xs font-semibold text-emerald-700">Disponible</span>
             </div>
-            {v.description && <p className="mt-4 text-sm leading-relaxed text-emerald-900/60">{v.description}</p>}
+            {v.description && <p className="mt-4 text-sm leading-relaxed text-[var(--mut)]">{v.description}</p>}
 
             {(() => {
               const st = statsFor(v.name);
@@ -830,17 +850,17 @@ function VehicleModal({ v, onClose, col, cmp }: { v: ShowroomVehicle; onClose: (
                       {STAT_META.map((s) => (
                         <div key={s.key}>
                           <div className="mb-0.5 flex items-center justify-between text-[11px]">
-                            <span className="font-medium text-emerald-900/60">{s.label}</span>
-                            <span className="font-bold text-emerald-900/70">{st[s.key]}</span>
+                            <span className="font-medium text-[var(--mut)]">{s.label}</span>
+                            <span className="font-bold text-[var(--mut)]">{st[s.key]}</span>
                           </div>
-                          <div className="h-2 overflow-hidden rounded-full bg-emerald-900/10">
+                          <div className="h-2 overflow-hidden rounded-full bg-[var(--track)]">
                             <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-lime-400" style={{ width: `${st[s.key]}%` }} />
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-dashed border-emerald-900/15 px-3 py-2 text-[11px] text-emerald-900/40">Stats de perf indisponibles pour ce modèle.</div>
+                    <div className="rounded-xl border border-dashed border-[var(--bd)] px-3 py-2 text-[11px] text-[var(--mut2)]">Stats de perf indisponibles pour ce modèle.</div>
                   )}
                 </div>
               );
@@ -855,7 +875,7 @@ function VehicleModal({ v, onClose, col, cmp }: { v: ShowroomVehicle; onClose: (
             </div>
 
             <button type="button" onClick={() => cmp.toggle(v)}
-              className={`mt-3 inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all ${cmp.has(v.id) ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-emerald-900/10 bg-white text-emerald-900/70 hover:border-emerald-500/50'}`}>
+              className={`mt-3 inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all ${cmp.has(v.id) ? 'border-emerald-500 bg-[var(--srf2)]0 text-white' : 'border-[var(--bd)] bg-[var(--srf)] text-[var(--mut)] hover:border-emerald-500/50'}`}>
               <CompareIcon className="h-4 w-4" /> {cmp.has(v.id) ? 'Dans le comparatif ✓' : 'Ajouter au comparatif'}
             </button>
 
@@ -866,7 +886,7 @@ function VehicleModal({ v, onClose, col, cmp }: { v: ShowroomVehicle; onClose: (
                   const inl = l.ids.includes(v.id);
                   return (
                     <button key={l.id} onClick={() => col.toggleIn(l.id, v.id)}
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition-all ${inl ? 'border-rose-300 bg-rose-500 text-white' : 'border-emerald-900/10 bg-white text-emerald-900/70 hover:border-rose-300'}`}>
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition-all ${inl ? 'border-rose-300 bg-rose-500 text-white' : 'border-[var(--bd)] bg-[var(--srf)] text-[var(--mut)] hover:border-rose-300'}`}>
                       <Heart active={inl} className="h-3.5 w-3.5" /> {l.name}
                     </button>
                   );
@@ -876,7 +896,7 @@ function VehicleModal({ v, onClose, col, cmp }: { v: ShowroomVehicle; onClose: (
                 <input value={creating} onChange={(e) => setCreating(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') create(); }}
                   placeholder="Créer une liste (ex. Mes SUV de rêve)…"
-                  className="h-9 flex-1 rounded-lg border border-emerald-900/10 bg-white px-2.5 text-sm outline-none focus:border-emerald-500/50" />
+                  className="h-9 flex-1 rounded-lg border border-[var(--bd)] bg-[var(--srf)] px-2.5 text-sm outline-none focus:border-emerald-500/50" />
                 <button onClick={create} disabled={!creating.trim()} className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-950 text-white disabled:opacity-40">＋</button>
               </div>
             </div>
