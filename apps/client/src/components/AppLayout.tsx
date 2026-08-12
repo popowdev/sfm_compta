@@ -23,6 +23,7 @@ import {
   Wallet,
   SlidersHorizontal,
   Settings,
+  LayoutList,
   ChevronDown,
   ChevronLeft,
   PanelLeftClose,
@@ -43,6 +44,7 @@ import { QuickClock } from '@/components/QuickClock';
 import { NotificationBell } from '@/components/NotificationBell';
 import { ImportantAnnouncementPopup } from '@/components/ImportantAnnouncementPopup';
 import { GuidedTour, type TourStep } from '@/components/GuidedTour';
+import { MenuOrganizer } from '@/components/MenuOrganizer';
 
 function buildCompanyTour(slug: string | null | undefined): TourStep[] {
   const dash = slug ? `[data-tour="nav:/entreprise/${slug}"]` : undefined;
@@ -75,6 +77,7 @@ interface NavItem {
   end?: boolean;
   active?: boolean;
   badge?: number;
+  onClick?: () => void;
 }
 
 interface NavGroup {
@@ -103,6 +106,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     }
   });
   const [search, setSearch] = useState('');
+  const [menuOrgOpen, setMenuOrgOpen] = useState(false);
 
   const toggle = () =>
     setCollapsed((c) => {
@@ -172,7 +176,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     ];
   }
 
-  function companyNavGroups(c: MyCompany): NavGroup[] {
+  function companyNavGroups(c: MyCompany, opts?: { withMenuAction?: boolean }): NavGroup[] {
     const accessible = c.modules.filter(
       (m) => COMPANY_PAGE_KEYS.has(m.key) && m.enabled && !m.blocked && m.canView,
     );
@@ -212,13 +216,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
     }
 
     if (c.canManage) {
-      groups.push({
-        title: null,
-        items: [
-          { to: `/entreprise/${c.company.slug}/evenements`, label: 'Évènements', Icon: CalendarDays },
-          { to: `/entreprise/${c.company.slug}/parametres`, label: 'Paramètres', Icon: Settings },
-        ],
-      });
+      const manageItems: NavItem[] = [
+        { to: `/entreprise/${c.company.slug}/evenements`, label: 'Évènements', Icon: CalendarDays },
+        { to: `/entreprise/${c.company.slug}/parametres`, label: 'Paramètres', Icon: Settings },
+      ];
+      if (opts?.withMenuAction) {
+        manageItems.push({
+          to: `/entreprise/${c.company.slug}/__organiser-menu`,
+          label: 'Organiser le menu',
+          Icon: LayoutList,
+          onClick: () => setMenuOrgOpen(true),
+        });
+      }
+      groups.push({ title: null, items: manageItems });
     }
     return groups;
   }
@@ -229,7 +239,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const immersive = immersiveCompany || immersiveAssoc;
   let groups: NavGroup[];
   if (immersiveCompany) {
-    groups = companyNavGroups(currentCompany!);
+    groups = companyNavGroups(currentCompany!, { withMenuAction: true });
   } else if (immersiveAssoc) {
     groups = [{ title: null, items: associationNavItems(activeAssocSlug!) }];
   } else {
@@ -331,6 +341,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const closeTour = () => { setTourOpen(false); localStorage.setItem(TOUR_FLAG, '1'); };
   const inCompany = immersive && !immersiveAssoc && !!currentCompany;
   const companyId = currentCompany?.company.id;
+  useEffect(() => setMenuOrgOpen(false), [companyId]);
   useEffect(() => {
     if (!inCompany || localStorage.getItem(TOUR_FLAG)) return;
     const t = window.setTimeout(openTour, 900);
@@ -433,7 +444,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
                           )}
                         </>
                       );
-                      return it.active === undefined ? (
+                      return it.onClick ? (
+                        <button
+                          key={it.to}
+                          type="button"
+                          onClick={it.onClick}
+                          title={collapsed ? it.label : undefined}
+                          className={`${navClass(false, collapsed)} w-full`}
+                        >
+                          {inner}
+                        </button>
+                      ) : it.active === undefined ? (
                         <NavLink
                           key={it.to}
                           to={it.to}
@@ -553,6 +574,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </button>
       )}
       <GuidedTour steps={tourSteps} open={tourOpen} onClose={closeTour} />
+      {menuOrgOpen && currentCompany && currentCompany.canManage && (
+        <MenuOrganizer
+          companyId={currentCompany.company.id}
+          modules={currentCompany.modules
+            .filter((m) => COMPANY_PAGE_KEYS.has(m.key) && m.enabled && !m.blocked)
+            .map((m) => ({ key: m.key, label: m.label }))}
+          initial={currentCompany.company.menuLayout}
+          onClose={() => setMenuOrgOpen(false)}
+        />
+      )}
     </div>
   );
 }
