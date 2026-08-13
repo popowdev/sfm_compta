@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings2, Award, Users, LayoutList, type LucideIcon } from 'lucide-react';
+import { Settings2, Award, Users, LayoutList, HelpCircle, type LucideIcon } from 'lucide-react';
 import { MODULES, MODULE_CONFIG, moduleConfigBool, type ModuleKey } from '@rp-compta/shared';
 import { toggleMyModule, uploadMyCompanyLogo, type MyModule } from '@/lib/me';
 import { useCompany } from '@/lib/useCompany';
@@ -13,12 +13,14 @@ import { useToast } from '@/components/ui/toast';
 import { ModuleConfigModal } from '@/components/ModuleConfigModal';
 import { LoyaltyTiersModal } from '@/components/LoyaltyTiersModal';
 import { GradesPanelModal } from '@/components/GradesPanelModal';
+import { ModuleHelpModal, moduleHasHelp } from '@/components/ModuleHelpModal';
 import { MenuOrganizer } from '@/components/MenuOrganizer';
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 
 const MODULE_DESC: Partial<Record<ModuleKey, string>> = {
   caisse: 'Encaisser des ventes, articles et services.',
+  garage: 'Réparations et customs de véhicules, avec commission mécano.',
   clients: 'Fichier clients, fidélité et crédits.',
   stocks: 'Matières premières, articles et inventaire.',
   locations: 'Locations et cautions.',
@@ -26,12 +28,22 @@ const MODULE_DESC: Partial<Record<ModuleKey, string>> = {
   depenses: 'Dépenses et charges déductibles.',
   subventions: 'Demandes de subventions à l’IRS.',
   dividendes: 'Versements de dividendes aux actionnaires.',
+  actionnaires: 'Répartition du capital entre actionnaires.',
   exercices: 'Périodes comptables et compte de résultat.',
   messagerie: 'Échanges avec l’IRS.',
   rh: 'Fiches employés, postes et performances.',
   badgeuse: 'Pointage et heures travaillées.',
   stats: 'Graphiques et statistiques de l’activité.',
   tickets: 'Support et tickets internes.',
+  documents: 'Dossiers et documents partagés de l’entreprise.',
+  immobilier: 'Gestion des propriétés et loyers.',
+  immo_carte: 'Carte interactive des propriétés.',
+  taxi: 'Courses citoyens/concitoyens/VIP et flotte.',
+  pawnshop: 'Rachat client → stock → revente au grossiste.',
+  runs: 'Livraisons à la course, avec part employé.',
+  chasse: 'Rachat de gibier au chasseur, revente au grossiste.',
+  concession: 'Vente de véhicules neuf/occasion + vitrine publique.',
+  cargaison: 'Commandes B2B : part entreprise + part employés à parts égales.',
 };
 
 function initials(name: string): string {
@@ -92,6 +104,7 @@ export default function CompanySettings() {
   const { user } = useAuth();
   const isStaff = (user?.appRoles ?? []).includes('staff');
   const staffOnlyKeys = new Set(MODULES.filter((m) => m.staffOnly).map((m) => m.key));
+  const defaultKeys = new Set(MODULES.filter((m) => m.defaultEnabled).map((m) => m.key));
 
   const upload = useMutation({
     mutationFn: (file: File) => uploadMyCompanyLogo(companyId, file),
@@ -104,6 +117,7 @@ export default function CompanySettings() {
     onError: (e: unknown) => toast((e as { info?: { error?: string } })?.info?.error === 'staff_only_module' ? 'Ce module est réservé au staff IRS.' : "Échec de l'activation.", 'error'),
   });
   const [configModule, setConfigModule] = useState<MyModule | null>(null);
+  const [helpModule, setHelpModule] = useState<MyModule | null>(null);
   const [tiersOpen, setTiersOpen] = useState(false);
   const [gradesOpen, setGradesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -197,13 +211,18 @@ export default function CompanySettings() {
                             <span className={`text-sm font-medium ${m.blocked ? 'text-muted-foreground' : ''}`}>
                               {m.label}
                             </span>
+                            {defaultKeys.has(m.key) && !m.blocked && (
+                              <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-medium text-emerald-400" title="Module de base, activé par défaut">
+                                de base
+                              </span>
+                            )}
                             {m.blocked && (
-                              <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-400">
+                              <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-400" title="Temporairement bloqué par l’IRS (maintenance)">
                                 maintenance
                               </span>
                             )}
                             {staffLocked && (
-                              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">
+                              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary" title="Activable par l’IRS uniquement">
                                 réservé staff
                               </span>
                             )}
@@ -212,6 +231,17 @@ export default function CompanySettings() {
                             <div className="truncate text-xs text-muted-foreground">{MODULE_DESC[m.key]}</div>
                           )}
                         </div>
+                        {on && moduleHasHelp(m.key) && (
+                          <button
+                            type="button"
+                            onClick={() => setHelpModule(m)}
+                            title="Aide du module"
+                            aria-label={`Aide de ${m.label}`}
+                            className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                          >
+                            <HelpCircle className="h-4 w-4" />
+                          </button>
+                        )}
                         {on && (MODULE_CONFIG[m.key]?.length ?? 0) > 0 && (
                           <button
                             type="button"
@@ -227,7 +257,17 @@ export default function CompanySettings() {
                           checked={on}
                           disabled={toggle.isPending || m.blocked || staffLocked}
                           ariaLabel={`Activer ${m.label}`}
-                          onChange={() => toggle.mutate({ key: m.key, enabled: !m.enabled })}
+                          onChange={() => {
+                            const enabling = !m.enabled;
+                            toggle.mutate({ key: m.key, enabled: enabling });
+                            if (enabling && moduleHasHelp(m.key)) {
+                              const flag = `rp_compta_modhelp_${companyId}_${m.key}`;
+                              if (!localStorage.getItem(flag)) {
+                                localStorage.setItem(flag, '1');
+                                setHelpModule(m);
+                              }
+                            }
+                          }}
                         />
                       </div>
                     );
@@ -271,6 +311,7 @@ export default function CompanySettings() {
       </Section>
 
       <ModuleConfigModal companyId={companyId} module={configModule} onClose={() => setConfigModule(null)} />
+      <ModuleHelpModal moduleKey={helpModule?.key ?? null} label={helpModule?.label ?? ''} open={!!helpModule} onClose={() => setHelpModule(null)} />
       <LoyaltyTiersModal companyId={companyId} open={tiersOpen} onClose={() => setTiersOpen(false)} />
       <GradesPanelModal companyId={companyId} open={gradesOpen} onClose={() => setGradesOpen(false)} />
       {menuOpen && (

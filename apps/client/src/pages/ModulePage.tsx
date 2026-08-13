@@ -1,13 +1,14 @@
 import { lazyRetry } from '@/lib/lazyRetry';
 import { Suspense, useState, type ComponentType, type LazyExoticComponent } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
-import { Users } from 'lucide-react';
+import { Users, HelpCircle } from 'lucide-react';
 import { MODULES } from '@rp-compta/shared';
 import { type MyModule } from '@/lib/me';
 import { useCompany } from '@/lib/useCompany';
 import { moduleIcon } from '@/lib/moduleIcons';
 import { Button } from '@/components/ui/button';
 import { GradesPanelModal } from '@/components/GradesPanelModal';
+import { ModuleHelpModal, moduleHasHelp } from '@/components/ModuleHelpModal';
 import { TourDemoProvider } from '@/components/TourDemo';
 import { ModuleTour } from '@/components/ModuleTour';
 
@@ -79,6 +80,7 @@ export default function ModulePage() {
   const { moduleKey } = useParams();
   const { company: mine, isLoading } = useCompany();
   const [accessOpen, setAccessOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   if (isLoading) return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
 
@@ -97,13 +99,21 @@ export default function ModulePage() {
         </div>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold tracking-tight">{mod.label}</h1>
-          {mine.canManage && (
-            <Button type="button" variant="outline" size="sm" onClick={() => setAccessOpen(true)}>
-              <Users className="h-4 w-4" /> Qui peut accéder ?
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {moduleHasHelp(mod.key) && (
+              <Button type="button" variant="outline" size="sm" onClick={() => setHelpOpen(true)} title="Aide du module">
+                <HelpCircle className="h-4 w-4" /> Aide
+              </Button>
+            )}
+            {mine.canManage && (
+              <Button type="button" variant="outline" size="sm" onClick={() => setAccessOpen(true)}>
+                <Users className="h-4 w-4" /> Qui peut accéder ?
+              </Button>
+            )}
+          </div>
         </div>
 
+        <ModuleHelpModal moduleKey={mod.key} label={mod.label} open={helpOpen} onClose={() => setHelpOpen(false)} />
         {mine.canManage && (
           <GradesPanelModal companyId={mine.company.id} open={accessOpen} onClose={() => setAccessOpen(false)} onlyModule={mod.key} />
         )}
