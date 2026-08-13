@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Plus, Trash2, ShieldCheck, UserPlus, Sparkles } from 'lucide-react';
+import { X, Plus, Trash2, ShieldCheck, UserPlus, Sparkles, AlertCircle } from 'lucide-react';
 import { MODULES, MODULE_SPECIAL_ACTIONS, type ModuleKey } from '@rp-compta/shared';
 import { ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { useToast } from '@/components/ui/toast';
 import { useConfirm } from '@/components/ui/confirm';
 import { PermissionLevelSelect } from '@/components/PermissionLevelSelect';
 import {
-  levelToPerm, permToLevel, GRADE_PRESETS,
+  levelToPerm, permToLevel, GRADE_PRESETS, LEVEL_VERB,
   type FixedLevel, type PermLevel,
 } from '@/lib/permLevels';
 import {
@@ -36,16 +36,18 @@ export function GradesPanelModal({
   open,
   onClose,
   onlyModule,
+  initialTab = 'perms',
 }: {
   companyId: number;
   open: boolean;
   onClose: () => void;
   onlyModule?: ModuleKey;
+  initialTab?: 'perms' | 'members';
 }) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
-  const [tab, setTab] = useState<'perms' | 'members'>('perms');
+  const [tab, setTab] = useState<'perms' | 'members'>(initialTab);
   const q = useQuery({ queryKey: ['my-grades', companyId], queryFn: () => getMyGrades(companyId), enabled: open });
   const [selected, setSelected] = useState<number | null>(null);
   const [newName, setNewName] = useState('');
@@ -61,6 +63,7 @@ export function GradesPanelModal({
       setSelected(first.id);
     }
   }, [open, grades, selected]);
+  useEffect(() => { if (open) setTab(initialTab); }, [open, initialTab]);
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['my-grades', companyId] });
@@ -112,6 +115,11 @@ export function GradesPanelModal({
     }
   };
   const applyPreset = async (grade: GradeFine, preset: (typeof GRADE_PRESETS)[number]) => {
+    const ok = await confirm({
+      title: `Appliquer le modèle « ${preset.label} » ?`,
+      message: `${presetPreviewText(preset, allModules)} Cela remplace les réglages actuels de ce grade.`,
+    });
+    if (!ok) return;
     await patchMyGrade(companyId, grade.id, { canManage: preset.canManage });
     if (!preset.canManage) {
       for (const m of allModules) {
@@ -152,6 +160,7 @@ export function GradesPanelModal({
                 <button key={g.id} type="button" onClick={() => setSelected(g.id)}
                   className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${g.id === selected ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
                   {g.nickname ? `${g.nickname} (${g.name})` : g.name}{g.canManage && <ShieldCheck className="h-3.5 w-3.5" />}
+                  {g.fivemGrade !== null && !g.nickname && <span className="h-2 w-2 rounded-full bg-red-500" title="Grade créé par le jeu — à nommer" />}
                 </button>
               ))}
               {!onlyModule && (
@@ -164,8 +173,22 @@ export function GradesPanelModal({
             </div>
 
             <div className="flex-1 overflow-y-auto p-5">
+              {onlyModule && (
+                <div className="mb-4 rounded-lg border bg-muted/40 px-4 py-2.5 text-xs text-muted-foreground">
+                  Réglage rapide pour <b className="text-foreground">{modules[0]?.label ?? 'ce module'}</b>. Pour créer des grades ou tout régler d'un coup, ouvre <b className="text-foreground">Paramètres → Équipe &amp; accès</b>.
+                </div>
+              )}
               {grade ? (
                 <>
+                  {grade.fivemGrade !== null && !grade.nickname && !onlyModule && (
+                    <div className="mb-4 flex items-center gap-3 rounded-lg border border-red-500/40 bg-red-500/5 px-4 py-3">
+                      <AlertCircle className="h-5 w-5 shrink-0 text-red-500" />
+                      <div className="text-sm">
+                        <span className="font-semibold">Ce grade vient du jeu.</span>{' '}
+                        <span className="text-muted-foreground">Donne-lui un surnom ci-dessous pour l'afficher clairement, et règle sa paie dans <b className="text-foreground">RH → Grille de paie</b> (salaire + taux horaire).</span>
+                      </div>
+                    </div>
+                  )}
                   {!onlyModule && (
                     <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 ${grade.canManage ? 'border-amber-500/40 bg-amber-500/5' : ''}`}>
                       <label className="flex cursor-pointer items-center gap-2.5 text-sm">
@@ -210,30 +233,42 @@ export function GradesPanelModal({
                     </div>
                   )}
 
-                  <div className="space-y-5">
-                    {groups.map((group) => (
-                      <div key={group}>
-                        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group}</h3>
-                        <div className="divide-y rounded-lg border">
-                          {modules.filter((m) => m.group === group).map((m) => (
-                            <div key={m.key} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-                              <span className="text-sm font-medium">{m.label}</span>
-                              <PermissionLevelSelect
-                                value={gradeLevel(grade, m.key)}
-                                disabled={grade.canManage}
-                                onChange={(lvl) => applyLevel(grade, m.key, lvl)}
-                                size="sm"
-                              />
-                            </div>
-                          ))}
-                        </div>
+                  {grade.canManage && !onlyModule ? (
+                    <div className="flex gap-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
+                      <ShieldCheck className="h-5 w-5 shrink-0 text-amber-500" />
+                      <div>
+                        <div className="text-sm font-semibold">Ce grade contrôle tout, automatiquement</div>
+                        <p className="mt-1 text-xs text-muted-foreground">Il a accès à tous les modules — présents et futurs — sans le moindre réglage. Décoche « Accès total » ci-dessus pour régler module par module.</p>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="space-y-5">
+                        {groups.map((group) => (
+                          <div key={group}>
+                            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group}</h3>
+                            <div className="divide-y rounded-lg border">
+                              {modules.filter((m) => m.group === group).map((m) => (
+                                <div key={m.key} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+                                  <span className="text-sm font-medium">{m.label}</span>
+                                  <PermissionLevelSelect
+                                    value={gradeLevel(grade, m.key)}
+                                    disabled={grade.canManage}
+                                    onChange={(lvl) => applyLevel(grade, m.key, lvl)}
+                                    size="sm"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
 
-                  <p className="mt-4 text-xs text-muted-foreground">
-                    <b>Voir</b> = consultation · <b>Utiliser</b> = travailler dessus (créer/modifier) · <b>Gérer</b> = contrôle total (supprimer + réglages). « Accès total » met tout sur Gérer.
-                  </p>
+                      <p className="mt-4 text-xs text-muted-foreground">
+                        <b>Voir</b> = consultation · <b>Utiliser</b> = travailler dessus (créer/modifier) · <b>Gérer</b> = contrôle total (supprimer + réglages). « Accès total » met tout sur Gérer.
+                      </p>
+                    </>
+                  )}
                 </>
               ) : (
                 <div className="py-8 text-center text-sm text-muted-foreground">Aucun grade.</div>
@@ -246,6 +281,24 @@ export function GradesPanelModal({
       </div>
     </div>
   );
+}
+
+function presetPreviewText(preset: (typeof GRADE_PRESETS)[number], modules: { key: ModuleKey; label: string; group: string }[]) {
+  if (preset.canManage) return 'Ce grade aura un accès total : il voit et gère tout.';
+  const manage: string[] = [];
+  const use: string[] = [];
+  const view: string[] = [];
+  for (const m of modules) {
+    const lvl = preset.levels[m.key];
+    if (lvl === 'manage') manage.push(m.label);
+    else if (lvl === 'use') use.push(m.label);
+    else if (lvl === 'view') view.push(m.label);
+  }
+  const parts: string[] = [];
+  if (manage.length) parts.push(`gère ${manage.join(', ')}`);
+  if (use.length) parts.push(`utilise ${use.join(', ')}`);
+  if (view.length) parts.push(`voit ${view.join(', ')}`);
+  return parts.length ? `Ce grade ${parts.join(' · ')}.` : 'Ce grade ne verra aucun module.';
 }
 
 function buildRecap(grade: GradeFine, modules: { key: ModuleKey; label: string; group: string }[]) {

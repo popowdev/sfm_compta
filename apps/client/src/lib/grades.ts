@@ -58,6 +58,7 @@ export interface GradeFine {
   id: number;
   name: string;
   nickname: string | null;
+  fivemGrade: number | null;
   rank: number;
   isDefault: boolean;
   canManage: boolean;
