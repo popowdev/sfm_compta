@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { memberships, users, companyRoles, companies, companyEmployees } from '../db/schema';
 import { requireAuth, requireAppRole, requireDev } from '../middleware/auth';
@@ -252,12 +252,13 @@ meMembersRouter.get(
         gradeId: companyRoles.id,
         gradeName: companyRoles.name,
         active: memberships.active,
+        hasFiche: sql<number>`EXISTS(SELECT 1 FROM company_employees ce WHERE ce.company_id = ${companyId} AND ce.user_id = ${users.id} AND ce.active = 1)`,
       })
       .from(memberships)
       .innerJoin(users, eq(memberships.userId, users.id))
       .leftJoin(companyRoles, eq(memberships.companyRoleId, companyRoles.id))
       .where(eq(memberships.companyId, companyId));
-    res.json(rows);
+    res.json(rows.map((r) => ({ ...r, hasFiche: Boolean(r.hasFiche) })));
   }),
 );
 

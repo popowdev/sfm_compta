@@ -127,6 +127,7 @@ export interface CompanyMember {
   gradeId: number | null;
   gradeName: string | null;
   active: boolean;
+  hasFiche: boolean;
 }
 
 export const getMyMembers = (companyId: number) =>

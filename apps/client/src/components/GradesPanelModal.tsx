@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Plus, Trash2, ShieldCheck, UserPlus, Sparkles, AlertCircle } from 'lucide-react';
+import { X, Plus, Trash2, ShieldCheck, UserPlus, Sparkles, AlertCircle, HardHat, UserCog, Crown, SlidersHorizontal, type LucideIcon } from 'lucide-react';
 import { MODULES, MODULE_SPECIAL_ACTIONS, type ModuleKey } from '@rp-compta/shared';
 import { ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,12 @@ import {
 } from '@/lib/grades';
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
+
+const PRESET_ICON: Record<string, LucideIcon> = {
+  employee: HardHat,
+  manager: UserCog,
+  boss: Crown,
+};
 
 function specialsFor(key: string) {
   return MODULE_SPECIAL_ACTIONS[key as ModuleKey] ?? [];
@@ -51,6 +57,7 @@ export function GradesPanelModal({
   const q = useQuery({ queryKey: ['my-grades', companyId], queryFn: () => getMyGrades(companyId), enabled: open });
   const [selected, setSelected] = useState<number | null>(null);
   const [newName, setNewName] = useState('');
+  const [viewMode, setViewMode] = useState<'simple' | 'advanced'>('simple');
 
   const grades = q.data?.grades ?? [];
   const allModules = (q.data?.modules ?? []).filter((m) => COMPANY_PAGE_KEYS.has(m.key));
@@ -225,11 +232,9 @@ export function GradesPanelModal({
                   )}
 
                   {!grade.canManage && !onlyModule && (
-                    <div className="mb-4 flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><Sparkles className="h-3.5 w-3.5" /> Modèle de départ :</span>
-                      {GRADE_PRESETS.map((p) => (
-                        <Button key={p.key} type="button" variant="outline" size="sm" title={p.help} onClick={() => applyPreset(grade, p)}>{p.label}</Button>
-                      ))}
+                    <div className="mb-4 inline-flex items-center gap-1 rounded-lg bg-muted p-0.5">
+                      <button type="button" onClick={() => setViewMode('simple')} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-colors ${viewMode === 'simple' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground'}`}><Sparkles className="h-3.5 w-3.5" /> Simple</button>
+                      <button type="button" onClick={() => setViewMode('advanced')} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-colors ${viewMode === 'advanced' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}><SlidersHorizontal className="h-3.5 w-3.5" /> Avancé</button>
                     </div>
                   )}
 
@@ -239,6 +244,23 @@ export function GradesPanelModal({
                       <div>
                         <div className="text-sm font-semibold">Ce grade contrôle tout, automatiquement</div>
                         <p className="mt-1 text-xs text-muted-foreground">Il a accès à tous les modules — présents et futurs — sans le moindre réglage. Décoche « Accès total » ci-dessus pour régler module par module.</p>
+                      </div>
+                    </div>
+                  ) : !onlyModule && viewMode === 'simple' ? (
+                    <div>
+                      <p className="mb-2 text-xs text-muted-foreground">Choisis un rôle prêt à l'emploi — tu pourras affiner ensuite en « Avancé ».</p>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        {GRADE_PRESETS.map((p) => {
+                          const Icon = PRESET_ICON[p.key] ?? Sparkles;
+                          return (
+                            <button key={p.key} type="button" onClick={() => applyPreset(grade, p)}
+                              className="rounded-xl border bg-card p-4 text-left transition-colors hover:border-primary/50 hover:bg-accent/40">
+                              <div className="mb-2 grid h-9 w-9 place-items-center rounded-lg border bg-background text-primary"><Icon className="h-5 w-5" /></div>
+                              <div className="text-sm font-semibold">{p.label}</div>
+                              <p className="mt-0.5 text-xs text-muted-foreground">{p.help}</p>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   ) : (
@@ -372,6 +394,9 @@ function MembersSection({ companyId, grades }: { companyId: number; grades: Grad
 
   return (
     <>
+      <div className="border-b px-5 py-2.5 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">L'équipe se remplit toute seule depuis le jeu.</span> Ajout manuel ci-dessous seulement en cas de besoin (ID Discord : clic droit sur le profil → « Copier l'identifiant », mode développeur activé).
+      </div>
       <div className="flex flex-wrap items-end gap-2 border-b px-5 py-3">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted-foreground">ID Discord</label>
@@ -395,7 +420,10 @@ function MembersSection({ companyId, grades }: { companyId: number; grades: Grad
 
       <div className="flex-1 overflow-y-auto p-5">
         {members.length === 0 ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">Aucun membre assigné.</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">L'équipe arrive automatiquement du jeu.</p>
+            <p className="mt-1">Dès qu'un joueur prend le job en jeu, il apparaît ici avec son accès.</p>
+          </div>
         ) : (
           <div className="overflow-hidden rounded-lg border">
             <table className="w-full text-sm">
@@ -415,8 +443,18 @@ function MembersSection({ companyId, grades }: { companyId: number; grades: Grad
                           <div className="grid h-7 w-7 place-items-center rounded-full bg-muted text-xs font-medium text-muted-foreground">{m.displayName.slice(0, 1).toUpperCase()}</div>
                         )}
                         <div className="leading-tight">
-                          <div className="font-medium">{m.displayName}</div>
-                          <div className="text-xs text-muted-foreground">{m.discordId}</div>
+                          <div className="flex flex-wrap items-center gap-2 font-medium">
+                            {m.displayName}
+                            {!m.hasFiche && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-500 ring-1 ring-inset ring-red-500/40" title="Aucune fiche RH active : son salaire n'est pas encore calculé. À créer dans RH → Employés.">
+                                <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Fiche RH à créer
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <span>{m.discordId}</span>
+                            {m.active && <span className="text-emerald-500">· a accès</span>}
+                          </div>
                         </div>
                       </div>
                     </td>
