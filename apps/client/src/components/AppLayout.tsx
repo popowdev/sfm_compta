@@ -49,7 +49,7 @@ import { MenuOrganizer } from '@/components/MenuOrganizer';
 function buildCompanyTour(slug: string | null | undefined): TourStep[] {
   const dash = slug ? `[data-tour="nav:/entreprise/${slug}"]` : undefined;
   return [
-    { title: 'Bienvenue 👋', body: 'Ta nouvelle entreprise est prête ! Petit tour rapide de l’essentiel — tu peux passer et relancer plus tard.' },
+    { title: 'Bienvenue 👋', body: 'Petit tour rapide de l’essentiel — tu peux le passer et le relancer plus tard avec le bouton « ? ».' },
     { target: '[data-tour="menu"]', title: 'Ton menu', body: 'Tes modules sont ici. Une entreprise neuve démarre avec les modules de base — tu en actives d’autres selon tes besoins (on y revient à la fin).' },
     { target: dash, title: 'Tableau de bord', body: 'Ta vue d’ensemble : chiffres clés, alertes et activité récente de l’entreprise.' },
     { target: '[data-tour$="/m/exercices"]', title: 'Comptabilité', body: 'Le cœur du système : résultat, charges, paies et impôts, calculés semaine par semaine (les exercices).' },
@@ -58,7 +58,7 @@ function buildCompanyTour(slug: string | null | undefined): TourStep[] {
     { target: '[data-tour$="/m/declarations"]', title: 'Déclarations fiscales', body: 'Déclare tes résultats à l’IRS directement depuis ici.' },
     { target: '[data-tour$="/m/subventions"]', title: 'Subventions', body: 'Suis tes demandes de subventions — dont le remboursement des salaires (heures badgeuse) par l’État.' },
     { target: '[data-tour$="/parametres"]', title: 'Paramètres de l’entreprise', body: 'Configure ton entreprise : informations, logo, grades et réglages propres à chaque module.' },
-    { title: 'Activer plus de modules', body: 'Ton entreprise démarre avec les modules de base (compta, dépenses, RH, fiscalité…). Beaucoup d’autres existent — Caisse, Badgeuse (pointage → paies), Gestion Propriétés, Garage, Taxi… — à activer côté staff via « Modules », entreprise par entreprise.' },
+    { title: 'Activer plus de modules', body: 'Ton entreprise démarre avec les modules de base (compta, dépenses, RH, fiscalité…). Beaucoup d’autres existent — Caisse, Badgeuse (pointage → paies), Gestion Propriétés, Garage, Taxi… — à activer toi-même dans « Paramètres → Modules », entreprise par entreprise.' },
     { title: 'Les permissions', body: 'Chaque grade a ses droits, module par module : voir, créer, modifier, supprimer. Un employé ne voit que ce que son grade autorise — la compta et les paies restent réservées aux gérants.' },
     { title: 'C’est parti ! 🚀', body: 'Tu connais l’essentiel. Tu peux relancer ce tutoriel quand tu veux via le bouton « ? » en bas à droite.' },
   ];
