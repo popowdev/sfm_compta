@@ -18,6 +18,7 @@ import { useCompany } from '@/lib/useCompany';
 import { getCompanyDashboard } from '@/lib/dashboard';
 import { groupIcon } from '@/lib/moduleIcons';
 import { Kpi } from '@/components/ui/kpi';
+import { MyAccessCard } from '@/components/MyAccessCard';
 
 const COMPANY_PAGE_KEYS = new Set(MODULES.filter((m) => m.companyPage).map((m) => m.key));
 const AXIS = 'rgba(148,163,184,0.6)';
@@ -66,9 +67,15 @@ export default function EntrepriseIndex() {
         <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Espace entreprise</div>
         <h1 className="mt-1 text-2xl font-bold tracking-tight">{mine.company.name}</h1>
         <p className="text-sm text-muted-foreground">
-          Vue d'ensemble de ta compta — {mine.grade ? `grade ${mine.grade.name}` : 'Staff'}.
+          {mine.canManage ? "Vue d'ensemble de ta compta" : `Ton espace ${mine.company.name}`}{mine.grade ? ` — grade ${mine.grade.name}` : ' — Staff'}.
         </p>
       </div>
+
+      {!mine.canManage && (
+        <div className="mb-6">
+          <MyAccessCard modules={mine.modules} gradeName={mine.grade?.name ?? null} slug={slug} />
+        </div>
+      )}
 
       {q.isError ? (
         <div className="grid place-items-center gap-3 py-12 text-sm text-muted-foreground">
