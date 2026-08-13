@@ -31,6 +31,7 @@ import {
   LogOut,
   HelpCircle,
   Search,
+  Lock,
 } from 'lucide-react';
 import { hasAppAccess, MODULES, moduleConfigBool } from '@rp-compta/shared';
 import { apiFetch } from '@/lib/api';
@@ -78,6 +79,7 @@ interface NavItem {
   active?: boolean;
   badge?: number;
   onClick?: () => void;
+  locked?: boolean;
 }
 
 interface NavGroup {
@@ -176,7 +178,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     ];
   }
 
-  function companyNavGroups(c: MyCompany, opts?: { withMenuAction?: boolean }): NavGroup[] {
+  function companyNavGroups(c: MyCompany, opts?: { withMenuAction?: boolean; withLocked?: boolean }): NavGroup[] {
     const accessible = c.modules.filter(
       (m) => COMPANY_PAGE_KEYS.has(m.key) && m.enabled && !m.blocked && m.canView,
     );
@@ -215,6 +217,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
       groups.push({ title: null, items: [dash, myPay, ...accessible.map((m) => navItem(m.key, m.label))] });
     }
 
+    if (opts?.withLocked) {
+      const locked = c.modules.filter(
+        (m) => COMPANY_PAGE_KEYS.has(m.key) && m.enabled && !m.blocked && !m.canView,
+      );
+      if (locked.length) {
+        groups.push({
+          title: 'Sans accès',
+          items: locked.map((m) => ({ to: `#locked-${m.key}`, label: m.label, Icon: moduleIcon(m.key), locked: true })),
+        });
+      }
+    }
+
     if (c.canManage) {
       const manageItems: NavItem[] = [
         { to: `/entreprise/${c.company.slug}/evenements`, label: 'Évènements', Icon: CalendarDays },
@@ -239,7 +253,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const immersive = immersiveCompany || immersiveAssoc;
   let groups: NavGroup[];
   if (immersiveCompany) {
-    groups = companyNavGroups(currentCompany!, { withMenuAction: true });
+    groups = companyNavGroups(currentCompany!, { withMenuAction: true, withLocked: true });
   } else if (immersiveAssoc) {
     groups = [{ title: null, items: associationNavItems(activeAssocSlug!) }];
   } else {
@@ -432,6 +446,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 {!isClosed && (
                   <div className="space-y-1">
                     {g.items.map((it) => {
+                      if (it.locked) {
+                        return (
+                          <div
+                            key={it.to}
+                            title="Ton grade n'a pas accès à ce module — demande à ton patron."
+                            className={`${navClass(false, collapsed)} cursor-not-allowed opacity-50`}
+                          >
+                            <it.Icon className="h-[18px] w-[18px] shrink-0" />
+                            {!collapsed && <span className="truncate">{it.label}</span>}
+                            {!collapsed && <Lock className="ml-auto h-3.5 w-3.5 shrink-0 opacity-80" />}
+                          </div>
+                        );
+                      }
                       const badge = it.badge;
                       const inner = (
                         <>
