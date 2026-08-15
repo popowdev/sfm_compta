@@ -146,24 +146,47 @@ async function roleIdForGrade(companyId: number, grade: number): Promise<number 
   return any[0]?.id ?? null;
 }
 
+async function resolveSyncRole(currentRoleId: number | null, targetRoleId: number | null): Promise<number | null> {
+  if (targetRoleId === null || currentRoleId === targetRoleId) return currentRoleId;
+  if (currentRoleId === null) return targetRoleId;
+  const cur = await db
+    .select({ fivemGrade: companyRoles.fivemGrade })
+    .from(companyRoles)
+    .where(eq(companyRoles.id, currentRoleId))
+    .limit(1);
+  return cur[0] && cur[0].fivemGrade === null ? currentRoleId : targetRoleId;
+}
+
 async function upsertMembership(companyId: number, userId: number, roleId: number | null): Promise<void> {
   const existing = await db
-    .select({ id: memberships.id })
+    .select({ id: memberships.id, roleId: memberships.companyRoleId })
     .from(memberships)
     .where(and(eq(memberships.companyId, companyId), eq(memberships.userId, userId)))
     .limit(1);
   if (existing[0]) {
-    await db.update(memberships).set({ active: true }).where(eq(memberships.id, existing[0].id));
+    const nextRoleId = await resolveSyncRole(existing[0].roleId, roleId);
+    await db
+      .update(memberships)
+      .set({ active: true, companyRoleId: nextRoleId })
+      .where(eq(memberships.id, existing[0].id));
     return;
   }
   try {
     await db.insert(memberships).values({ companyId, userId, companyRoleId: roleId });
   } catch (err) {
     if (!isDuplicate(err)) throw err;
-    await db
-      .update(memberships)
-      .set({ active: true })
-      .where(and(eq(memberships.companyId, companyId), eq(memberships.userId, userId)));
+    const dup = await db
+      .select({ id: memberships.id, roleId: memberships.companyRoleId })
+      .from(memberships)
+      .where(and(eq(memberships.companyId, companyId), eq(memberships.userId, userId)))
+      .limit(1);
+    if (dup[0]) {
+      const nextRoleId = await resolveSyncRole(dup[0].roleId, roleId);
+      await db
+        .update(memberships)
+        .set({ active: true, companyRoleId: nextRoleId })
+        .where(eq(memberships.id, dup[0].id));
+    }
   }
 }
 
