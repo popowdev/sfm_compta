@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
+import { useAuth } from '@/auth/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Wrench, Car, Sparkles, FileText, Settings2, Check, Coins } from 'lucide-react';
 import { useCompany } from '@/lib/useCompany';
@@ -39,12 +40,14 @@ export default function Garage() {
 
   const cfg = useQuery({ queryKey: ['garage-config', companyId], queryFn: () => getGarageConfig(companyId), enabled: !!companyId });
   const membersQ = useQuery({ queryKey: ['garage-members', companyId], queryFn: () => getGarageMembers(companyId), enabled: !!companyId });
+  const { user } = useAuth();
 
   if (isLoading) return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
   if (!mine) return <Navigate to="/" replace />;
 
   const canWrite = cfg.data?.canWrite ?? false;
   const members = membersQ.data?.members ?? [];
+  const myMechId: number | '' = user && members.some((m) => m.userId === Number(user.id)) ? Number(user.id) : '';
   const GROUP1: { key: Tab; label: string; Icon: typeof Wrench }[] = [
     { key: 'repairs', label: 'Réparations', Icon: Wrench },
     { key: 'customs', label: 'Customs', Icon: Sparkles },
@@ -86,9 +89,9 @@ export default function Garage() {
       ) : showSettings ? (
         <SettingsTab companyId={companyId} canWrite={canWrite} />
       ) : tab === 'repairs' ? (
-        <RepairsTab companyId={companyId} canWrite={canWrite} cfg={cfg.data} members={members} form={repairForm} setForm={setRepairForm} />
+        <RepairsTab companyId={companyId} canWrite={canWrite} cfg={cfg.data} members={members} form={repairForm} setForm={setRepairForm} myMechId={myMechId} />
       ) : tab === 'customs' ? (
-        <CustomsTab companyId={companyId} canWrite={canWrite} cfg={cfg.data} members={members} form={customForm} setForm={setCustomForm} />
+        <CustomsTab companyId={companyId} canWrite={canWrite} cfg={cfg.data} members={members} form={customForm} setForm={setCustomForm} myMechId={myMechId} />
       ) : tab === 'vehicles' ? (
         <VehiclesTab companyId={companyId} canWrite={canWrite} />
       ) : tab === 'contracts' ? (
@@ -188,15 +191,18 @@ function ModelField({ companyId, value, onChange }: { companyId: number; value: 
   );
 }
 
-function RepairsTab({ companyId, canWrite, cfg, members, form, setForm }: {
+function RepairsTab({ companyId, canWrite, cfg, members, form, setForm, myMechId }: {
   companyId: number; canWrite: boolean; cfg: GarageConfig; members: GarageMember[];
-  form: RepairForm; setForm: React.Dispatch<React.SetStateAction<RepairForm>>;
+  form: RepairForm; setForm: React.Dispatch<React.SetStateAction<RepairForm>>; myMechId: number | '';
 }) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
   const list = useQuery({ queryKey: ['garage-repairs', companyId], queryFn: () => getGarageRepairs(companyId) });
   const patch = (p: Partial<RepairForm>) => setForm((f) => ({ ...f, ...p }));
+  useEffect(() => {
+    if (myMechId !== '') setForm((f) => (f.mechanicUserId === '' ? { ...f, mechanicUserId: myMechId } : f));
+  }, [myMechId, setForm]);
 
   const { types, packs, settings } = cfg;
   const perKm = settings.depannagePerKm, mult = settings.depannageMultiplier, commPct = settings.commissionPct;
@@ -241,7 +247,7 @@ function RepairsTab({ companyId, canWrite, cfg, members, form, setForm }: {
       packId: form.packId || undefined, typeIds: form.packId ? undefined : form.typeIds,
       depannageKm: kmN,
     }),
-    onSuccess: () => { toast('Réparation enregistrée.', 'success'); setForm(EMPTY_REP); queryClient.invalidateQueries({ queryKey: ['garage-repairs', companyId] }); queryClient.invalidateQueries({ queryKey: ['garage-earnings', companyId] }); },
+    onSuccess: () => { toast('Réparation enregistrée.', 'success'); setForm({ ...EMPTY_REP, mechanicUserId: myMechId }); queryClient.invalidateQueries({ queryKey: ['garage-repairs', companyId] }); queryClient.invalidateQueries({ queryKey: ['garage-earnings', companyId] }); },
     onError: () => toast("Échec de l'enregistrement.", 'error'),
   });
   const paidM = useMutation({ mutationFn: (v: { id: number; paid: boolean }) => setRepairPaid(companyId, v.id, v.paid), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['garage-repairs', companyId] }) });
@@ -319,15 +325,18 @@ function RepairsTab({ companyId, canWrite, cfg, members, form, setForm }: {
   );
 }
 
-function CustomsTab({ companyId, canWrite, cfg, members, form, setForm }: {
+function CustomsTab({ companyId, canWrite, cfg, members, form, setForm, myMechId }: {
   companyId: number; canWrite: boolean; cfg: GarageConfig; members: GarageMember[];
-  form: CustomForm; setForm: React.Dispatch<React.SetStateAction<CustomForm>>;
+  form: CustomForm; setForm: React.Dispatch<React.SetStateAction<CustomForm>>; myMechId: number | '';
 }) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
   const list = useQuery({ queryKey: ['garage-customs', companyId], queryFn: () => getGarageCustoms(companyId) });
   const patch = (p: Partial<CustomForm>) => setForm((f) => ({ ...f, ...p }));
+  useEffect(() => {
+    if (myMechId !== '') setForm((f) => (f.mechanicUserId === '' ? { ...f, mechanicUserId: myMechId } : f));
+  }, [myMechId, setForm]);
   const margin = cfg.settings.customMarginPct, commPct = cfg.settings.commissionPct;
 
   const costN = Number(form.cost) || 0;
@@ -345,7 +354,7 @@ function CustomsTab({ companyId, canWrite, cfg, members, form, setForm }: {
       contractId: form.contractId || undefined, clientName: form.clientName.trim() || undefined,
       plate: form.plate.trim() || undefined, model: form.model.trim() || undefined, costPrice: costN, discountPct: discN,
     }),
-    onSuccess: () => { toast('Custom enregistré.', 'success'); setForm(EMPTY_CUS); queryClient.invalidateQueries({ queryKey: ['garage-customs', companyId] }); queryClient.invalidateQueries({ queryKey: ['garage-earnings', companyId] }); },
+    onSuccess: () => { toast('Custom enregistré.', 'success'); setForm({ ...EMPTY_CUS, mechanicUserId: myMechId }); queryClient.invalidateQueries({ queryKey: ['garage-customs', companyId] }); queryClient.invalidateQueries({ queryKey: ['garage-earnings', companyId] }); },
     onError: () => toast("Échec de l'enregistrement.", 'error'),
   });
   const paidM = useMutation({ mutationFn: (v: { id: number; paid: boolean }) => setCustomPaid(companyId, v.id, v.paid), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['garage-customs', companyId] }) });
