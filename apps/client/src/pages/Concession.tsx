@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { useCompany } from '@/lib/useCompany';
+import { useCompany, useModulePerms } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CarFront, Plus, Trash2, Boxes, Receipt, TrendingUp, Coins, X, MoreVertical, Search, ExternalLink, Copy, RefreshCw, Tag, Upload } from 'lucide-react';
 import { fmtInt } from '@/lib/declarations';
@@ -54,6 +54,7 @@ type Tab = 'catalogue' | 'ventes';
 
 export default function Concession() {
   const { companyId, isLoading } = useCompany();
+  const canManage = useModulePerms('concession').canDelete;
   const [tab, setTab] = useState<Tab>('catalogue');
   const q = useQuery({ queryKey: ['concession', companyId, 'overview'], queryFn: () => getConcessionOverview(companyId), enabled: !!companyId });
 
@@ -79,14 +80,14 @@ export default function Concession() {
         <Kpi icon={Coins} label="Commissions versées" value={money(s.commissionsPaid)} sub="aux vendeurs" accent="text-amber-400" />
       </div>
 
-      {canWrite && <ShowroomBanner companyId={companyId} showroom={showroom} />}
+      {canWrite && <ShowroomBanner companyId={companyId} showroom={showroom} canManage={canManage} />}
 
       <div className="flex flex-wrap items-center gap-1 rounded-xl border bg-card p-1">
         <TabBtn k="catalogue" label="Catalogue" icon={Boxes} />
         <TabBtn k="ventes" label="Ventes" icon={Receipt} />
       </div>
 
-      {tab === 'catalogue' && <CatalogueTab companyId={companyId} vehicles={vehicles} canWrite={canWrite} />}
+      {tab === 'catalogue' && <CatalogueTab companyId={companyId} vehicles={vehicles} canManage={canManage} />}
       {tab === 'ventes' && <VentesTab companyId={companyId} vehicles={vehicles} canWrite={canWrite} pastClients={pastClients} />}
     </div>
   );
@@ -102,7 +103,7 @@ function Kpi({ icon: Icon, label, value, sub, accent }: { icon: typeof CarFront;
   );
 }
 
-function ShowroomBanner({ companyId, showroom }: { companyId: number; showroom: ConcessionShowroom }) {
+function ShowroomBanner({ companyId, showroom, canManage }: { companyId: number; showroom: ConcessionShowroom; canManage: boolean }) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -135,10 +136,10 @@ function ShowroomBanner({ companyId, showroom }: { companyId: number; showroom: 
         <div className="flex items-center gap-2">
           {url && <a href={url} target="_blank" rel="noreferrer"><Button size="sm" variant="outline"><ExternalLink className="h-4 w-4" /> Ouvrir</Button></a>}
           {url && <Button size="sm" variant="outline" onClick={() => { navigator.clipboard?.writeText(url); toast('Lien copié.', 'success'); }}><Copy className="h-4 w-4" /> Copier</Button>}
-          <Button size="sm" variant="outline" disabled={regen.isPending}
+          {canManage && <Button size="sm" variant="outline" disabled={regen.isPending}
             onClick={async () => { if (await confirm({ title: 'Régénérer le lien ?', message: 'L\'ancien lien cessera de fonctionner immédiatement.', destructive: true })) regen.mutate(); }}>
             <RefreshCw className="h-4 w-4" /> Régénérer
-          </Button>
+          </Button>}
         </div>
       </div>
       {url && <div className="mt-2 truncate rounded-md bg-background/60 px-3 py-2 font-mono text-xs text-muted-foreground">{url}</div>}
@@ -152,7 +153,7 @@ function TypeBadge({ type }: { type: VehicleType }) {
     : <span className="rounded px-1.5 py-0.5 text-[10px] bg-sky-500/15 text-sky-300">Neuf</span>;
 }
 
-function CatalogueTab({ companyId, vehicles, canWrite }: { companyId: number; vehicles: ConcessionVehicle[]; canWrite: boolean }) {
+function CatalogueTab({ companyId, vehicles, canManage }: { companyId: number; vehicles: ConcessionVehicle[]; canManage: boolean }) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -179,7 +180,7 @@ function CatalogueTab({ companyId, vehicles, canWrite }: { companyId: number; ve
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
           <div className="relative"><Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><input className={`${inputCls} w-52 pl-8`} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher…" /></div>
-          {canWrite && <Button onClick={() => setModal({ edit: null })}><Plus className="h-4 w-4" /> Ajouter</Button>}
+          {canManage && <Button onClick={() => setModal({ edit: null })}><Plus className="h-4 w-4" /> Ajouter</Button>}
         </div>
       </div>
       <div className="mb-2 text-xs text-muted-foreground">{rows.length} affiché{rows.length > 1 ? 's' : ''}</div>
@@ -193,7 +194,7 @@ function CatalogueTab({ companyId, vehicles, canWrite }: { companyId: number; ve
               <th className="py-2 text-right font-semibold">Prix vente</th>
               <th className="py-2 text-center font-semibold">Vitrine</th>
               <th className="py-2 text-center font-semibold">Statut</th>
-              {canWrite && <th className="py-2 text-center font-semibold">Actions</th>}
+              {canManage && <th className="py-2 text-center font-semibold">Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -210,7 +211,7 @@ function CatalogueTab({ companyId, vehicles, canWrite }: { companyId: number; ve
                 <td className="py-2 text-right font-semibold text-emerald-400">{money(v.salePrice)}</td>
                 <td className="py-2 text-center"><span className={`rounded px-1.5 py-0.5 text-[10px] ${v.showroom ? 'bg-emerald-500/15 text-emerald-300' : 'bg-muted text-muted-foreground'}`}>{v.showroom ? 'OUI' : 'NON'}</span></td>
                 <td className="py-2 text-center"><span className={`rounded px-1.5 py-0.5 text-[10px] ${v.available ? 'bg-emerald-500/15 text-emerald-300' : 'bg-muted text-muted-foreground'}`}>{v.available ? 'DISPO' : 'RETIRÉ'}</span></td>
-                {canWrite && (
+                {canManage && (
                   <td className="py-2 text-center">
                     <div className="relative inline-block">
                       <button type="button" onClick={() => setMenu(menu === v.id ? null : v.id)} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent"><MoreVertical className="h-4 w-4" /></button>
@@ -230,7 +231,7 @@ function CatalogueTab({ companyId, vehicles, canWrite }: { companyId: number; ve
                 )}
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={canWrite ? 8 : 7} className="py-6 text-center text-sm text-muted-foreground">Aucun véhicule.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={canManage ? 8 : 7} className="py-6 text-center text-sm text-muted-foreground">Aucun véhicule.</td></tr>}
           </tbody>
         </table>
       </div>

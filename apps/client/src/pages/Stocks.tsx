@@ -313,7 +313,7 @@ function ItemsManager({
             </div>
           )}
         </div>
-        {canCreate && (
+        {canDelete && (
           <Button className="ml-auto" onClick={openNew}>
             <Plus className="h-4 w-4" />
             Nouvelle matière
@@ -381,7 +381,7 @@ function ItemsManager({
                       </button>
                     </>
                   )}
-                  {canEdit && (
+                  {canDelete && (
                     <button type="button" onClick={() => openEdit(it)} title="Modifier" className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
                       <Pencil className="h-4 w-4" />
                     </button>
@@ -412,7 +412,7 @@ function ItemsManager({
         {items.length === 0 && (
           <div className="grid place-items-center gap-3 rounded-xl border border-dashed bg-card p-12 text-center">
             <p className="text-sm text-muted-foreground">Aucune matière première en stock.</p>
-            {canCreate && (
+            {canDelete && (
               <Button variant="outline" onClick={openNew}>
                 <Plus className="h-4 w-4" />
                 Ajouter la première
@@ -596,7 +596,7 @@ function CategoriesManager({
 
   return (
     <div className="max-w-xl space-y-4">
-      {canCreate && (
+      {canDelete && (
         <div className="flex gap-2">
           <input
             value={name}
@@ -642,7 +642,7 @@ function CategoriesManager({
               ) : (
                 <>
                   <span className="flex-1 text-sm font-medium">{c.name}</span>
-                  {canEdit && (
+                  {canDelete && (
                     <button type="button" onClick={() => { setEditingId(c.id); setEditName(c.name); }} className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
                       <Pencil className="h-4 w-4" />
                     </button>

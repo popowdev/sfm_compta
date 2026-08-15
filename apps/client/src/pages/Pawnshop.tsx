@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useCompany } from '@/lib/useCompany';
+import { useCompany, useModulePerms } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Gem, Plus, Trash2, ArrowDownLeft, ArrowUpRight, Boxes, Coins, TrendingUp, Warehouse, X, MoreVertical, Search } from 'lucide-react';
 import { fmtInt } from '@/lib/declarations';
@@ -23,6 +23,7 @@ type Tab = 'stock' | 'buys' | 'sells' | 'catalog';
 
 export default function Pawnshop() {
   const { companyId, isLoading } = useCompany();
+  const { canDelete: canManage } = useModulePerms('pawnshop');
   const [tab, setTab] = useState<Tab>('stock');
   const q = useQuery({ queryKey: ['pawnshop', companyId, 'overview'], queryFn: () => getPawnOverview(companyId), enabled: !!companyId });
 
@@ -58,7 +59,7 @@ export default function Pawnshop() {
       {tab === 'stock' && <StockTab items={items} />}
       {tab === 'buys' && <TransactionsTab companyId={companyId} type="buy" items={items} canWrite={canWrite} />}
       {tab === 'sells' && <TransactionsTab companyId={companyId} type="sell" items={items} canWrite={canWrite} />}
-      {tab === 'catalog' && <CatalogTab companyId={companyId} items={items} canWrite={canWrite} />}
+      {tab === 'catalog' && <CatalogTab companyId={companyId} items={items} canManage={canManage} />}
     </div>
   );
 }
@@ -241,7 +242,7 @@ function TxModal({ companyId, type, items, onClose, onSaved }: { companyId: numb
   );
 }
 
-function CatalogTab({ companyId, items, canWrite }: { companyId: number; items: PawnItem[]; canWrite: boolean }) {
+function CatalogTab({ companyId, items, canManage }: { companyId: number; items: PawnItem[]; canManage: boolean }) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -262,7 +263,7 @@ function CatalogTab({ companyId, items, canWrite }: { companyId: number; items: 
         </div>
         <div className="flex items-center gap-2">
           <div className="relative"><Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><input className={`${inputCls} w-52 pl-8`} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher…" /></div>
-          {canWrite && <Button onClick={() => setModal({ edit: null })}><Plus className="h-4 w-4" /> Ajouter un objet</Button>}
+          {canManage && <Button onClick={() => setModal({ edit: null })}><Plus className="h-4 w-4" /> Ajouter un objet</Button>}
         </div>
       </div>
       <div className="overflow-x-auto">
@@ -274,7 +275,7 @@ function CatalogTab({ companyId, items, canWrite }: { companyId: number; items: 
               <th className="py-2 text-right font-semibold">Prix revente (grossiste)</th>
               <th className="py-2 text-center font-semibold">Vente client</th>
               <th className="py-2 text-center font-semibold">Statut</th>
-              {canWrite && <th className="py-2 text-center font-semibold">Actions</th>}
+              {canManage && <th className="py-2 text-center font-semibold">Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -285,7 +286,7 @@ function CatalogTab({ companyId, items, canWrite }: { companyId: number; items: 
                 <td className="py-2.5 text-right">{money(it.sellPrice)}</td>
                 <td className="py-2.5 text-center"><span className={`rounded px-1.5 py-0.5 text-[10px] ${it.venteClient ? 'bg-sky-500/15 text-sky-300' : 'bg-muted text-muted-foreground'}`}>{it.venteClient ? 'OUI' : 'NON'}</span></td>
                 <td className="py-2.5 text-center"><span className={`rounded px-1.5 py-0.5 text-[10px] ${it.active ? 'bg-emerald-500/15 text-emerald-300' : 'bg-muted text-muted-foreground'}`}>{it.active ? 'ACTIF' : 'INACTIF'}</span></td>
-                {canWrite && (
+                {canManage && (
                   <td className="py-2.5 text-center">
                     <div className="relative inline-block">
                       <button type="button" onClick={() => setMenu(menu === it.id ? null : it.id)} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent"><MoreVertical className="h-4 w-4" /></button>
@@ -304,7 +305,7 @@ function CatalogTab({ companyId, items, canWrite }: { companyId: number; items: 
                 )}
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={canWrite ? 6 : 5} className="py-6 text-center text-sm text-muted-foreground">Aucun objet.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={canManage ? 6 : 5} className="py-6 text-center text-sm text-muted-foreground">Aucun objet.</td></tr>}
           </tbody>
         </table>
       </div>

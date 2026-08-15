@@ -90,6 +90,7 @@ meGarageRouter.get('/config', asyncHandler(async (req, res) => {
   const packs = await db.select().from(garagePacks).where(eq(garagePacks.companyId, companyId)).orderBy(garagePacks.name);
   res.json({
     canWrite: g.acc!.canWrite,
+    canManage: g.acc!.canDelete,
     settings: {
       depannagePerKm: Number(settings?.depannagePerKm ?? 25),
       depannageMultiplier: settings?.depannageMultiplier ?? 2,

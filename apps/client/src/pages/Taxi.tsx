@@ -37,7 +37,7 @@ function weekRange(): { from: string; to: string } {
 type Tab = 'citoyens' | 'concitoyens' | 'vip' | 'settings';
 
 export default function Taxi() {
-  const { companyId, canEdit } = useModulePerms('taxi');
+  const { companyId, canEdit, canDelete } = useModulePerms('taxi');
   const cfg = useQuery({ queryKey: ['taxi-config', companyId], queryFn: () => getTaxiConfig(companyId) });
   const [tab, setTab] = useState<Tab>('citoyens');
   const drivers = cfg.data?.drivers ?? [];
@@ -55,13 +55,13 @@ export default function Taxi() {
         <TabBtn active={tab === 'citoyens'} onClick={() => setTab('citoyens')} icon={Car} label="Courses Citoyens" />
         <TabBtn active={tab === 'concitoyens'} onClick={() => setTab('concitoyens')} icon={Users} label="Courses Concitoyens" />
         <TabBtn active={tab === 'vip'} onClick={() => setTab('vip')} icon={Crown} label="Courses VIP" />
-        {canEdit && <TabBtn active={tab === 'settings'} onClick={() => setTab('settings')} icon={Settings} label="Paramètres" />}
+        {canDelete && <TabBtn active={tab === 'settings'} onClick={() => setTab('settings')} icon={Settings} label="Paramètres" />}
       </div>
 
       {tab === 'citoyens' && <CitoyensTab companyId={companyId} canEdit={canEdit} drivers={drivers} pricePerKm={settings?.pricePerKm ?? 20} />}
       {tab === 'concitoyens' && <ConcitoyensTab companyId={companyId} canEdit={canEdit} drivers={drivers} pricePerClient={settings?.pricePerClient ?? 605} />}
       {tab === 'vip' && <VipTab companyId={companyId} canEdit={canEdit} drivers={drivers} vipTypes={vipTypes} />}
-      {tab === 'settings' && canEdit && <SettingsTab companyId={companyId} />}
+      {tab === 'settings' && canDelete && <SettingsTab companyId={companyId} canManage={canDelete} />}
     </div>
   );
 }
@@ -396,7 +396,7 @@ function VipModal({ companyId, edit, drivers, vipTypes, onClose, onSaved }: { co
   );
 }
 
-function SettingsTab({ companyId }: { companyId: number }) {
+function SettingsTab({ companyId, canManage }: { companyId: number; canManage: boolean }) {
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -426,14 +426,14 @@ function SettingsTab({ companyId }: { companyId: number }) {
           <label className="text-sm"><span className={labelCls}>Prix d’une course concitoyen (par client)</span>
             <input type="number" min="0" step="0.01" className={inputCls} value={ppc} onChange={(e) => setPpc(e.target.value)} placeholder={String(settings?.pricePerClient ?? 605)} />
           </label>
-          <div className="sm:col-span-2"><Button type="submit" disabled={saveSettings.isPending}>{saveSettings.isPending ? 'Enregistrement…' : 'Enregistrer les tarifs'}</Button></div>
+          {canManage && <div className="sm:col-span-2"><Button type="submit" disabled={saveSettings.isPending}>{saveSettings.isPending ? 'Enregistrement…' : 'Enregistrer les tarifs'}</Button></div>}
         </form>
       </div>
 
       <div className="overflow-hidden rounded-xl border bg-card">
         <div className="flex items-center justify-between border-b px-5 py-4">
           <h2 className="text-sm font-semibold">Types de courses VIP</h2>
-          <Button onClick={() => setTypeModal({ open: true, edit: null })}><Plus className="h-4 w-4" /> Ajouter un type</Button>
+          {canManage && <Button onClick={() => setTypeModal({ open: true, edit: null })}><Plus className="h-4 w-4" /> Ajouter un type</Button>}
         </div>
         {vipTypes.length === 0 ? <div className="p-6 text-center text-sm text-muted-foreground">Aucun type VIP.</div>
           : <table className="w-full border-collapse text-sm"><thead><tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
@@ -443,7 +443,7 @@ function SettingsTab({ companyId }: { companyId: number }) {
                 <td className="px-5 py-3 font-medium">{t.name}</td>
                 <td className="px-5 py-3 text-right">{fmtMoney(t.fixedPrice)} $</td>
                 <td className="px-5 py-3">{t.pricePerKm == null ? <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">Fixe uniquement</span> : `${fmtMoney(t.pricePerKm)} $/km`}</td>
-                <td className="px-5 py-3"><RowActions onEdit={() => setTypeModal({ open: true, edit: t })} onDelete={async () => { if (await confirm({ title: 'Supprimer ce type ?', message: t.name, destructive: true })) removeType.mutate(t.id); }} /></td>
+                <td className="px-5 py-3"><RowActions onEdit={canManage ? () => setTypeModal({ open: true, edit: t }) : undefined} onDelete={canManage ? async () => { if (await confirm({ title: 'Supprimer ce type ?', message: t.name, destructive: true })) removeType.mutate(t.id); } : undefined} /></td>
               </tr>)}
             </tbody></table>}
       </div>

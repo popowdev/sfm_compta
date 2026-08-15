@@ -174,11 +174,11 @@ export default function Immobilier() {
         <div className="flex gap-1 border-b p-1.5">
           <TabBtn active={tab === 'locations'} onClick={() => switchTab('locations')} icon={KeyRound} label="Locations" count={rentalStats?.total} />
           <TabBtn active={tab === 'ventes'} onClick={() => switchTab('ventes')} icon={Home} label="Ventes" count={saleStats?.total} />
-          {canEdit && <TabBtn active={tab === 'parametres'} onClick={() => switchTab('parametres')} icon={SlidersHorizontal} label="Paramètres" />}
+          {canDelete && <TabBtn active={tab === 'parametres'} onClick={() => switchTab('parametres')} icon={SlidersHorizontal} label="Paramètres" />}
         </div>
 
         {tab === 'parametres' ? (
-          <ImmoSettingsPanel companyId={companyId} canEdit={canEdit} />
+          <ImmoSettingsPanel companyId={companyId} canManage={canDelete} />
         ) : (<>
         <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
           <label className="text-sm">

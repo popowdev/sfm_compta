@@ -3,7 +3,7 @@ import { apiFetch } from './api';
 export interface GarageType { id: number; name: string; price: number; active: boolean }
 export interface GaragePack { id: number; name: string; price: number; active: boolean }
 export interface GarageSettings { depannagePerKm: number; depannageMultiplier: number; customMarginPct: number; commissionPct: number }
-export interface GarageConfig { canWrite: boolean; settings: GarageSettings; types: GarageType[]; packs: GaragePack[] }
+export interface GarageConfig { canWrite: boolean; canManage: boolean; settings: GarageSettings; types: GarageType[]; packs: GaragePack[] }
 export interface GarageMember { userId: number; name: string; gradeName: string | null; commissionRate: number | null }
 export interface GarageEarning { name: string; commission: number; revenue: number; count: number }
 export interface GarageContractPrice { typeId: number | null; packId: number | null; price: number }

@@ -14,13 +14,14 @@ type Col = { field: string; label: string; kind: 'text' | 'int' | 'pct'; width?:
 type Row = Record<string, string | number>;
 
 function EditableBlock({
-  title, cols, initial, onSave, addLabel,
+  title, cols, initial, onSave, addLabel, canManage,
 }: {
   title: string;
   cols: Col[];
   initial: Row[];
   onSave: (rows: Row[]) => Promise<unknown>;
   addLabel: string;
+  canManage: boolean;
 }) {
   const toast = useToast();
   const [rows, setRows] = useState<Row[]>(initial);
@@ -37,7 +38,7 @@ function EditableBlock({
     <div className="overflow-hidden rounded-xl border bg-card">
       <div className="flex items-center justify-between border-b px-5 py-3">
         <h3 className="text-sm font-semibold">{title}</h3>
-        <Button variant="outline" size="sm" onClick={addRow}><Plus className="h-4 w-4" /> {addLabel}</Button>
+        {canManage && <Button variant="outline" size="sm" onClick={addRow}><Plus className="h-4 w-4" /> {addLabel}</Button>}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
@@ -65,21 +66,23 @@ function EditableBlock({
                   </td>
                 ))}
                 <td className="px-3 py-1.5 text-center">
-                  <button type="button" onClick={() => delRow(i)} title="Supprimer" className="grid h-8 w-8 place-items-center rounded-md bg-destructive/15 text-destructive hover:bg-destructive/25"><Trash2 className="h-4 w-4" /></button>
+                  {canManage && <button type="button" onClick={() => delRow(i)} title="Supprimer" className="grid h-8 w-8 place-items-center rounded-md bg-destructive/15 text-destructive hover:bg-destructive/25"><Trash2 className="h-4 w-4" /></button>}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <div className="border-t px-5 py-3">
-        <Button onClick={() => save.mutate()} disabled={save.isPending}><Save className="h-4 w-4" /> {save.isPending ? 'Enregistrement…' : 'Enregistrer'}</Button>
-      </div>
+      {canManage && (
+        <div className="border-t px-5 py-3">
+          <Button onClick={() => save.mutate()} disabled={save.isPending}><Save className="h-4 w-4" /> {save.isPending ? 'Enregistrement…' : 'Enregistrer'}</Button>
+        </div>
+      )}
     </div>
   );
 }
 
-export function ImmoSettingsPanel({ companyId }: { companyId: number; canEdit: boolean }) {
+export function ImmoSettingsPanel({ companyId, canManage }: { companyId: number; canManage: boolean }) {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['immo-settings', companyId], queryFn: () => getImmoSettings(companyId) });
   const invalidate = () => qc.invalidateQueries({ queryKey: ['immo-settings', companyId] });
@@ -108,20 +111,20 @@ export function ImmoSettingsPanel({ companyId }: { companyId: number; canEdit: b
     <div className="space-y-5 p-4">
       <p className="text-xs text-muted-foreground">Ces tarifs et options servent au calcul automatique du prix lors d’une vente ou d’une location. Montants en entiers (pas de centimes).</p>
       <div className="grid gap-5 xl:grid-cols-2">
-        <EditableBlock title="Types d’intérieur — Locations" addLabel="Ajouter un type" cols={typeCols}
+        <EditableBlock title="Types d’intérieur — Locations" addLabel="Ajouter un type" cols={typeCols} canManage={canManage}
           initial={d.locationTypes.map((t) => ({ key: t.key, label: t.label, basePrice: t.basePrice }))}
           onSave={(rows) => done(saveImmoPriceTypes(companyId, 'location', rows.map((r) => ({ key: String(r.key), label: String(r.label), basePrice: num(r.basePrice) }))))} />
-        <EditableBlock title="Types d’intérieur — Ventes" addLabel="Ajouter un type" cols={typeCols}
+        <EditableBlock title="Types d’intérieur — Ventes" addLabel="Ajouter un type" cols={typeCols} canManage={canManage}
           initial={d.venteTypes.map((t) => ({ key: t.key, label: t.label, basePrice: t.basePrice }))}
           onSave={(rows) => done(saveImmoPriceTypes(companyId, 'vente', rows.map((r) => ({ key: String(r.key), label: String(r.label), basePrice: num(r.basePrice) }))))} />
-        <EditableBlock title="Options supplémentaires — Locations" addLabel="Ajouter une option" cols={optCols}
+        <EditableBlock title="Options supplémentaires — Locations" addLabel="Ajouter une option" cols={optCols} canManage={canManage}
           initial={d.locationOptions.map((o) => ({ name: o.name, pct: o.pct }))}
           onSave={(rows) => done(saveImmoOptions(companyId, 'location', rows.map((r) => ({ name: String(r.name), pct: num(r.pct) }))))} />
-        <EditableBlock title="Options supplémentaires — Ventes" addLabel="Ajouter une option" cols={optCols}
+        <EditableBlock title="Options supplémentaires — Ventes" addLabel="Ajouter une option" cols={optCols} canManage={canManage}
           initial={d.venteOptions.map((o) => ({ name: o.name, pct: o.pct }))}
           onSave={(rows) => done(saveImmoOptions(companyId, 'vente', rows.map((r) => ({ name: String(r.name), pct: num(r.pct) }))))} />
       </div>
-      <EditableBlock title="Réductions personnalisées (Locations et Ventes)" addLabel="Ajouter une réduction" cols={discCols}
+      <EditableBlock title="Réductions personnalisées (Locations et Ventes)" addLabel="Ajouter une réduction" cols={discCols} canManage={canManage}
         initial={d.discounts.map((o) => ({ name: o.name, pct: o.pct }))}
         onSave={(rows) => done(saveImmoDiscounts(companyId, rows.map((r) => ({ name: String(r.name), pct: num(r.pct) }))))} />
     </div>

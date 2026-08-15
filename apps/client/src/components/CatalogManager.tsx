@@ -237,7 +237,7 @@ export function CatalogManager({
               Craft
             </Button>
           )}
-          {canCreate && (
+          {canDelete && (
             <Button onClick={openNew}>
               <Plus className="h-4 w-4" />
               Nouvel article
@@ -289,7 +289,7 @@ export function CatalogManager({
                   </div>
                 </button>
                 <div className="flex shrink-0 gap-1">
-                  {canEdit && (
+                  {canDelete && (
                     <button type="button" onClick={() => openEdit(it)} title="Modifier" aria-label={`Modifier ${it.name}`} className="grid h-8 w-8 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
                       <Pencil className="h-4 w-4" />
                     </button>
@@ -338,7 +338,7 @@ export function CatalogManager({
             title="Aucun article au catalogue"
             hint="Un article est ce que tu vends. Un produit se fabrique à partir de matières premières (sa recette) ; un service n'a pas de stock."
             action={
-              canCreate ? (
+              canDelete ? (
                 <Button variant="outline" onClick={openNew}>
                   <Plus className="h-4 w-4" />
                   Créer le premier article

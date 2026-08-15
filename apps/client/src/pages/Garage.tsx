@@ -46,6 +46,7 @@ export default function Garage() {
   if (!mine) return <Navigate to="/" replace />;
 
   const canWrite = cfg.data?.canWrite ?? false;
+  const canManage = cfg.data?.canManage ?? false;
   const members = membersQ.data?.members ?? [];
   const myMechId: number | '' = user && members.some((m) => m.userId === Number(user.id)) ? Number(user.id) : '';
   const GROUP1: { key: Tab; label: string; Icon: typeof Wrench }[] = [
@@ -71,9 +72,11 @@ export default function Garage() {
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Espace entreprise</div>
           <h1 className="mt-1 text-2xl font-bold tracking-tight">Garage</h1>
         </div>
-        <Button variant={showSettings ? 'default' : 'outline'} onClick={() => setShowSettings((v) => !v)}>
-          <Settings2 className="h-4 w-4" /> Paramètres
-        </Button>
+        {canManage && (
+          <Button variant={showSettings ? 'default' : 'outline'} onClick={() => setShowSettings((v) => !v)}>
+            <Settings2 className="h-4 w-4" /> Paramètres
+          </Button>
+        )}
       </div>
 
       {!showSettings && (
@@ -86,8 +89,8 @@ export default function Garage() {
 
       {!cfg.data ? (
         <div className="text-sm text-muted-foreground">Chargement…</div>
-      ) : showSettings ? (
-        <SettingsTab companyId={companyId} canWrite={canWrite} />
+      ) : showSettings && canManage ? (
+        <SettingsTab companyId={companyId} canWrite={canManage} />
       ) : tab === 'repairs' ? (
         <RepairsTab companyId={companyId} canWrite={canWrite} cfg={cfg.data} members={members} form={repairForm} setForm={setRepairForm} myMechId={myMechId} />
       ) : tab === 'customs' ? (
@@ -95,7 +98,7 @@ export default function Garage() {
       ) : tab === 'vehicles' ? (
         <VehiclesTab companyId={companyId} canWrite={canWrite} />
       ) : tab === 'contracts' ? (
-        <ContractsTab companyId={companyId} canWrite={canWrite} />
+        <ContractsTab companyId={companyId} canWrite={canManage} />
       ) : (
         <PaiesTab companyId={companyId} commissionPct={cfg.data.settings.commissionPct} />
       )}
