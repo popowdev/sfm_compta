@@ -192,10 +192,17 @@ async function requireWrite(req: Request, companyId: number, res: import('expres
   return true;
 }
 
+async function requireManage(req: Request, companyId: number, res: import('express').Response): Promise<boolean> {
+  const g = await gate(req, companyId);
+  if (g.error) { res.status(g.error).json({ error: 'forbidden' }); return false; }
+  if (!g.acc!.canDelete) { res.status(403).json({ error: 'forbidden' }); return false; }
+  return true;
+}
+
 meGarageRouter.put('/settings', asyncHandler(async (req, res) => {
   const companyId = parseId(req.params.companyId);
   if (!companyId) return res.status(400).json({ error: 'bad_request' });
-  if (!(await requireWrite(req, companyId, res))) return;
+  if (!(await requireManage(req, companyId, res))) return;
   const schema = z.object({ depannagePerKm: money, depannageMultiplier: z.coerce.number().int().min(1).max(10), customMarginPct: pct, commissionPct: pct });
   const p = schema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: 'bad_request' });
@@ -211,7 +218,7 @@ const namePrice = z.object({ name: z.string().trim().min(1).max(80), price: mone
 meGarageRouter.post('/types', asyncHandler(async (req, res) => {
   const companyId = parseId(req.params.companyId);
   if (!companyId) return res.status(400).json({ error: 'bad_request' });
-  if (!(await requireWrite(req, companyId, res))) return;
+  if (!(await requireManage(req, companyId, res))) return;
   const p = namePrice.safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: 'bad_request' });
   await db.insert(garageRepairTypes).values({ companyId, name: p.data.name, price: p.data.price.toFixed(2), sortOrder: 99 });
@@ -220,7 +227,7 @@ meGarageRouter.post('/types', asyncHandler(async (req, res) => {
 meGarageRouter.patch('/types/:id', asyncHandler(async (req, res) => {
   const companyId = parseId(req.params.companyId); const id = parseId(req.params.id);
   if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
-  if (!(await requireWrite(req, companyId, res))) return;
+  if (!(await requireManage(req, companyId, res))) return;
   const p = namePrice.partial().safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: 'bad_request' });
   const set: Record<string, unknown> = {};
@@ -232,7 +239,7 @@ meGarageRouter.patch('/types/:id', asyncHandler(async (req, res) => {
 meGarageRouter.delete('/types/:id', asyncHandler(async (req, res) => {
   const companyId = parseId(req.params.companyId); const id = parseId(req.params.id);
   if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
-  if (!(await requireWrite(req, companyId, res))) return;
+  if (!(await requireManage(req, companyId, res))) return;
   await db.delete(garageRepairTypes).where(and(eq(garageRepairTypes.id, id), eq(garageRepairTypes.companyId, companyId)));
   res.json({ ok: true });
 }));
@@ -240,7 +247,7 @@ meGarageRouter.delete('/types/:id', asyncHandler(async (req, res) => {
 meGarageRouter.post('/packs', asyncHandler(async (req, res) => {
   const companyId = parseId(req.params.companyId);
   if (!companyId) return res.status(400).json({ error: 'bad_request' });
-  if (!(await requireWrite(req, companyId, res))) return;
+  if (!(await requireManage(req, companyId, res))) return;
   const p = namePrice.safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: 'bad_request' });
   await db.insert(garagePacks).values({ companyId, name: p.data.name, price: p.data.price.toFixed(2) });
@@ -249,7 +256,7 @@ meGarageRouter.post('/packs', asyncHandler(async (req, res) => {
 meGarageRouter.delete('/packs/:id', asyncHandler(async (req, res) => {
   const companyId = parseId(req.params.companyId); const id = parseId(req.params.id);
   if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
-  if (!(await requireWrite(req, companyId, res))) return;
+  if (!(await requireManage(req, companyId, res))) return;
   await db.delete(garagePacks).where(and(eq(garagePacks.id, id), eq(garagePacks.companyId, companyId)));
   res.json({ ok: true });
 }));
@@ -313,7 +320,7 @@ meGarageRouter.get('/contracts', asyncHandler(async (req, res) => {
 meGarageRouter.post('/contracts', asyncHandler(async (req, res) => {
   const companyId = parseId(req.params.companyId);
   if (!companyId) return res.status(400).json({ error: 'bad_request' });
-  if (!(await requireWrite(req, companyId, res))) return;
+  if (!(await requireManage(req, companyId, res))) return;
   const p = contractSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: 'bad_request' });
   const ins = await db.insert(garageContracts).values({ companyId, name: p.data.name, description: p.data.description || null });
@@ -323,7 +330,7 @@ meGarageRouter.post('/contracts', asyncHandler(async (req, res) => {
 meGarageRouter.patch('/contracts/:id', asyncHandler(async (req, res) => {
   const companyId = parseId(req.params.companyId); const id = parseId(req.params.id);
   if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
-  if (!(await requireWrite(req, companyId, res))) return;
+  if (!(await requireManage(req, companyId, res))) return;
   const p = contractSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: 'bad_request' });
   const owned = await db.select({ id: garageContracts.id }).from(garageContracts).where(and(eq(garageContracts.id, id), eq(garageContracts.companyId, companyId))).limit(1);
@@ -335,7 +342,7 @@ meGarageRouter.patch('/contracts/:id', asyncHandler(async (req, res) => {
 meGarageRouter.delete('/contracts/:id', asyncHandler(async (req, res) => {
   const companyId = parseId(req.params.companyId); const id = parseId(req.params.id);
   if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
-  if (!(await requireWrite(req, companyId, res))) return;
+  if (!(await requireManage(req, companyId, res))) return;
   await db.delete(garageContracts).where(and(eq(garageContracts.id, id), eq(garageContracts.companyId, companyId)));
   res.json({ ok: true });
 }));
@@ -414,7 +421,7 @@ const modelSchema = z.object({
 meGarageRouter.post('/models', asyncHandler(async (req, res) => {
   const companyId = parseId(req.params.companyId);
   if (!companyId) return res.status(400).json({ error: 'bad_request' });
-  if (!(await requireWrite(req, companyId, res))) return;
+  if (!(await requireManage(req, companyId, res))) return;
   const p = modelSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: 'bad_request' });
   await db.insert(vehicleModels).values({ name: p.data.name, manufacturer: p.data.manufacturer || null, category: p.data.category || null });
@@ -423,7 +430,7 @@ meGarageRouter.post('/models', asyncHandler(async (req, res) => {
 meGarageRouter.patch('/models/:id', asyncHandler(async (req, res) => {
   const companyId = parseId(req.params.companyId); const id = parseId(req.params.id);
   if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
-  if (!(await requireWrite(req, companyId, res))) return;
+  if (!(await requireManage(req, companyId, res))) return;
   if (!(await isStaff(req.user!.id))) return res.status(403).json({ error: 'forbidden' });
   const p = modelSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: 'bad_request' });
@@ -433,7 +440,7 @@ meGarageRouter.patch('/models/:id', asyncHandler(async (req, res) => {
 meGarageRouter.delete('/models/:id', asyncHandler(async (req, res) => {
   const companyId = parseId(req.params.companyId); const id = parseId(req.params.id);
   if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
-  if (!(await requireWrite(req, companyId, res))) return;
+  if (!(await requireManage(req, companyId, res))) return;
   if (!(await isStaff(req.user!.id))) return res.status(403).json({ error: 'forbidden' });
   await db.delete(vehicleModels).where(eq(vehicleModels.id, id));
   res.json({ ok: true });

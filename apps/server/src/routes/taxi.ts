@@ -35,7 +35,7 @@ async function gate(req: Request, companyId: number, moduleKey: ModuleKey) {
   if (!acc.enabled || acc.blocked) return { ok: false as const, status: 403, error: 'module_unavailable' };
   if (!acc.canView) return { ok: false as const, status: 403, error: 'forbidden' };
   if (actionDenied(acc, methodAction(req.method))) return { ok: false as const, status: 403, error: 'forbidden' };
-  return { ok: true as const, canWrite: acc.canWrite };
+  return { ok: true as const, canWrite: acc.canWrite, canManage: acc.canDelete };
 }
 
 async function getSettings(companyId: number) {
@@ -96,7 +96,7 @@ meTaxiRouter.put(
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId, 'taxi');
     if (!g.ok) return res.status(g.status).json({ error: g.error });
-    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
     const p = settingsSchema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: 'bad_request' });
     await getSettings(companyId);
@@ -118,7 +118,7 @@ meTaxiRouter.post(
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId, 'taxi');
     if (!g.ok) return res.status(g.status).json({ error: g.error });
-    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
     const p = vipTypeSchema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: 'bad_request' });
     const inserted = await db.insert(taxiVipTypes).values({
@@ -139,7 +139,7 @@ meTaxiRouter.patch(
     if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId, 'taxi');
     if (!g.ok) return res.status(g.status).json({ error: g.error });
-    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
     const p = vipTypeSchema.partial().safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: 'bad_request' });
     const patch: Record<string, unknown> = {};

@@ -62,7 +62,7 @@ meDashboardRouter.get(
       can('exercices'),
     ]);
 
-    const slots = bizDayList(30);
+    const slots = bizDayList(7);
     const sinceStr = slots[0] ?? bizToday();
     const dayExpr = bizDayStr(sales.createdAt);
 

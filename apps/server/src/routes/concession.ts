@@ -29,7 +29,7 @@ async function gate(req: Request, companyId: number) {
   if (!acc.enabled || acc.blocked) return { ok: false as const, status: 403, error: 'module_unavailable' };
   if (!acc.canView) return { ok: false as const, status: 403, error: 'forbidden' };
   if (actionDenied(acc, methodAction(req.method))) return { ok: false as const, status: 403, error: 'forbidden' };
-  return { ok: true as const, canWrite: acc.canWrite };
+  return { ok: true as const, canWrite: acc.canWrite, canManage: acc.canDelete };
 }
 
 async function readModuleConfig(companyId: number): Promise<Record<string, unknown> | null> {
@@ -181,6 +181,7 @@ meConcessionRouter.post(
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
     const p = vehicleCreate.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: 'bad_request' });
     const maxOrder = await db.select({ m: sql<number>`COALESCE(MAX(${concessionVehicles.sortOrder}), 0)` }).from(concessionVehicles).where(eq(concessionVehicles.companyId, companyId));
@@ -210,6 +211,7 @@ meConcessionRouter.patch(
     if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
     const p = vehiclePatch.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: 'bad_request' });
     const set: Record<string, unknown> = {};
@@ -291,7 +293,7 @@ meConcessionRouter.post(
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
-    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
     if (!req.file) return res.status(400).json({ error: 'invalid_file' });
     res.json({ url: concessionImageUrl(req.file.filename) });
   }),
@@ -376,7 +378,7 @@ meConcessionRouter.post(
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
-    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
     const token = randomBytes(16).toString('hex');
     await db.update(companies).set({ showroomToken: token }).where(eq(companies.id, companyId));
     emitInvalidate(['irs', `company:${companyId}`], [['concession', companyId]]);

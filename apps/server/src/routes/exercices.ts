@@ -235,6 +235,15 @@ meExercicesRouter.put(
     if (d.status !== undefined) {
       set.status = d.status;
       if (d.status === 'open') set.snapshot = null; // reopening unfreezes → recompute live
+      if (d.status === 'closed') {
+        const [ex] = await db
+          .select({ endDate: exercices.endDate })
+          .from(exercices)
+          .where(and(eq(exercices.id, id), eq(exercices.companyId, companyId)))
+          .limit(1);
+        if (!ex) return res.status(404).json({ error: 'not_found' });
+        if (ex.endDate >= bizWeek().monday) return res.status(409).json({ error: 'week_not_over' });
+      }
     }
     if (d.revenue !== undefined) set.revenue = String(round2(d.revenue));
     if (d.dividends !== undefined) set.dividends = String(round2(d.dividends));

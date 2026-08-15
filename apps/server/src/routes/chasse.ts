@@ -20,12 +20,13 @@ function methodAction(method: string): PermAction {
   return method === 'POST' ? 'create' : method === 'PUT' || method === 'PATCH' ? 'edit' : method === 'DELETE' ? 'delete' : 'view';
 }
 
-async function gate(req: Request, companyId: number) {
+async function gate(req: Request, companyId: number, requireManage = false) {
   const acc = await getModuleAccess(req.user!.id, companyId, 'chasse');
   if (!acc) return { ok: false as const, status: 404, error: 'not_member' };
   if (!acc.enabled || acc.blocked) return { ok: false as const, status: 403, error: 'module_unavailable' };
   if (!acc.canView) return { ok: false as const, status: 403, error: 'forbidden' };
   if (actionDenied(acc, methodAction(req.method))) return { ok: false as const, status: 403, error: 'forbidden' };
+  if (requireManage && !acc.canDelete) return { ok: false as const, status: 403, error: 'forbidden' };
   return { ok: true as const, canWrite: acc.canWrite };
 }
 
@@ -126,7 +127,7 @@ meChasseRouter.post(
   asyncHandler(async (req, res) => {
     const companyId = parseId(req.params.companyId);
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
-    const g = await gate(req, companyId);
+    const g = await gate(req, companyId, true);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const p = itemCreate.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: 'bad_request' });
@@ -150,7 +151,7 @@ meChasseRouter.patch(
     const companyId = parseId(req.params.companyId);
     const id = parseId(req.params.id);
     if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
-    const g = await gate(req, companyId);
+    const g = await gate(req, companyId, true);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const p = itemPatch.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: 'bad_request' });

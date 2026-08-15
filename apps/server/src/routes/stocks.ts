@@ -120,6 +120,7 @@ meStocksRouter.post(
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canDelete) return res.status(403).json({ error: 'forbidden' });
     const parsed = itemSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     if (parsed.data.categoryId && !(await categoryInCompany(parsed.data.categoryId, companyId))) {
@@ -139,6 +140,7 @@ meStocksRouter.put(
     if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canDelete) return res.status(403).json({ error: 'forbidden' });
     const parsed = metaSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     if (parsed.data.categoryId && !(await categoryInCompany(parsed.data.categoryId, companyId))) {

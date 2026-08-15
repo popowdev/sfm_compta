@@ -40,7 +40,7 @@ async function gate(req: Request, companyId: number, moduleKey: ModuleKey) {
   if (!acc.enabled || acc.blocked) return { ok: false as const, status: 403, error: 'module_unavailable' };
   if (!acc.canView) return { ok: false as const, status: 403, error: 'forbidden' };
   if (actionDenied(acc, methodAction(req.method))) return { ok: false as const, status: 403, error: 'forbidden' };
-  return { ok: true as const, canWrite: acc.canWrite };
+  return { ok: true as const, canWrite: acc.canWrite, canManage: acc.canDelete };
 }
 
 // Ensemble des n° de propriété qui ont une parcelle sur la carte (pour le lien fiche → carte).
@@ -826,7 +826,7 @@ meImmoSettingsRouter.put(
     if (!companyId || !kind) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId, 'immobilier');
     if (!g.ok) return res.status(g.status).json({ error: g.error });
-    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
     const p = priceTypesSchema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: 'bad_request' });
     await db.delete(immoPriceTypes).where(and(eq(immoPriceTypes.companyId, companyId), eq(immoPriceTypes.kind, kind)));
@@ -852,7 +852,7 @@ meImmoSettingsRouter.put(
     if (!companyId || !kind) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId, 'immobilier');
     if (!g.ok) return res.status(g.status).json({ error: g.error });
-    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
     const p = optionsSchema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: 'bad_request' });
     await db.delete(immoOptions).where(and(eq(immoOptions.companyId, companyId), eq(immoOptions.kind, kind)));
@@ -877,7 +877,7 @@ meImmoSettingsRouter.put(
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId, 'immobilier');
     if (!g.ok) return res.status(g.status).json({ error: g.error });
-    if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
+    if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
     const p = discountsSchema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: 'bad_request' });
     await db.delete(immoDiscounts).where(eq(immoDiscounts.companyId, companyId));

@@ -27,7 +27,7 @@ async function gate(req: Request, companyId: number) {
   if (actionDenied(acc, methodAction(req.method))) {
     return { ok: false as const, status: 403, error: 'forbidden' };
   }
-  return { ok: true as const, canWrite: acc.canWrite };
+  return { ok: true as const, canWrite: acc.canWrite, canManage: acc.canDelete };
 }
 
 const nameSchema = z.object({ name: z.string().trim().min(1).max(80) });
@@ -58,6 +58,7 @@ meStockCategoriesRouter.post(
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
     const parsed = nameSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     try {
@@ -79,6 +80,7 @@ meStockCategoriesRouter.put(
     if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
     const parsed = nameSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     try {

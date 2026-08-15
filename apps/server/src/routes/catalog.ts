@@ -30,7 +30,7 @@ async function gate(req: Request, companyId: number) {
   if (actionDenied(acc, methodAction(req.method))) {
     return { ok: false as const, status: 403, error: 'forbidden' };
   }
-  return { ok: true as const, canWrite: acc.canWrite };
+  return { ok: true as const, canWrite: acc.canWrite, canManage: acc.canDelete };
 }
 
 const TYPE_KEYS = CATALOG_ITEM_TYPES.map((t) => t.key) as [string, ...string[]];
@@ -213,6 +213,7 @@ meCatalogRouter.post(
     if (!companyId) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
     const parsed = itemSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     if (parsed.data.categoryId && !(await categoryInCompany(parsed.data.categoryId, companyId))) {
@@ -239,6 +240,7 @@ meCatalogRouter.put(
     if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
     const parsed = itemSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     if (parsed.data.categoryId && !(await categoryInCompany(parsed.data.categoryId, companyId))) {
@@ -302,6 +304,7 @@ meCatalogRouter.put(
     if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
     const parsed = recipeSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
 

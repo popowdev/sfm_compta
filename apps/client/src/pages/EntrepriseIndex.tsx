@@ -92,9 +92,9 @@ export default function EntrepriseIndex() {
       ) : (
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-            <Kpi icon={ShoppingCart} label="CA (30 j)" value={money(d.sales.total)} accent="text-primary" />
-            <Kpi icon={TrendingUp} label="Marge (30 j)" value={money(d.sales.margin)} accent="text-emerald-400" />
-            <Kpi icon={Receipt} label="Ventes (30 j)" value={`${d.sales.count}`} />
+            <Kpi icon={ShoppingCart} label="CA (7 j)" value={money(d.sales.total)} accent="text-primary" />
+            <Kpi icon={TrendingUp} label="Marge (7 j)" value={money(d.sales.margin)} accent="text-emerald-400" />
+            <Kpi icon={Receipt} label="Ventes (7 j)" value={`${d.sales.count}`} />
             <Kpi icon={Boxes} label="Valeur stock" value={money(d.stock.totalValue)} accent="text-sky-400" />
             <Kpi icon={Users} label="Employés actifs" value={`${d.hr.active}`} />
             <Kpi icon={Wallet} label="Créances clients" value={money(d.clients.debt)} accent={d.clients.debt > 0 ? 'text-amber-400' : undefined} />
@@ -102,7 +102,7 @@ export default function EntrepriseIndex() {
 
           <div className="grid gap-6 lg:grid-cols-3">
             <div className="rounded-xl border bg-card p-5 lg:col-span-2">
-              <h3 className="mb-3 text-sm font-semibold">Chiffre d'affaires — 30 derniers jours</h3>
+              <h3 className="mb-3 text-sm font-semibold">Chiffre d'affaires — 7 derniers jours</h3>
               {!hasSales ? (
                 <div className="grid h-56 place-items-center text-sm text-muted-foreground">
                   Pas encore de ventes. Lance la Caisse pour voir ton CA apparaître ici.
@@ -160,7 +160,7 @@ export default function EntrepriseIndex() {
 
               {d.sales.topProducts.length > 0 && (
                 <div className="rounded-xl border bg-card p-5">
-                  <h3 className="mb-2 text-sm font-semibold">Top articles (30 j)</h3>
+                  <h3 className="mb-2 text-sm font-semibold">Top articles (7 j)</h3>
                   <ul className="space-y-1.5">
                     {d.sales.topProducts.map((p) => (
                       <li key={p.name} className="flex items-center justify-between text-sm">

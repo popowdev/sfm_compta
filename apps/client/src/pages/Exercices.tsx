@@ -150,6 +150,13 @@ export default function Exercices() {
       invalidate();
       queryClient.invalidateQueries({ queryKey: ['exercice', companyId, v.id] });
     },
+    onError: (e) => {
+      if (e instanceof ApiError && e.code === 'week_not_over') {
+        alert('La semaine en cours ne peut pas être clôturée : elle se gèle automatiquement une fois terminée (dimanche soir).');
+      } else {
+        alert('Échec de la mise à jour de l’exercice.');
+      }
+    },
   });
   const genWeek = useMutation({
     mutationFn: (offset: number) => generateWeek(companyId, offset),
