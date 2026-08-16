@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
@@ -129,6 +129,17 @@ export default function Exercices() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['exercices', companyId] });
 
+  const didAutoExpand = useRef(false);
+  useEffect(() => {
+    if (didAutoExpand.current || expanded !== null) return;
+    const rows = q.data?.exercices ?? [];
+    const current = rows.find((e) => e.status === 'open') ?? rows[0];
+    if (current) {
+      setExpanded(current.id);
+      didAutoExpand.current = true;
+    }
+  }, [q.data, expanded]);
+
   const create = useMutation({
     mutationFn: (body: ExerciceInput) => createExercice(companyId, body),
     onSuccess: () => {
@@ -241,7 +252,7 @@ export default function Exercices() {
           <HelpCircle className="h-4 w-4" />
           À quoi ça sert ?
         </button>
-        <div className="ml-auto flex flex-wrap gap-2">
+        <div className="ml-auto flex flex-wrap gap-2" data-tour="ex-actions">
           {canCreate && (
             <>
               <Button variant="outline" onClick={() => genWeek.mutate(0)} disabled={genWeek.isPending}>
@@ -304,7 +315,7 @@ export default function Exercices() {
 
       <div className="space-y-3">
         {list.map((ex) => (
-          <div key={ex.id} className="rounded-xl border bg-card">
+          <div key={ex.id} className="rounded-xl border bg-card" data-tour={expanded === ex.id ? 'ex-card' : undefined}>
             <div className="flex flex-wrap items-start justify-between gap-3 p-4">
               <button
                 type="button"
@@ -325,6 +336,7 @@ export default function Exercices() {
                         ? 'bg-emerald-500/10 text-emerald-400'
                         : 'bg-muted text-muted-foreground'
                     }`}
+                    data-tour={expanded === ex.id ? 'ex-status-badge' : undefined}
                   >
                     {ex.status === 'open' ? <LockOpen className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
                     {ex.status === 'open' ? 'ouvert' : 'clôturé'}
@@ -338,7 +350,7 @@ export default function Exercices() {
                   {showDividends && ex.dividends > 0 && <span>dividendes {fmtMoney(ex.dividends)} $</span>}
                 </div>
               </button>
-              <div className="flex shrink-0 gap-1">
+              <div className="flex shrink-0 gap-1" data-tour={expanded === ex.id ? 'ex-card-actions' : undefined}>
                 {canEdit && (
                   <>
                     <button
@@ -969,7 +981,7 @@ function ExerciceDetailView({
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8" data-tour="ex-kpis">
         <Kpi icon={ShoppingCart} label="Chiffre d'affaires" value={`${fmtMoney(s.caNet)} $`} accent="text-primary" />
         <Kpi icon={ShoppingCart} label="Nombre de ventes" value={`${s.salesCount}`} />
         {stocksEnabled && (
@@ -984,7 +996,7 @@ function ExerciceDetailView({
         <Kpi icon={Coins} label="Résultat après impôts" value={`${fmtMoney(s.netAfterTax)} $`} accent={s.netAfterTax >= 0 ? 'text-emerald-400' : 'text-destructive'} />
       </div>
 
-      <div className="rounded-xl border bg-card p-5 md:p-6">
+      <div className="rounded-xl border bg-card p-5 md:p-6" data-tour="ex-pnl">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-lg font-bold tracking-tight">Le parcours de l'argent 💸</h3>
@@ -1017,7 +1029,7 @@ function ExerciceDetailView({
         </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 md:col-span-2">
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 md:col-span-2" data-tour="ex-tax">
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-300"><Landmark className="h-4 w-4" /> Les impôts</div>
             <div className="space-y-1.5 text-sm">
               <div className="flex items-center justify-between"><span className="text-muted-foreground">Base imposable</span><span className="font-medium">{fmtMoney(s.taxableBenefit)} $</span></div>
@@ -1036,7 +1048,7 @@ function ExerciceDetailView({
               )}
             </div>
           </div>
-          <div className={`grid place-content-center rounded-xl border p-4 text-center ${s.netAfterTax >= 0 ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-destructive/40 bg-destructive/10'}`}>
+          <div className={`grid place-content-center rounded-xl border p-4 text-center ${s.netAfterTax >= 0 ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-destructive/40 bg-destructive/10'}`} data-tour="ex-net-result">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Résultat net final</div>
             <div className={`mt-1 text-3xl font-extrabold tracking-tight ${s.netAfterTax >= 0 ? 'text-emerald-400' : 'text-destructive'}`}>{fmtMoney(s.netAfterTax)} $</div>
             <div className="mt-1 text-xs text-muted-foreground">dans la poche, après impôts</div>
@@ -1044,7 +1056,7 @@ function ExerciceDetailView({
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2" data-tour="ex-charts">
         <div className="rounded-xl border bg-card p-5">
           <h3 className="mb-3 text-sm font-semibold">Ventes par jour</h3>
           {s.caNet === 0 ? (
@@ -1091,7 +1103,7 @@ function ExerciceDetailView({
         </div>
       </div>
 
-      <div className="rounded-xl border bg-card p-5">
+      <div className="rounded-xl border bg-card p-5" data-tour="ex-perf-employees">
         <h3 className="mb-3 text-sm font-semibold">Performance employés</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -1122,7 +1134,7 @@ function ExerciceDetailView({
         </div>
       </div>
 
-      <div className="rounded-xl border bg-card p-5">
+      <div className="rounded-xl border bg-card p-5" data-tour="ex-top-products">
         <h3 className="mb-3 text-sm font-semibold">Top produits de la semaine</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -1153,7 +1165,7 @@ function ExerciceDetailView({
         </div>
       </div>
 
-      <div className="rounded-xl border bg-card p-5">
+      <div className="rounded-xl border bg-card p-5" data-tour="ex-payroll">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">Paies employés — {fmtInt(s.payrollTotal)} $ versés</h3>
           <div className="flex items-center gap-2">
@@ -1190,7 +1202,7 @@ function ExerciceDetailView({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
+              <thead data-tour="ex-payroll-columns">
                 <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-2 py-1.5 text-left font-semibold">Employé</th>
                   <th className="px-2 py-1.5 text-right font-semibold">Heures</th>
@@ -1243,7 +1255,7 @@ function ExerciceDetailView({
         )}
       </div>
 
-      <div className="rounded-xl border bg-card p-5">
+      <div className="rounded-xl border bg-card p-5" data-tour="ex-sales">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">Détail des ventes ({salesList.length})</h3>
           <div className="flex gap-2">
@@ -1296,7 +1308,7 @@ function ExerciceDetailView({
         )}
       </div>
 
-      <div className="rounded-xl border bg-card p-5">
+      <div className="rounded-xl border bg-card p-5" data-tour="ex-notes">
         <h3 className="mb-3 text-sm font-semibold">Notes de l'exercice</h3>
         <textarea
           className="h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
