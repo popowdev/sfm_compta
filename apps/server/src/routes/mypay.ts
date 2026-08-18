@@ -124,6 +124,24 @@ meMyPayRouter.get(
       const salaryCap = ex ? Number(ex.salaryCap) : 0;
       const paid = salaryCap > 0 ? Math.min(theoretical, Math.round(salaryCap)) : theoretical;
 
+      let fzHours = rawHours, fzCapped = cappedHours, fzBase = base, fzCaisse = caisseCommission,
+        fzGarage = garageCommission, fzTaxi = taxiCommission, fzPawn = pawnshopCommission,
+        fzChasse = chasseCommission, fzRuns = runsCommission, fzConc = concessionCommission,
+        fzCarg = cargaisonShare, fzPeak = peakBonus, fzBonus = bonus, fzDed = deductions, fzPaid = paid;
+      if (ex && ex.status === 'closed' && ex.snapshot) {
+        const snap = (typeof ex.snapshot === 'string' ? JSON.parse(ex.snapshot) : ex.snapshot) as { payroll?: Array<Record<string, unknown>> };
+        const pr = Array.isArray(snap?.payroll) ? snap.payroll.find((p) => Number(p.employeeId) === emp.id) : undefined;
+        if (pr) {
+          const num = (k: string) => Math.round(Number(pr[k]) || 0);
+          fzBase = num('base'); fzCaisse = num('commission'); fzGarage = num('garageCommission');
+          fzTaxi = num('taxiCommission'); fzPawn = num('pawnshopCommission'); fzChasse = num('chasseCommission');
+          fzRuns = num('runsCommission'); fzConc = num('concessionCommission'); fzCarg = num('cargaisonShare');
+          fzPeak = num('peakBonus'); fzBonus = num('bonus'); fzDed = num('deductions'); fzPaid = num('paid');
+          if (pr.hours != null) fzHours = Number(pr.hours);
+          if (pr.cappedHours != null) fzCapped = Number(pr.cappedHours);
+        }
+      }
+
       const salesCount = Number(caisseAgg[0]?.cnt ?? 0);
       const garageCount = Number(garRev[0]?.cnt ?? 0) + Number(garCustRev[0]?.cnt ?? 0);
       const runsCount = Number(runsAgg[0]?.cnt ?? 0);
@@ -137,21 +155,21 @@ meMyPayRouter.get(
         startDate: start,
         endDate: end,
         status: ex ? ex.status : 'none',
-        hours: Math.round(rawHours * 10) / 10,
-        cappedHours: Math.round(cappedHours * 10) / 10,
-        base,
-        caisseCommission,
-        garageCommission,
-        taxiCommission,
-        pawnshopCommission,
-        chasseCommission,
-        runsCommission,
-        concessionCommission,
-        cargaisonShare,
-        peakBonus,
-        bonus,
-        deductions,
-        paid: Math.round(paid),
+        hours: Math.round(fzHours * 10) / 10,
+        cappedHours: Math.round(fzCapped * 10) / 10,
+        base: fzBase,
+        caisseCommission: fzCaisse,
+        garageCommission: fzGarage,
+        taxiCommission: fzTaxi,
+        pawnshopCommission: fzPawn,
+        chasseCommission: fzChasse,
+        runsCommission: fzRuns,
+        concessionCommission: fzConc,
+        cargaisonShare: fzCarg,
+        peakBonus: fzPeak,
+        bonus: fzBonus,
+        deductions: fzDed,
+        paid: Math.round(fzPaid),
         coursesCount,
         salesCount,
         garageCount,
