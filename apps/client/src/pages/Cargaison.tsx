@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useCompany } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { PackageCheck, Plus, Trash2, Coins, Users, Building2, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { PackageCheck, Plus, Trash2, Coins, Users, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { fmtInt } from '@/lib/declarations';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -25,7 +25,6 @@ export default function Cargaison() {
   const inv = () => queryClient.invalidateQueries({ queryKey: ['cargaison', companyId] });
 
   const [clientName, setClientName] = useState('');
-  const [blNumber, setBlNumber] = useState('');
   const [product, setProduct] = useState('');
   const [qty, setQty] = useState('1');
   const [total, setTotal] = useState('');
@@ -35,7 +34,6 @@ export default function Cargaison() {
     mutationFn: () =>
       addCargaison(companyId, {
         clientName: clientName.trim(),
-        blNumber: blNumber.trim() || undefined,
         product: product.trim() || undefined,
         qty: Math.max(1, Math.floor(Number(qty) || 1)),
         total: Math.max(1, Math.floor(Number(total) || 0)),
@@ -43,7 +41,7 @@ export default function Cargaison() {
       }),
     onSuccess: () => {
       toast('Commande enregistrée.', 'success');
-      setClientName(''); setBlNumber(''); setProduct(''); setQty('1'); setTotal(''); setParts([]);
+      setClientName(''); setProduct(''); setQty('1'); setTotal(''); setParts([]);
       inv();
     },
     onError: () => toast("Échec de l'enregistrement.", 'error'),
@@ -96,16 +94,10 @@ export default function Cargaison() {
               <span className="mb-1 block text-xs text-muted-foreground">Entreprise cliente</span>
               <input className={inputCls} value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Ex. LSCustom" />
             </label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs text-muted-foreground">N° de BL</span>
-                <input className={inputCls} value={blNumber} onChange={(e) => setBlNumber(e.target.value)} placeholder="BL-0000" />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs text-muted-foreground">Quantité</span>
-                <input type="number" min="1" step="1" className={inputCls} value={qty} onChange={(e) => setQty(e.target.value)} />
-              </label>
-            </div>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs text-muted-foreground">Quantité</span>
+              <input type="number" min="1" step="1" className={inputCls} value={qty} onChange={(e) => setQty(e.target.value)} />
+            </label>
             <label className="block text-sm">
               <span className="mb-1 block text-xs text-muted-foreground">Produit commandé</span>
               <input className={inputCls} value={product} onChange={(e) => setProduct(e.target.value)} placeholder="Ex. Pare-chocs" />
@@ -154,7 +146,6 @@ export default function Cargaison() {
                   <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
                     <th className="py-2 text-left font-semibold">Date</th>
                     <th className="py-2 text-left font-semibold">Client</th>
-                    <th className="py-2 text-left font-semibold">BL</th>
                     <th className="py-2 text-left font-semibold">Produit</th>
                     <th className="py-2 text-right font-semibold">Total</th>
                     <th className="py-2 text-right font-semibold">Entreprise</th>
@@ -167,7 +158,6 @@ export default function Cargaison() {
                     <tr key={r.id} className="border-b align-top last:border-b-0">
                       <td className="py-2 text-muted-foreground whitespace-nowrap">{fmtDay(r.createdAt)}</td>
                       <td className="py-2 font-medium">{r.clientName || '—'}</td>
-                      <td className="py-2 text-muted-foreground">{r.blNumber ? <span className="inline-flex items-center gap-1"><FileText className="h-3 w-3" />{r.blNumber}</span> : '—'}</td>
                       <td className="py-2">{r.product || '—'}{r.qty > 1 && <span className="text-muted-foreground"> ×{r.qty}</span>}</td>
                       <td className="py-2 text-right text-emerald-400 whitespace-nowrap">{money(r.total)}</td>
                       <td className="py-2 text-right text-violet-400 whitespace-nowrap">{money(r.companyShare)}</td>
