@@ -337,7 +337,7 @@ meConcessionRouter.post(
     const salePrice = Math.round(p.data.salePrice);
     const purchasePrice = Math.round(p.data.purchasePrice);
     const rate = await effectiveRate(companyId, cfg, req.user!.id);
-    const commission = Math.round((rate / 100) * salePrice);
+    const commission = Math.round((rate / 100) * Math.max(0, salePrice - purchasePrice));
 
     await db.insert(concessionSales).values({
       companyId,
