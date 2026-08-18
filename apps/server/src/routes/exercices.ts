@@ -256,6 +256,7 @@ meExercicesRouter.put(
       .set(set)
       .where(and(eq(exercices.id, id), eq(exercices.companyId, companyId)));
     if (!result[0].affectedRows) return res.status(404).json({ error: 'not_found' });
+    if (d.status === 'closed') await snapshotExerciceIfClosed(companyId, id);
     emitInvalidate(['irs', `company:${companyId}`], [['exercices', companyId], ['exercice', companyId, id]]);
     res.json({ ok: true });
   }),
@@ -286,20 +287,13 @@ meExercicesRouter.delete(
   }),
 );
 
-meExercicesRouter.get(
-  '/:id',
-  asyncHandler(async (req, res) => {
-    const companyId = parseId(req.params.companyId);
-    const id = parseId(req.params.id);
-    if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
-    const g = await gate(req, companyId);
-    if (!g.ok) return res.status(g.status).json({ error: g.error });
+async function buildExerciceDetail(companyId: number, id: number) {
     const exRows = await db
       .select()
       .from(exercices)
       .where(and(eq(exercices.id, id), eq(exercices.companyId, companyId)))
       .limit(1);
-    if (!exRows[0]) return res.status(404).json({ error: 'not_found' });
+    if (!exRows[0]) return null;
     const ex = serialize(exRows[0]);
 
     const cmRows = await db
@@ -426,9 +420,6 @@ meExercicesRouter.get(
     }
 
     const garageEnabled = true;
-
-    const stocksAcc = await getModuleAccess(req.user!.id, companyId, 'stocks');
-    const stocksEnabled = !!stocksAcc && stocksAcc.enabled && !stocksAcc.blocked && stocksAcc.canView;
 
     const salesWhere = and(
       eq(sales.companyId, companyId),
@@ -852,12 +843,38 @@ meExercicesRouter.get(
       })),
     };
 
-    // A closed exercice is FROZEN: snapshot the figures on first read, then always serve that snapshot.
+    return { exRow: exRows[0], detailBase };
+}
+
+export async function snapshotExerciceIfClosed(companyId: number, id: number) {
+  const built = await buildExerciceDetail(companyId, id);
+  if (!built || built.exRow.status !== 'closed') return;
+  await db
+    .update(exercices)
+    .set({ snapshot: built.detailBase })
+    .where(and(eq(exercices.id, id), eq(exercices.companyId, companyId)));
+}
+
+meExercicesRouter.get(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const id = parseId(req.params.id);
+    if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    const built = await buildExerciceDetail(companyId, id);
+    if (!built) return res.status(404).json({ error: 'not_found' });
+    const { exRow, detailBase } = built;
+
+    const stocksAcc = await getModuleAccess(req.user!.id, companyId, 'stocks');
+    const stocksEnabled = !!stocksAcc && stocksAcc.enabled && !stocksAcc.blocked && stocksAcc.canView;
+
     let base: typeof detailBase = detailBase;
     let frozen = false;
-    if (ex.status === 'closed') {
+    if (exRow.status === 'closed') {
       frozen = true;
-      const rawSnap = exRows[0].snapshot;
+      const rawSnap = exRow.snapshot;
       const snap = (
         rawSnap == null ? null : typeof rawSnap === 'string' ? JSON.parse(rawSnap) : rawSnap
       ) as typeof detailBase | null;
