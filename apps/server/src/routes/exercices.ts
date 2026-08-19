@@ -629,10 +629,14 @@ async function buildExerciceDetail(companyId: number, id: number) {
     const chasseRevByEmp = new Map<number, number>();
     const concessionRevByEmp = new Map<number, number>();
     const concessionCommByEmp = new Map<number, number>();
+    const concessionMarginByEmp = new Map<number, number>();
+    const concessionCountByEmp = new Map<number, number>();
+    const concessionByDay = new Map<string, number>();
     let taxiRevenueTotal = 0;
     let pawnshopRevenueTotal = 0;
     let chasseRevenueTotal = 0;
     let concessionRevenueTotal = 0;
+    let concessionTxCount = 0;
     {
       const empRows = await db
         .select({ id: companyEmployees.id, userId: companyEmployees.userId })
@@ -640,13 +644,14 @@ async function buildExerciceDetail(companyId: number, id: number) {
         .where(eq(companyEmployees.companyId, companyId));
       const empByUser = new Map<number, number>();
       for (const e of empRows) if (e.userId != null) empByUser.set(e.userId, e.id);
-      const [txCit, txCon, txVip, pawnSell, chasseSell, concessionSell] = await Promise.all([
+      const [txCit, txCon, txVip, pawnSell, chasseSell, concessionSell, concessionDay] = await Promise.all([
         db.select({ userId: taxiCitoyens.driverUserId, total: sql<string>`COALESCE(SUM(${taxiCitoyens.total}),0)` }).from(taxiCitoyens).where(and(eq(taxiCitoyens.companyId, companyId), gte(bizDate(taxiCitoyens.createdAt), ex.startDate), lte(bizDate(taxiCitoyens.createdAt), ex.endDate))).groupBy(taxiCitoyens.driverUserId),
         db.select({ userId: taxiConcitoyens.driverUserId, total: sql<string>`COALESCE(SUM(${taxiConcitoyens.total}),0)` }).from(taxiConcitoyens).where(and(eq(taxiConcitoyens.companyId, companyId), gte(bizDate(taxiConcitoyens.createdAt), ex.startDate), lte(bizDate(taxiConcitoyens.createdAt), ex.endDate))).groupBy(taxiConcitoyens.driverUserId),
         db.select({ userId: taxiVip.driverUserId, total: sql<string>`COALESCE(SUM(${taxiVip.total}),0)` }).from(taxiVip).where(and(eq(taxiVip.companyId, companyId), gte(bizDate(taxiVip.createdAt), ex.startDate), lte(bizDate(taxiVip.createdAt), ex.endDate))).groupBy(taxiVip.driverUserId),
         db.select({ userId: pawnshopTransactions.createdByUserId, total: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.type, 'sell'), gte(bizDate(pawnshopTransactions.createdAt), ex.startDate), lte(bizDate(pawnshopTransactions.createdAt), ex.endDate))).groupBy(pawnshopTransactions.createdByUserId),
         db.select({ userId: chasseTransactions.createdByUserId, total: sql<string>`COALESCE(SUM(${chasseTransactions.total}),0)` }).from(chasseTransactions).where(and(eq(chasseTransactions.companyId, companyId), eq(chasseTransactions.type, 'sell'), gte(bizDate(chasseTransactions.createdAt), ex.startDate), lte(bizDate(chasseTransactions.createdAt), ex.endDate))).groupBy(chasseTransactions.createdByUserId),
-        db.select({ userId: concessionSales.createdByUserId, comm: sql<string>`COALESCE(SUM(${concessionSales.commission}),0)`, total: sql<string>`COALESCE(SUM(${concessionSales.salePrice}),0)` }).from(concessionSales).where(and(eq(concessionSales.companyId, companyId), gte(bizDate(concessionSales.createdAt), ex.startDate), lte(bizDate(concessionSales.createdAt), ex.endDate))).groupBy(concessionSales.createdByUserId),
+        db.select({ userId: concessionSales.createdByUserId, comm: sql<string>`COALESCE(SUM(${concessionSales.commission}),0)`, total: sql<string>`COALESCE(SUM(${concessionSales.salePrice}),0)`, margin: sql<string>`COALESCE(SUM(${concessionSales.salePrice} - ${concessionSales.purchasePrice}),0)`, count: sql<number>`COUNT(*)` }).from(concessionSales).where(and(eq(concessionSales.companyId, companyId), gte(bizDate(concessionSales.createdAt), ex.startDate), lte(bizDate(concessionSales.createdAt), ex.endDate))).groupBy(concessionSales.createdByUserId),
+        db.select({ date: bizDayStr(concessionSales.createdAt), total: sql<string>`COALESCE(SUM(${concessionSales.salePrice}),0)` }).from(concessionSales).where(and(eq(concessionSales.companyId, companyId), gte(bizDate(concessionSales.createdAt), ex.startDate), lte(bizDate(concessionSales.createdAt), ex.endDate))).groupBy(bizDayStr(concessionSales.createdAt)),
       ]);
       const addRev = (map: Map<number, number>, userId: number | null, total: number) => {
         if (userId == null) return;
@@ -662,9 +667,15 @@ async function buildExerciceDetail(companyId: number, id: number) {
       for (const r of concessionSell) {
         addRev(concessionRevByEmp, r.userId, Number(r.total));
         concessionRevenueTotal += Number(r.total);
+        concessionTxCount += Number(r.count);
         const empId = r.userId != null ? empByUser.get(r.userId) : undefined;
-        if (empId != null) concessionCommByEmp.set(empId, (concessionCommByEmp.get(empId) ?? 0) + Number(r.comm));
+        if (empId != null) {
+          concessionCommByEmp.set(empId, (concessionCommByEmp.get(empId) ?? 0) + Number(r.comm));
+          concessionMarginByEmp.set(empId, (concessionMarginByEmp.get(empId) ?? 0) + Number(r.margin));
+          concessionCountByEmp.set(empId, (concessionCountByEmp.get(empId) ?? 0) + Number(r.count));
+        }
       }
+      for (const r of concessionDay) concessionByDay.set(r.date, (concessionByDay.get(r.date) ?? 0) + Number(r.total));
     }
 
     const caByEmp = new Map(perfRows.map((r) => [r.employeeId, Number(r.ca)]));
@@ -744,7 +755,7 @@ async function buildExerciceDetail(companyId: number, id: number) {
     const salesDiscount = round2(Number(aggRows[0]?.discount ?? 0));
     const salesNet = round2(Number(aggRows[0]?.net ?? 0));
     const productionCost = round2(Number(aggRows[0]?.cost ?? 0) + garagePartsCost);
-    const salesCount = Number(aggRows[0]?.count ?? 0) + garageTxCount;
+    const salesCount = Number(aggRows[0]?.count ?? 0) + garageTxCount + concessionTxCount;
     const componentPurchases = round2(Number(purchRows[0]?.purchases ?? 0));
 
     const moduleRevenue = round2(taxiRevenueTotal + pawnshopRevenueTotal + chasseRevenueTotal + runsRevenueTotal + concessionRevenueTotal + cargaisonRevenueTotal);
@@ -765,7 +776,7 @@ async function buildExerciceDetail(companyId: number, id: number) {
     const byDay: { date: string; total: number }[] = [];
     for (let t = startMs; t <= endMs; t += 86_400_000) {
       const d = new Date(t).toISOString().slice(0, 10);
-      byDay.push({ date: d, total: round2((dayMap.get(d) ?? 0) + (garageByDay.get(d) ?? 0)) });
+      byDay.push({ date: d, total: round2((dayMap.get(d) ?? 0) + (garageByDay.get(d) ?? 0) + (concessionByDay.get(d) ?? 0)) });
     }
 
     const detailBase = {
@@ -822,10 +833,10 @@ async function buildExerciceDetail(companyId: number, id: number) {
       perfByEmployee: perfRows.map((r) => ({
         employeeId: r.employeeId,
         name: r.name,
-        salesCount: Number(r.count) + (garageCountByEmp.get(r.employeeId) ?? 0),
-        ca: round2(Number(r.ca) + (garageRevByEmp.get(r.employeeId) ?? 0)),
+        salesCount: Number(r.count) + (garageCountByEmp.get(r.employeeId) ?? 0) + (concessionCountByEmp.get(r.employeeId) ?? 0),
+        ca: round2(Number(r.ca) + (garageRevByEmp.get(r.employeeId) ?? 0) + (concessionMarginByEmp.get(r.employeeId) ?? 0)),
         discounts: round2(Number(r.discounts)),
-      })),
+      })).sort((a, b) => b.ca - a.ca),
       topProducts: topRows.map((r) => {
         const ca = round2(Number(r.ca));
         const cost = round2(Number(r.cost));
