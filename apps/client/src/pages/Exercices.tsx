@@ -1033,6 +1033,9 @@ function ExerciceDetailView({
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-300"><Landmark className="h-4 w-4" /> Les impôts</div>
             <div className="space-y-1.5 text-sm">
               <div className="flex items-center justify-between"><span className="text-muted-foreground">Base imposable</span><span className="font-medium">{fmtMoney(s.taxableBenefit)} $</span></div>
+              {s.salaryExcess > 0 && (
+                <div className="flex items-center justify-between text-xs text-amber-300/80"><span>dont salaires non déductibles (plafond de grade)</span><span>+ {fmtMoney(s.salaryExcess)} $</span></div>
+              )}
               <div className="flex items-center justify-between"><span className="text-muted-foreground">Impôt sur les bénéfices{s.effectiveRate > 0 ? ` (~${s.effectiveRate}%)` : ''}</span><span className="font-medium text-destructive">− {fmtMoney(s.corporateTax)} $</span></div>
               {showDividends && (
                 <div className="flex items-center justify-between gap-3">

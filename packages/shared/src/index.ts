@@ -466,14 +466,37 @@ export function moduleConfigNumber(
 
 export const EXPENSE_CATEGORIES = [
   { key: 'salary', label: 'Salaires' },
-  { key: 'vehicle', label: 'Véhicules' },
-  { key: 'meal', label: 'Repas' },
-  { key: 'supply', label: 'Fournitures' },
+  { key: 'vehicle', label: 'Véhicules (achat)' },
+  { key: 'vehicle_repair', label: 'Réparations véhicules' },
   { key: 'rent', label: 'Loyer' },
+  { key: 'meal', label: 'Repas salariés' },
+  { key: 'medical', label: 'Soins médicaux' },
+  { key: 'legal', label: 'Prestations juridiques' },
+  { key: 'accounting', label: 'Prestations comptables' },
+  { key: 'donation', label: 'Donations' },
+  { key: 'supply', label: 'Fournitures' },
   { key: 'other', label: 'Autre' },
 ] as const;
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number]['key'];
 export const EXPENSE_CATEGORY_KEYS = EXPENSE_CATEGORIES.map((c) => c.key) as ExpenseCategory[];
+
+export const EXPENSE_DEDUCTION_CAPS: Partial<Record<ExpenseCategory, number>> = {
+  vehicle: 50000,
+  vehicle_repair: 2000,
+  rent: 15000,
+  meal: 3000,
+  medical: 3000,
+  legal: 10000,
+  accounting: 3000,
+};
+
+export const SALARY_TIER_CAPS = {
+  gerant: 100000,
+  cogerant: 90000,
+  manager: 75000,
+  employe: 60000,
+} as const;
+export type SalaryTier = keyof typeof SALARY_TIER_CAPS;
 
 export const ASSOCIATION_MEMBER_ROLES = [
   { key: 'president', label: 'Président' },

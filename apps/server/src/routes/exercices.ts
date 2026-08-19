@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { and, desc, eq, gte, inArray, isNotNull, lte, ne, sql } from 'drizzle-orm';
-import { moduleConfigBool, moduleConfigNumber } from '@rp-compta/shared';
+import { moduleConfigBool, moduleConfigNumber, EXPENSE_DEDUCTION_CAPS, SALARY_TIER_CAPS, type ExpenseCategory } from '@rp-compta/shared';
 import { db } from '../db';
 import {
   exercices,
@@ -363,7 +363,11 @@ async function buildExerciceDetail(companyId: number, id: number) {
       .filter((r) => r.total !== 0)
       .sort((a, b) => b.total - a.total);
     const expensesTotal = round2(catRows.reduce((s, r) => s + Number(r.total), 0));
-    const expensesDeductible = round2(catRows.reduce((s, r) => s + Number(r.deductible), 0));
+    const expensesDeductible = round2(catRows.reduce((s, r) => {
+      const cap = EXPENSE_DEDUCTION_CAPS[r.category as ExpenseCategory];
+      const ded = Number(r.deductible);
+      return s + (cap != null ? Math.min(ded, cap) : ded);
+    }, 0));
 
     const overrideRows = await db
       .select()
@@ -813,9 +817,27 @@ async function buildExerciceDetail(companyId: number, id: number) {
     const caNet = round2(caGross - salesDiscount);
     const grossMargin = round2(caNet - productionCost);
 
+    const roleRows = await db
+      .select({ id: companyRoles.id, rank: companyRoles.rank, canManage: companyRoles.canManage })
+      .from(companyRoles)
+      .where(eq(companyRoles.companyId, companyId));
+    const manageRoles = roleRows.filter((r) => r.canManage).sort((a, b) => b.rank - a.rank);
+    const tierByRole = new Map<number, number>();
+    manageRoles.forEach((r, i) => {
+      tierByRole.set(r.id, i === 0 ? SALARY_TIER_CAPS.gerant : i === 1 ? SALARY_TIER_CAPS.cogerant : SALARY_TIER_CAPS.manager);
+    });
+    for (const r of roleRows) if (!r.canManage) tierByRole.set(r.id, SALARY_TIER_CAPS.employe);
+    const salaryDeductible = Math.round(
+      payroll.reduce((s, p) => {
+        const cap = (p.companyRoleId != null ? tierByRole.get(p.companyRoleId) : undefined) ?? SALARY_TIER_CAPS.employe;
+        return s + Math.min(p.paid, cap);
+      }, 0),
+    );
+    const salaryExcess = Math.max(0, payrollTotal - salaryDeductible);
+
     const charges = round2(expensesTotal + payrollTotal);
     const benefit = round2(caNet - charges);
-    const taxableBenefit = round2(Math.max(0, benefit - expensesDeductible));
+    const taxableBenefit = round2(Math.max(0, benefit - expensesDeductible + salaryExcess));
     const taxes = await computeTaxes(taxableBenefit, effectiveDividends);
     const effectiveRate = taxableBenefit > 0 ? round2((taxes.corporateTax / taxableBenefit) * 100) : 0;
     const netAfterTax = round2(benefit - taxes.corporateTax - effectiveDividends - taxes.dividendTax);
@@ -864,6 +886,8 @@ async function buildExerciceDetail(companyId: number, id: number) {
         expensesTotal,
         expensesDeductible,
         payrollTotal,
+        salaryDeductible,
+        salaryExcess,
         excessToCompany,
         charges,
         benefit,

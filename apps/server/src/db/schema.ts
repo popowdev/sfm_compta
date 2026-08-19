@@ -284,7 +284,7 @@ export const companyExpenses = mysqlTable('company_expenses', {
     .notNull()
     .references(() => companies.id, { onDelete: 'cascade' }),
   label: varchar('label', { length: 200 }).notNull(),
-  category: mysqlEnum('category', ['salary', 'vehicle', 'meal', 'supply', 'rent', 'other'])
+  category: mysqlEnum('category', ['salary', 'vehicle', 'vehicle_repair', 'meal', 'medical', 'legal', 'accounting', 'donation', 'supply', 'rent', 'other'])
     .notNull()
     .default('other'),
   amount: decimal('amount', { precision: 14, scale: 2 }).notNull(),

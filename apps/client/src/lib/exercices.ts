@@ -103,6 +103,8 @@ export interface ExerciceSummary {
   expensesTotal: number;
   expensesDeductible: number;
   payrollTotal: number;
+  salaryDeductible: number;
+  salaryExcess: number;
   excessToCompany: number;
   charges: number;
   benefit: number;
