@@ -293,12 +293,17 @@ irsSubventionsRouter.patch(
         companyId: subventions.companyId,
         motif: subventions.motif,
         requestedByUserId: subventions.requestedByUserId,
+        status: subventions.status,
+        amountGranted: subventions.amountGranted,
       })
       .from(subventions)
       .where(eq(subventions.id, id))
       .limit(1);
     if (!existing[0]) return res.status(404).json({ error: 'not_found' });
     const { status, amountGranted } = parsed.data;
+    if (existing[0].status === 'paid' && status !== 'paid') {
+      return res.status(409).json({ error: 'already_paid' });
+    }
     const decided = status === 'approved' || status === 'paid' || status === 'rejected';
     const updates: Partial<typeof subventions.$inferInsert> = {
       status,

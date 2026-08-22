@@ -45,6 +45,18 @@ function parseId(value: string | undefined): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
+function salaryTierCap(roleName: string, canManage: boolean): number {
+  const n = roleName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const isCo = /\bco[\s-]?(patron|gerant|pdg|fondateur)/.test(n) || /^co[\s-]/.test(n);
+  if (canManage) {
+    if (isCo) return SALARY_TIER_CAPS.cogerant;
+    if (/(patron|pdg|gerant|chief|boss|directeur|president|fondateur|chef)/.test(n)) return SALARY_TIER_CAPS.gerant;
+    return SALARY_TIER_CAPS.manager;
+  }
+  if (/(manager|manageur|responsable|superviseur|chef)/.test(n)) return SALARY_TIER_CAPS.manager;
+  return SALARY_TIER_CAPS.employe;
+}
+
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const blank = (v: string | null | undefined) => (v ? v : null);
 
@@ -820,15 +832,11 @@ async function buildExerciceDetail(companyId: number, id: number) {
     const grossMargin = round2(caNet - productionCost);
 
     const roleRows = await db
-      .select({ id: companyRoles.id, rank: companyRoles.rank, canManage: companyRoles.canManage })
+      .select({ id: companyRoles.id, name: companyRoles.name, canManage: companyRoles.canManage })
       .from(companyRoles)
       .where(eq(companyRoles.companyId, companyId));
-    const manageRoles = roleRows.filter((r) => r.canManage).sort((a, b) => b.rank - a.rank);
     const tierByRole = new Map<number, number>();
-    manageRoles.forEach((r, i) => {
-      tierByRole.set(r.id, i === 0 ? SALARY_TIER_CAPS.gerant : i === 1 ? SALARY_TIER_CAPS.cogerant : SALARY_TIER_CAPS.manager);
-    });
-    for (const r of roleRows) if (!r.canManage) tierByRole.set(r.id, SALARY_TIER_CAPS.employe);
+    for (const r of roleRows) tierByRole.set(r.id, salaryTierCap(r.name, r.canManage));
     const salaryDeductible = Math.round(
       payroll.reduce((s, p) => {
         const cap = (p.companyRoleId != null ? tierByRole.get(p.companyRoleId) : undefined) ?? SALARY_TIER_CAPS.employe;
@@ -842,7 +850,7 @@ async function buildExerciceDetail(companyId: number, id: number) {
 
     const charges = round2(expensesTotalAll + payrollTotal);
     const benefit = round2(caNet - charges);
-    const taxableBenefit = round2(Math.max(0, benefit - expensesDeductibleAll + salaryExcess));
+    const taxableBenefit = round2(Math.max(0, caNet - salaryDeductible - expensesDeductibleAll));
     const taxes = await computeTaxes(taxableBenefit, effectiveDividends);
     const effectiveRate = taxableBenefit > 0 ? round2((taxes.corporateTax / taxableBenefit) * 100) : 0;
     const netAfterTax = round2(benefit - taxes.corporateTax - effectiveDividends - taxes.dividendTax);

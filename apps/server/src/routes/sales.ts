@@ -289,6 +289,9 @@ meSalesRouter.post(
           // Produit fini stocké : on décrémente SON stock. Les matières premières ont déjà
           // été consommées lors du craft, on ne les redécompte pas à la vente.
           lineUnitCost = costById.get(c.stockItemId) ?? 0;
+          if (lineUnitCost === 0 && lineRecipe.length) {
+            lineUnitCost = lineRecipe.reduce((sum, r) => sum + Number(r.quantity) * (costById.get(r.stockItemId) ?? 0), 0);
+          }
           if (cfg.stockLink && c.type === 'product') {
             consume.set(c.stockItemId, (consume.get(c.stockItemId) ?? 0) + qty);
           }

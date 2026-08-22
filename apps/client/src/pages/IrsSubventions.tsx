@@ -62,7 +62,7 @@ export default function IrsSubventions() {
     .reduce((sum, s) => sum + (s.amountGranted ?? 0), 0);
 
   const grantValue = (s: Subvention) =>
-    grants[s.id] ?? String(s.amountGranted ?? s.amountRequested);
+    grants[s.id] ?? String(s.amountGranted ?? (s.status === 'pending' ? s.amountRequested : 0));
 
   const companyOptions = distinctOptions(list.map((s) => s.companyName));
   const statusOptions = (Object.keys(SUB_STATUS) as SubventionStatus[]).map((k) => ({
@@ -227,7 +227,7 @@ export default function IrsSubventions() {
                             decide.mutate({
                               id: s.id,
                               status: 'approved',
-                              amountGranted: Number(grantValue(s)) || s.amountRequested,
+                              amountGranted: Number(grantValue(s)) || 0,
                             })
                           }
                         >
@@ -249,7 +249,7 @@ export default function IrsSubventions() {
                           Verser
                         </button>
                       )}
-                      {s.status !== 'rejected' && (
+                      {s.status !== 'rejected' && s.status !== 'paid' && (
                         <button
                           className={actionBtn}
                           disabled={decide.isPending}
@@ -258,7 +258,7 @@ export default function IrsSubventions() {
                           Refuser
                         </button>
                       )}
-                      {s.status !== 'pending' && (
+                      {s.status !== 'pending' && s.status !== 'paid' && (
                         <button
                           className={actionBtn}
                           disabled={decide.isPending}

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { STOCK_UNIT_KEYS } from '@rp-compta/shared';
 import { db } from '../db';
-import { stockItems, stockMovements, stockCategories, users } from '../db/schema';
+import { stockItems, stockMovements, stockCategories, catalogRecipe, users } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
@@ -164,6 +164,13 @@ meStocksRouter.delete(
     if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
+    const used = await db
+      .select({ n: sql<number>`COUNT(*)` })
+      .from(catalogRecipe)
+      .where(eq(catalogRecipe.stockItemId, id));
+    if (Number(used[0]?.n ?? 0) > 0) {
+      return res.status(409).json({ error: 'used_in_recipe', count: Number(used[0]!.n) });
+    }
     const result = await db
       .delete(stockItems)
       .where(and(eq(stockItems.id, id), eq(stockItems.companyId, companyId)));

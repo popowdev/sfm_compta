@@ -28,7 +28,7 @@ const CAT_LABEL: Record<string, string> = Object.fromEntries(
 );
 
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
 
 const EMPTY = {

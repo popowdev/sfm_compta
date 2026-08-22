@@ -35,7 +35,7 @@ function serialize(e: typeof companyExpenses.$inferSelect) {
 
 const bodySchema = z.object({
   label: z.string().trim().min(1).max(200),
-  category: z.enum(EXPENSE_CATEGORY_KEYS as [string, ...string[]]),
+  category: z.enum(EXPENSE_CATEGORY_KEYS.filter((k) => k !== 'salary') as [string, ...string[]]),
   amount: z.number().nonnegative().finite().max(999_999_999_999.99),
   taxDeductible: z.boolean().optional(),
   expenseDate: z

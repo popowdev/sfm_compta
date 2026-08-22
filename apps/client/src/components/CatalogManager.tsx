@@ -427,7 +427,13 @@ export function CatalogManager({
                             value={form.stockQty}
                             onChange={(e) => set('stockQty', e.target.value)}
                             placeholder="0"
+                            disabled={editingId !== null}
                           />
+                          {editingId !== null && (
+                            <span className="mt-1 block text-[11px] text-muted-foreground">
+                              La quantité se modifie via les mouvements de stock.
+                            </span>
+                          )}
                         </label>
                       )}
                       <p className="mt-2 text-xs text-muted-foreground">

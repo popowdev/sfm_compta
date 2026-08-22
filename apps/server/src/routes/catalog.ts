@@ -74,7 +74,7 @@ async function syncOwnStock(
     if (currentStockId) {
       await tx
         .update(stockItems)
-        .set({ quantity: String(qty), name: d.name.slice(0, 150) })
+        .set({ name: d.name.slice(0, 150) })
         .where(and(eq(stockItems.id, currentStockId), eq(stockItems.companyId, companyId)));
     } else {
       const ins = await tx
@@ -369,7 +369,7 @@ meCatalogRouter.post(
     if (!acc || !acc.enabled || acc.blocked || !acc.canView) {
       return res.status(403).json({ error: 'forbidden' });
     }
-    if (actionDenied(acc, 'write' as PermAction)) return res.status(403).json({ error: 'forbidden' });
+    if (actionDenied(acc, 'edit')) return res.status(403).json({ error: 'forbidden' });
 
     const parsed = craftSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
@@ -419,10 +419,20 @@ meCatalogRouter.post(
 
     const stockIds = [...new Set([...consume.keys(), ...produce.keys()])];
     const stocks = await db
-      .select({ id: stockItems.id, name: stockItems.name, quantity: stockItems.quantity })
+      .select({ id: stockItems.id, name: stockItems.name, quantity: stockItems.quantity, unitCost: stockItems.unitCost })
       .from(stockItems)
       .where(and(eq(stockItems.companyId, companyId), inArray(stockItems.id, stockIds)));
     const byId = new Map(stocks.map((s) => [s.id, s]));
+
+    // Coût de fabrication unitaire de chaque produit fini = somme(recette x coût matière).
+    const craftCost = new Map<number, number>();
+    for (const it of items) {
+      const unitCost = (recipeByItem.get(it.id) ?? []).reduce(
+        (sum, r) => sum + Number(r.quantity) * Number(byId.get(r.stockItemId)?.unitCost ?? 0),
+        0,
+      );
+      craftCost.set(it.stockItemId!, Math.round(unitCost * 100) / 100);
+    }
 
     // Vérifie qu'on a assez de matières premières AVANT de rien modifier.
     const short: string[] = [];
@@ -448,15 +458,21 @@ meCatalogRouter.post(
         });
       }
       for (const [sid, amount] of produce) {
+        const unitCost = craftCost.get(sid) ?? 0;
         await tx
           .update(stockItems)
-          .set({ quantity: sql`${stockItems.quantity} + ${amount}` })
+          .set(
+            unitCost > 0
+              ? { quantity: sql`${stockItems.quantity} + ${amount}`, unitCost: String(unitCost) }
+              : { quantity: sql`${stockItems.quantity} + ${amount}` },
+          )
           .where(and(eq(stockItems.id, sid), eq(stockItems.companyId, companyId)));
         await tx.insert(stockMovements).values({
           companyId,
           stockItemId: sid,
           type: 'in',
           quantity: String(amount),
+          unitCost: unitCost > 0 ? String(unitCost) : null,
           reason: 'Craft (production)',
           createdByUserId: req.user!.id,
         });
