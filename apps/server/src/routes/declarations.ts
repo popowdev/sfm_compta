@@ -128,14 +128,15 @@ meDeclarationsRouter.post(
       )
       .limit(1);
     if (dup[0]) return res.status(409).json({ error: 'week_exists' });
-    const taxes = await computeTaxes(d.benefit, d.dividends);
+    const benefit = Math.round((d.caNet - d.charges) * 100) / 100;
+    const taxes = await computeTaxes(benefit, d.dividends);
     await db.insert(declarations).values({
       companyId,
       weekLabel: d.weekLabel,
       declarantName: d.declarantName,
       caNet: String(d.caNet),
       charges: String(d.charges),
-      benefit: String(d.benefit),
+      benefit: String(benefit),
       corporateTax: String(taxes.corporateTax),
       dividends: String(d.dividends),
       dividendTax: String(taxes.dividendTax),

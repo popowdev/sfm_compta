@@ -68,7 +68,7 @@ export default function Declarations() {
         declarantName: form.declarantName.trim(),
         caNet: Number(form.caNet) || 0,
         charges: Number(form.charges) || 0,
-        benefit: Number(form.benefit) || 0,
+        benefit: Math.round(((Number(form.caNet) || 0) - (Number(form.charges) || 0)) * 100) / 100,
         dividends: Number(form.dividends) || 0,
         email: form.email.trim() || undefined,
         notes: form.notes.trim() || undefined,
@@ -105,7 +105,7 @@ export default function Declarations() {
   const company = my.data?.find((c) => c.company.id === companyId);
   if (!my.isLoading && !company) return <Navigate to="/" replace />;
 
-  const benefit = Number(form.benefit) || 0;
+  const benefit = Math.round(((Number(form.caNet) || 0) - (Number(form.charges) || 0)) * 100) / 100;
   const dividends = Number(form.dividends) || 0;
   const corpTax = computeCorporateTax(benefit, fiscal.data?.brackets ?? []);
   const divRate = fiscal.data?.dividendTaxRate ?? 0;
@@ -269,10 +269,11 @@ export default function Declarations() {
                   <span className="mb-1 block text-muted-foreground">Bénéfice ($)</span>
                   <input
                     type="number"
-                    className={inputCls}
-                    value={form.benefit}
-                    onChange={(e) => set('benefit', e.target.value)}
+                    className={`${inputCls} bg-muted/50`}
+                    value={String(Math.round(((Number(form.caNet) || 0) - (Number(form.charges) || 0)) * 100) / 100)}
+                    readOnly
                   />
+                  <span className="mt-1 block text-[11px] text-muted-foreground">Calculé : CA net − charges.</span>
                 </label>
                 <label className="text-sm">
                   <span className="mb-1 block text-muted-foreground">Dividendes reversés ($)</span>
