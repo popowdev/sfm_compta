@@ -632,11 +632,12 @@ async function buildExerciceDetail(companyId: number, id: number) {
     const cargaisonCountByEmp = new Map<number, number>();
     const cargaisonByDay = new Map<string, number>();
     let cargaisonRevenueTotal = 0;
+    let cargaisonImportTotal = 0;
     let cargaisonTxCount = 0;
     {
       const [revRows, cargaisonDayRows, partRows] = await Promise.all([
         db
-          .select({ total: sql<string>`COALESCE(SUM(${companyCargaisons.total}),0)`, count: sql<number>`COUNT(*)` })
+          .select({ total: sql<string>`COALESCE(SUM(${companyCargaisons.total}),0)`, importCost: sql<string>`COALESCE(SUM(${companyCargaisons.importCost}),0)`, count: sql<number>`COUNT(*)` })
           .from(companyCargaisons)
           .where(and(eq(companyCargaisons.companyId, companyId), gte(bizDate(companyCargaisons.createdAt), ex.startDate), lte(bizDate(companyCargaisons.createdAt), ex.endDate))),
         db
@@ -652,6 +653,7 @@ async function buildExerciceDetail(companyId: number, id: number) {
           .groupBy(cargaisonParticipants.employeeId),
       ]);
       cargaisonRevenueTotal = Number(revRows[0]?.total ?? 0);
+      cargaisonImportTotal = Number(revRows[0]?.importCost ?? 0);
       cargaisonTxCount = Number(revRows[0]?.count ?? 0);
       for (const r of partRows) if (r.employeeId != null) {
         cargaisonShareByEmp.set(r.employeeId, Number(r.share));
@@ -835,9 +837,12 @@ async function buildExerciceDetail(companyId: number, id: number) {
     );
     const salaryExcess = Math.max(0, payrollTotal - salaryDeductible);
 
-    const charges = round2(expensesTotal + payrollTotal);
+    const expensesTotalAll = round2(expensesTotal + cargaisonImportTotal);
+    const expensesDeductibleAll = round2(expensesDeductible + cargaisonImportTotal);
+
+    const charges = round2(expensesTotalAll + payrollTotal);
     const benefit = round2(caNet - charges);
-    const taxableBenefit = round2(Math.max(0, benefit - expensesDeductible + salaryExcess));
+    const taxableBenefit = round2(Math.max(0, benefit - expensesDeductibleAll + salaryExcess));
     const taxes = await computeTaxes(taxableBenefit, effectiveDividends);
     const effectiveRate = taxableBenefit > 0 ? round2((taxes.corporateTax / taxableBenefit) * 100) : 0;
     const netAfterTax = round2(benefit - taxes.corporateTax - effectiveDividends - taxes.dividendTax);
@@ -883,8 +888,9 @@ async function buildExerciceDetail(companyId: number, id: number) {
         grossMargin,
         componentPurchases,
         salesCount,
-        expensesTotal,
-        expensesDeductible,
+        expensesTotal: expensesTotalAll,
+        expensesDeductible: expensesDeductibleAll,
+        cargaisonImportCost: Math.round(cargaisonImportTotal),
         payrollTotal,
         salaryDeductible,
         salaryExcess,

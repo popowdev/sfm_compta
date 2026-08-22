@@ -28,6 +28,7 @@ export default function Cargaison() {
   const [product, setProduct] = useState('');
   const [qty, setQty] = useState('1');
   const [total, setTotal] = useState('');
+  const [importCost, setImportCost] = useState('');
   const [parts, setParts] = useState<number[]>([]);
 
   const add = useMutation({
@@ -37,11 +38,12 @@ export default function Cargaison() {
         product: product.trim() || undefined,
         qty: Math.max(1, Math.floor(Number(qty) || 1)),
         total: Math.max(1, Math.floor(Number(total) || 0)),
+        importCost: Math.max(0, Math.floor(Number(importCost) || 0)),
         participantIds: parts,
       }),
     onSuccess: () => {
       toast('Commande enregistrée.', 'success');
-      setClientName(''); setProduct(''); setQty('1'); setTotal(''); setParts([]);
+      setClientName(''); setProduct(''); setQty('1'); setTotal(''); setImportCost(''); setParts([]);
       inv();
     },
     onError: () => toast("Échec de l'enregistrement.", 'error'),
@@ -51,12 +53,14 @@ export default function Cargaison() {
   const companyPct = q.data?.config.companyPct ?? 25;
   const preview = useMemo(() => {
     const t = Math.max(0, Math.floor(Number(total) || 0));
-    const pool = Math.round((t * (100 - companyPct)) / 100);
+    const imp = Math.min(Math.max(0, Math.floor(Number(importCost) || 0)), t);
+    const base = Math.max(0, t - imp);
+    const pool = Math.round((base * (100 - companyPct)) / 100);
     const n = parts.length;
     const share = n > 0 ? Math.floor(pool / n) : 0;
     const employeeShare = share * n;
-    return { t, share, employeeShare, companyShare: t - employeeShare, n };
-  }, [total, companyPct, parts]);
+    return { t, imp, base, share, employeeShare, companyShare: base - employeeShare, n };
+  }, [total, importCost, companyPct, parts]);
 
   if (isLoading || q.isLoading) return <div className="space-y-4"><Skeleton className="h-24 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
   if (!q.data) return <EmptyState icon={PackageCheck} title="Cargaison / commandes" hint="Module indisponible." />;
@@ -106,6 +110,11 @@ export default function Cargaison() {
               <span className="mb-1 block text-xs text-muted-foreground">Montant total ($)</span>
               <input type="number" min="1" step="1" className={inputCls} value={total} onChange={(e) => setTotal(e.target.value)} placeholder="100000" />
             </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs text-muted-foreground">Coût d'importation ($)</span>
+              <input type="number" min="0" step="1" className={inputCls} value={importCost} onChange={(e) => setImportCost(e.target.value)} placeholder="0" />
+              <span className="mt-1 block text-[11px] text-muted-foreground">Déduit du montant avant le partage. Compté en charge déductible.</span>
+            </label>
 
             <div className="space-y-2">
               <span className="block text-xs text-muted-foreground">Employés présents (se partagent la part employés)</span>
@@ -126,6 +135,12 @@ export default function Cargaison() {
 
             <div className="space-y-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm">
               <div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">Total commande</span><span className="text-lg font-bold text-emerald-400">{money(preview.t)}</span></div>
+              {preview.imp > 0 && (
+                <>
+                  <div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">Coût d'importation</span><span className="font-semibold text-destructive">− {money(preview.imp)}</span></div>
+                  <div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">À partager</span><span className="font-semibold">{money(preview.base)}</span></div>
+                </>
+              )}
               <div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">Part entreprise ({companyPct}%)</span><span className="font-semibold text-violet-400">{money(preview.companyShare)}</span></div>
               <div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">Part employés ({100 - companyPct}%)</span><span className="font-semibold text-amber-400">{money(preview.employeeShare)}</span></div>
               <div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">Par employé{preview.n > 0 ? ` (÷${preview.n})` : ''}</span><span className="font-semibold text-amber-400">{money(preview.share)}</span></div>

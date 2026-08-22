@@ -1387,6 +1387,7 @@ export const companyCargaisons = mysqlTable('company_cargaisons', {
   product: varchar('product', { length: 150 }).notNull().default(''),
   qty: int('qty').notNull().default(1),
   total: decimal('total', { precision: 14, scale: 2 }).notNull().default('0'),
+  importCost: decimal('import_cost', { precision: 14, scale: 2 }).notNull().default('0'),
   employeeShare: decimal('employee_share', { precision: 14, scale: 2 }).notNull().default('0'),
   companyShare: decimal('company_share', { precision: 14, scale: 2 }).notNull().default('0'),
   participantCount: int('participant_count').notNull().default(0),

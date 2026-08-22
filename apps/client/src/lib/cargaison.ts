@@ -12,6 +12,7 @@ export interface CargaisonRow {
   product: string;
   qty: number;
   total: number;
+  importCost: number;
   employeeShare: number;
   companyShare: number;
   participantCount: number;
@@ -36,7 +37,7 @@ export const getCargaisons = (c: number, offset = 0) => apiFetch<CargaisonData>(
 
 export const addCargaison = (
   c: number,
-  body: { clientName: string; blNumber?: string; product?: string; qty: number; total: number; participantIds: number[]; note?: string },
+  body: { clientName: string; blNumber?: string; product?: string; qty: number; total: number; importCost?: number; participantIds: number[]; note?: string },
 ) =>
   apiFetch<{ ok: boolean; total: number; employeeShare: number; companyShare: number; sharePerEmployee: number }>(base(c), {
     method: 'POST',

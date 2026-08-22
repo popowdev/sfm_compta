@@ -76,7 +76,7 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
   ]);
 
   const [cargaisonRevRow, cargaisonShareRows] = await Promise.all([
-    db.select({ total: sql<string>`COALESCE(SUM(${companyCargaisons.total}),0)` }).from(companyCargaisons).where(and(eq(companyCargaisons.companyId, companyId), inDay(companyCargaisons.createdAt))),
+    db.select({ total: sql<string>`COALESCE(SUM(${companyCargaisons.total}),0)`, importCost: sql<string>`COALESCE(SUM(${companyCargaisons.importCost}),0)` }).from(companyCargaisons).where(and(eq(companyCargaisons.companyId, companyId), inDay(companyCargaisons.createdAt))),
     db.select({ employeeId: cargaisonParticipants.employeeId, share: sql<string>`COALESCE(SUM(${cargaisonParticipants.share}),0)` }).from(cargaisonParticipants).innerJoin(companyCargaisons, eq(cargaisonParticipants.cargaisonId, companyCargaisons.id)).where(and(eq(companyCargaisons.companyId, companyId), inDay(companyCargaisons.createdAt))).groupBy(cargaisonParticipants.employeeId),
   ]);
 
@@ -168,7 +168,7 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
   const salesDiscount = Number(salesAgg[0]?.discount ?? 0);
   const caGross = round2(salesGross + garageRevenueTotal + moduleRevenue);
   const caNet = round2(caGross - salesDiscount);
-  const expenses = round2(Number(expRow[0]?.total ?? 0));
+  const expenses = round2(Number(expRow[0]?.total ?? 0) + Number(cargaisonRevRow[0]?.importCost ?? 0));
   const payroll = round2(payrollTotal);
   const charges = round2(expenses + payroll);
   const benefit = round2(caNet - charges);

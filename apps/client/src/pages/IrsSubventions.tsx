@@ -10,7 +10,7 @@ import {
   type Subvention,
   type SubventionStatus,
 } from '@/lib/subventions';
-import { SUB_STATUS, SUB_TYPE_LABEL, Attachments } from '@/pages/Subventions';
+import { SUB_STATUS, SUB_TYPE_LABEL, Attachments, fmtDepot } from '@/pages/Subventions';
 import { SearchInput, FilterSelect, distinctOptions } from '@/components/ui/filters';
 import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
@@ -143,11 +143,12 @@ export default function IrsSubventions() {
             onClick={() =>
               downloadCsv(
                 'subventions.csv',
-                ['Entreprise', 'Type', 'Motif', 'Demandeur', 'RIB', 'Demandé', 'Accordé', 'Statut'],
+                ['Entreprise', 'Type', 'Motif', 'Déposée le', 'Demandeur', 'RIB', 'Demandé', 'Accordé', 'Statut'],
                 filtered.map((s) => [
                   s.companyName ?? '',
                   SUB_TYPE_LABEL[s.type] ?? s.type,
                   s.motif,
+                  fmtDepot(s.createdAt),
                   s.requesterName,
                   s.rib ?? '',
                   s.amountRequested,
@@ -170,6 +171,7 @@ export default function IrsSubventions() {
               <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="px-4 py-3 text-left font-semibold">Entreprise</th>
                 <th className="px-4 py-3 text-left font-semibold">Motif</th>
+                <th className="px-4 py-3 text-left font-semibold">Déposée le</th>
                 <th className="px-4 py-3 text-left font-semibold">Demandeur</th>
                 <th className="px-4 py-3 text-right font-semibold">Demandé</th>
                 <th className="px-4 py-3 text-right font-semibold">Accordé</th>
@@ -190,6 +192,7 @@ export default function IrsSubventions() {
                       </span>
                     </div>
                   </td>
+                  <td className="px-4 py-3 text-muted-foreground">{fmtDepot(s.createdAt)}</td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {s.requesterName}
                     {s.rib && <div className="font-mono text-[11px] text-foreground/70">RIB : {s.rib}</div>}

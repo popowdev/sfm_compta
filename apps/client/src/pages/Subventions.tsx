@@ -27,6 +27,8 @@ export const SUB_STATUS: Record<SubventionStatus, { label: string; cls: string }
   paid: { label: 'versée', cls: 'bg-emerald-500/10 text-emerald-400' },
 };
 
+export const fmtDepot = (v: string) => new Date(v).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
 export const SUB_TYPE_LABEL: Record<string, string> = Object.fromEntries(
   SUBVENTION_TYPES.map((t) => [t.key, t.label]),
 );
@@ -167,6 +169,7 @@ export default function Subventions() {
               <thead>
                 <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-4 py-3 text-left font-semibold">Motif</th>
+                  <th className="px-4 py-3 text-left font-semibold">Déposée le</th>
                   <th className="px-4 py-3 text-left font-semibold">Demandeur</th>
                   <th className="px-4 py-3 text-right font-semibold">Demandé</th>
                   <th className="px-4 py-3 text-right font-semibold">Accordé</th>
@@ -186,6 +189,7 @@ export default function Subventions() {
                       </div>
                       {s.notes && <div className="text-xs text-muted-foreground">{s.notes}</div>}
                     </td>
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{fmtDepot(s.createdAt)}</td>
                     <td className="px-4 py-3 text-muted-foreground">{s.requesterName}</td>
                     <td className="px-4 py-3 text-right">{fmtMoney(s.amountRequested)} $</td>
                     <td className="px-4 py-3 text-right">

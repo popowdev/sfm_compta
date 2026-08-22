@@ -66,6 +66,7 @@ meCargaisonRouter.get(
         product: companyCargaisons.product,
         qty: companyCargaisons.qty,
         total: companyCargaisons.total,
+        importCost: companyCargaisons.importCost,
         employeeShare: companyCargaisons.employeeShare,
         companyShare: companyCargaisons.companyShare,
         participantCount: companyCargaisons.participantCount,
@@ -125,6 +126,7 @@ meCargaisonRouter.get(
         product: r.product,
         qty: Number(r.qty),
         total: Math.round(Number(r.total)),
+        importCost: Math.round(Number(r.importCost)),
         employeeShare: Math.round(Number(r.employeeShare)),
         companyShare: Math.round(Number(r.companyShare)),
         participantCount: Number(r.participantCount),
@@ -149,6 +151,7 @@ const cargaisonSchema = z.object({
   product: z.string().trim().max(150).optional(),
   qty: z.coerce.number().int().min(1).max(1_000_000).default(1),
   total: z.coerce.number().int().min(1).max(1_000_000_000),
+  importCost: z.coerce.number().int().min(0).max(1_000_000_000).default(0),
   participantIds: z.array(z.coerce.number().int().positive()).max(100).default([]),
   note: z.string().trim().max(255).optional(),
 });
@@ -178,11 +181,13 @@ meCargaisonRouter.post(
 
     const { companyPct } = await cargaisonConfig(companyId);
     const total = Math.round(p.data.total);
-    const pool = Math.round((total * (100 - companyPct)) / 100);
+    const importCost = Math.min(Math.round(p.data.importCost), total);
+    const base = Math.max(0, total - importCost);
+    const pool = Math.round((base * (100 - companyPct)) / 100);
     const n = validIds.length;
     const share = n > 0 ? Math.floor(pool / n) : 0;
     const employeeShare = share * n;
-    const companyShare = total - employeeShare;
+    const companyShare = base - employeeShare;
 
     const ins = await db.insert(companyCargaisons).values({
       companyId,
@@ -191,6 +196,7 @@ meCargaisonRouter.post(
       product: p.data.product || '',
       qty: p.data.qty,
       total: String(total),
+      importCost: String(importCost),
       employeeShare: String(employeeShare),
       companyShare: String(companyShare),
       participantCount: n,
@@ -204,7 +210,7 @@ meCargaisonRouter.post(
       );
     }
     emitInvalidate(['irs', `company:${companyId}`], [['cargaison', companyId]]);
-    res.status(201).json({ ok: true, total, employeeShare, companyShare, sharePerEmployee: share });
+    res.status(201).json({ ok: true, total, importCost, employeeShare, companyShare, sharePerEmployee: share });
   }),
 );
 

@@ -311,7 +311,7 @@ export default function Depenses() {
                     value={form.category}
                     onChange={(ev) => set('category', ev.target.value as ExpenseCategory)}
                   >
-                    {EXPENSE_CATEGORIES.map((c) => (
+                    {EXPENSE_CATEGORIES.filter((c) => c.key !== 'salary').map((c) => (
                       <option key={c.key} value={c.key}>
                         {c.label}
                       </option>

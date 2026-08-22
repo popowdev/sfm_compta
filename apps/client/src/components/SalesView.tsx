@@ -61,6 +61,7 @@ export function SalesView({
   const [clientOpen, setClientOpen] = useState(false);
   const [payment, setPayment] = useState<PaymentMethod>('cash');
   const [discount, setDiscount] = useState('');
+  const [discountPct, setDiscountPct] = useState(false);
   const [notes, setNotes] = useState('');
   const [vendeurId, setVendeurId] = useState<number | ''>('');
   const vendeursQ = useQuery({ queryKey: ['vendeurs', companyId], queryFn: () => getSaleVendeurs(companyId) });
@@ -156,7 +157,9 @@ export function SalesView({
   const removeLine = (u: number) => setCart((c) => c.filter((l) => l.uid !== u));
 
   const subtotal = cart.reduce((s, l) => s + (Number(l.unitPrice) || 0) * (Number(l.quantity) || 0), 0);
-  const disc = discountAllowed ? Math.min(Number(discount) || 0, subtotal) : 0;
+  const discRaw = Number(discount) || 0;
+  const discWanted = discountPct ? (subtotal * Math.min(Math.max(discRaw, 0), 100)) / 100 : discRaw;
+  const disc = discountAllowed ? Math.round(Math.min(Math.max(discWanted, 0), subtotal) * 100) / 100 : 0;
   const total = Math.max(0, subtotal - disc);
   const costKnown = cart.every((l) => l.unitCost !== null);
   const cost = cart.reduce((s, l) => s + (l.unitCost ?? 0) * (Number(l.quantity) || 0), 0);
@@ -175,7 +178,7 @@ export function SalesView({
       paymentMethod: payment,
       clientId: clientLink && clientId ? Number(clientId) : null,
       employeeId: vendeurId ? Number(vendeurId) : null,
-      discount: discountAllowed ? Number(discount) || 0 : 0,
+      discount: disc,
       notes: notes.trim() || undefined,
       lines: cart.map((l) =>
         l.catalogItemId
@@ -376,16 +379,38 @@ export function SalesView({
             </label>
             {discountAllowed && (
               <label className="block text-sm">
-                <span className="mb-1 block text-muted-foreground">Remise ($)</span>
+                <span className="mb-1 flex items-center justify-between text-muted-foreground">
+                  <span>Remise{discountPct ? ' (%)' : ' ($)'}</span>
+                  <span className="inline-flex overflow-hidden rounded-md border">
+                    <button
+                      type="button"
+                      onClick={() => setDiscountPct(false)}
+                      className={`px-2 py-0.5 text-[11px] font-medium ${!discountPct ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
+                    >
+                      $
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDiscountPct(true)}
+                      className={`px-2 py-0.5 text-[11px] font-medium ${discountPct ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
+                    >
+                      %
+                    </button>
+                  </span>
+                </span>
                 <input
                   type="number"
-                  step="0.01"
+                  step={discountPct ? '1' : '0.01'}
                   min="0"
+                  max={discountPct ? 100 : undefined}
                   className={inputCls}
                   value={discount}
                   onChange={(e) => setDiscount(e.target.value)}
                   placeholder="0"
                 />
+                {discountPct && discRaw > 0 && (
+                  <span className="mt-1 block text-[11px] text-muted-foreground">= {disc.toLocaleString('fr-FR')} $</span>
+                )}
               </label>
             )}
             <label className="block text-sm">
