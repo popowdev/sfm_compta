@@ -27,6 +27,8 @@ function WeekCard({ w, current }: { w: MyPayWeek; current?: boolean }) {
     { label: `Commission pawnshop`, value: w.pawnshopCommission, icon: Gem, accent: '' },
     { label: `Commission chasse`, value: w.chasseCommission, icon: Target, accent: '' },
     { label: `Runs (${w.runsCount})`, value: w.runsCommission, icon: Truck, accent: '' },
+    { label: `Commission concession`, value: w.concessionCommission, icon: Car, accent: '' },
+    { label: `Cargaison (${w.cargaisonCount})`, value: w.cargaisonShare, icon: Truck, accent: '' },
     { label: `Prime de pointe`, value: w.peakBonus, icon: Wallet, accent: 'text-violet-400' },
     { label: `Prime`, value: w.bonus, icon: Wallet, accent: '' },
   ].filter((r) => r.value !== 0);

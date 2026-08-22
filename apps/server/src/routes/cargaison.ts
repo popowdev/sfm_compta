@@ -103,6 +103,7 @@ meCargaisonRouter.get(
     const agg = await db
       .select({
         total: sql<string>`COALESCE(SUM(${companyCargaisons.total}),0)`,
+        importCost: sql<string>`COALESCE(SUM(${companyCargaisons.importCost}),0)`,
         empShare: sql<string>`COALESCE(SUM(${companyCargaisons.employeeShare}),0)`,
         compShare: sql<string>`COALESCE(SUM(${companyCargaisons.companyShare}),0)`,
         count: sql<number>`COUNT(*)`,
@@ -110,6 +111,7 @@ meCargaisonRouter.get(
       .from(companyCargaisons)
       .where(and(eq(companyCargaisons.companyId, companyId), inWeek));
     const totalRevenue = Math.round(Number(agg[0]?.total ?? 0));
+    const totalImportCost = Math.round(Number(agg[0]?.importCost ?? 0));
     const totalEmployee = Math.round(Number(agg[0]?.empShare ?? 0));
     const totalCompany = Math.round(Number(agg[0]?.compShare ?? 0));
 
@@ -133,10 +135,11 @@ meCargaisonRouter.get(
         participants: partByCargaison.get(r.id) ?? [],
         note: r.note,
         authorName: canManage ? r.authorName : null,
-        createdAt: canManage ? r.createdAt : String(r.createdAt).slice(0, 10),
+        createdAt: canManage ? r.createdAt : new Date(r.createdAt).toISOString().slice(0, 10),
       })),
       summary: {
         totalRevenue,
+        totalImportCost,
         totalEmployee,
         totalCompany,
         count: Number(agg[0]?.count ?? 0),

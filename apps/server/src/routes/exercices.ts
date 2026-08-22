@@ -242,6 +242,17 @@ meExercicesRouter.put(
     const parsed = updateSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     const d = parsed.data;
+    const touchesFigures =
+      d.revenue !== undefined || d.dividends !== undefined || d.hoursCap !== undefined || d.salaryCap !== undefined;
+    if (touchesFigures && d.status !== 'open') {
+      const [cur] = await db
+        .select({ status: exercices.status })
+        .from(exercices)
+        .where(and(eq(exercices.id, id), eq(exercices.companyId, companyId)))
+        .limit(1);
+      if (!cur) return res.status(404).json({ error: 'not_found' });
+      if (cur.status === 'closed') return res.status(409).json({ error: 'exercice_closed' });
+    }
     const set: Record<string, unknown> = {};
     if (d.label !== undefined) set.label = d.label;
     if (d.status !== undefined) {

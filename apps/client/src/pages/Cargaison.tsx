@@ -83,6 +83,9 @@ export default function Cargaison() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi icon={PackageCheck} label="Commandes" value={String(summary.count)} sub={`Semaine`} accent="text-sky-400" />
         <Kpi icon={Coins} label="CA total" value={money(summary.totalRevenue)} sub="Montant des commandes" accent="text-emerald-400" />
+        {summary.totalImportCost > 0 && (
+          <Kpi icon={Coins} label="Coût d'import" value={money(summary.totalImportCost)} sub="Déduit avant partage" accent="text-destructive" />
+        )}
         <Kpi icon={Users} label="Part employés" value={money(summary.totalEmployee)} sub={`${100 - companyPct} % réparti`} accent="text-amber-400" />
         <Kpi icon={Building2} label="Part entreprise" value={money(summary.totalCompany)} sub={`${companyPct} % gardé`} accent="text-violet-400" />
       </div>
@@ -163,6 +166,7 @@ export default function Cargaison() {
                     <th className="py-2 text-left font-semibold">Client</th>
                     <th className="py-2 text-left font-semibold">Produit</th>
                     <th className="py-2 text-right font-semibold">Total</th>
+                    <th className="py-2 text-right font-semibold">Import</th>
                     <th className="py-2 text-right font-semibold">Entreprise</th>
                     <th className="py-2 text-right font-semibold">Employés</th>
                     {canManage && <th className="py-2"></th>}
@@ -175,6 +179,7 @@ export default function Cargaison() {
                       <td className="py-2 font-medium">{r.clientName || '—'}</td>
                       <td className="py-2">{r.product || '—'}{r.qty > 1 && <span className="text-muted-foreground"> ×{r.qty}</span>}</td>
                       <td className="py-2 text-right text-emerald-400 whitespace-nowrap">{money(r.total)}</td>
+                      <td className="py-2 text-right text-muted-foreground whitespace-nowrap">{r.importCost > 0 ? `− ${money(r.importCost)}` : '—'}</td>
                       <td className="py-2 text-right text-violet-400 whitespace-nowrap">{money(r.companyShare)}</td>
                       <td className="py-2 text-right">
                         <div className="text-amber-400 whitespace-nowrap">{money(r.employeeShare)}</div>

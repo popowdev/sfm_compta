@@ -28,7 +28,7 @@ export interface CargaisonData {
   week: { offset: number; label: string; start: string; end: string };
   employees: { id: number; name: string }[];
   cargaisons: CargaisonRow[];
-  summary: { totalRevenue: number; totalEmployee: number; totalCompany: number; count: number };
+  summary: { totalRevenue: number; totalImportCost: number; totalEmployee: number; totalCompany: number; count: number };
 }
 
 const base = (c: number) => `/api/me/companies/${c}/cargaison`;

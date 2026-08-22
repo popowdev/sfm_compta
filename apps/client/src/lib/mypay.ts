@@ -15,6 +15,8 @@ export interface MyPayWeek {
   pawnshopCommission: number;
   chasseCommission: number;
   runsCommission: number;
+  concessionCommission: number;
+  cargaisonShare: number;
   peakBonus: number;
   bonus: number;
   deductions: number;
@@ -23,6 +25,7 @@ export interface MyPayWeek {
   salesCount: number;
   garageCount: number;
   runsCount: number;
+  cargaisonCount: number;
   isPaid: boolean;
 }
 export interface MyPay {
