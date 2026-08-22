@@ -516,13 +516,12 @@ export function CatalogManager({
                             <div key={id} className="flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2">
                               <span className="min-w-[8rem] flex-1 truncate text-sm font-medium">{s?.name ?? '—'}</span>
                               <input
-                                type="number"
-                                step="0.001"
-                                min="0"
+                                type="text"
+                                inputMode="decimal"
                                 className={`${inputCls} w-28`}
                                 value={qty[id] ?? ''}
-                                onChange={(e) => setQty((qq) => ({ ...qq, [id]: e.target.value }))}
-                                placeholder="quantité"
+                                onChange={(e) => setQty((qq) => ({ ...qq, [id]: e.target.value.replace(',', '.').replace(/[^0-9.]/g, '') }))}
+                                placeholder="ex. 0.1"
                               />
                               <span className="text-xs text-muted-foreground">{s?.unit ?? ''}</span>
                               <span className="w-24 text-right text-xs text-muted-foreground">{fmtMoney((s?.unitCost ?? 0) * q)} $</span>

@@ -175,6 +175,9 @@ function ItemsManager({
   const [movItem, setMovItem] = useState<StockItem | null>(null);
   const [movType, setMovType] = useState<StockMovementType>('in');
   const [movForm, setMovForm] = useState({ ...EMPTY_MOV });
+  const [catFilter, setCatFilter] = useState<string>('');
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'cat' | 'qty' | 'value'>('cat');
   const setMov = <K extends keyof typeof EMPTY_MOV>(k: K, v: (typeof EMPTY_MOV)[K]) =>
     setMovForm((f) => ({ ...f, [k]: v }));
 
@@ -286,9 +289,20 @@ function ItemsManager({
     move.mutate({ id: movItem.id, body });
   };
 
-  const items = q.data?.items ?? [];
-  const totalValue = items.reduce((s, it) => s + it.quantity * it.unitCost, 0);
-  const lowCount = items.filter((it) => it.lowStockThreshold > 0 && it.quantity <= it.lowStockThreshold).length;
+  const allItems = q.data?.items ?? [];
+  const items = allItems
+    .filter((it) => (catFilter === '' ? true : catFilter === 'none' ? it.categoryId == null : it.categoryId === Number(catFilter)))
+    .filter((it) => (search.trim() === '' ? true : it.name.toLowerCase().includes(search.trim().toLowerCase())))
+    .slice()
+    .sort((a, b) =>
+      sortBy === 'qty'
+        ? b.quantity - a.quantity
+        : sortBy === 'value'
+          ? b.quantity * b.unitCost - a.quantity * a.unitCost
+          : (a.categoryName ?? '\uffff').localeCompare(b.categoryName ?? '\uffff') || a.name.localeCompare(b.name),
+    );
+  const totalValue = allItems.reduce((s, it) => s + it.quantity * it.unitCost, 0);
+  const lowCount = allItems.filter((it) => it.lowStockThreshold > 0 && it.quantity <= it.lowStockThreshold).length;
 
   return (
     <div className="space-y-5">
@@ -318,6 +332,38 @@ function ItemsManager({
             <Plus className="h-4 w-4" />
             Nouvelle matière
           </Button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          className="h-9 w-48 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
+          placeholder="Rechercher…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+          value={catFilter}
+          onChange={(e) => setCatFilter(e.target.value)}
+        >
+          <option value="">Toutes les catégories</option>
+          {categories.map((c) => (
+            <option key={c.id} value={String(c.id)}>{c.name}</option>
+          ))}
+          <option value="none">Sans catégorie</option>
+        </select>
+        <select
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as 'cat' | 'qty' | 'value')}
+        >
+          <option value="cat">Trier : catégorie</option>
+          <option value="qty">Trier : quantité</option>
+          <option value="value">Trier : valeur</option>
+        </select>
+        {(catFilter !== '' || search !== '') && (
+          <span className="text-xs text-muted-foreground">{items.length} / {allItems.length}</span>
         )}
       </div>
 
@@ -464,7 +510,7 @@ function ItemsManager({
                 </label>
                 <label className="text-sm">
                   <span className={labelCls}>Quantité {editing !== null && '(via mouvements)'}</span>
-                  <input type="number" step="0.001" min="0" className={inputCls} value={form.quantity} onChange={(e) => set('quantity', e.target.value)} disabled={editing !== null} />
+                  <input type="text" inputMode="decimal" className={inputCls} value={form.quantity} onChange={(e) => set('quantity', e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''))} disabled={editing !== null} />
                 </label>
                 {showValuation && (
                   <label className="text-sm">
@@ -475,7 +521,7 @@ function ItemsManager({
                 {showThreshold && (
                   <label className="text-sm">
                     <span className={labelCls}>Seuil d'alerte</span>
-                    <input type="number" step="0.001" min="0" className={inputCls} value={form.lowStockThreshold} onChange={(e) => set('lowStockThreshold', e.target.value)} placeholder="0 = pas d'alerte" />
+                    <input type="text" inputMode="decimal" className={inputCls} value={form.lowStockThreshold} onChange={(e) => set('lowStockThreshold', e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''))} placeholder="0 = pas d'alerte" />
                   </label>
                 )}
                 <label className="text-sm sm:col-span-2">
@@ -513,7 +559,7 @@ function ItemsManager({
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="text-sm">
                   <span className={labelCls}>{movType === 'adjust' ? 'Correction (+/−)' : 'Quantité'} ({UNIT_SHORT[movItem.unit]})</span>
-                  <input type="number" step="0.001" className={inputCls} value={movForm.quantity} onChange={(e) => setMov('quantity', e.target.value)} autoFocus />
+                  <input type="text" inputMode="decimal" className={inputCls} value={movForm.quantity} onChange={(e) => setMov('quantity', e.target.value.replace(',', '.').replace(/[^0-9.-]/g, ''))} autoFocus />
                 </label>
                 {movType === 'in' && showValuation && (
                   <label className="text-sm">
