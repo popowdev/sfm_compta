@@ -965,7 +965,7 @@ function ExerciceDetailView({
       `CA brut: ${fmtMoney(s.caGross)} $`,
       `Remises: ${fmtMoney(s.salesDiscount)} $`,
       `CA net: ${fmtMoney(s.caNet)} $`,
-      `Charges: ${fmtMoney(s.charges)} $ (salaires ${fmtInt(s.payrollTotal)} + dépenses ${fmtMoney(s.expensesTotal)})`,
+      `Charges: ${fmtMoney(s.charges)} $ (commissions ${fmtInt(s.payrollCompany)} + dépenses ${fmtMoney(s.expensesTotal)}${s.productionCost > 0 ? ` + coût production ${fmtMoney(s.productionCost)}` : ''})`,
       `Bénéfice: ${fmtMoney(s.benefit)} $`,
       `Base imposable: ${fmtMoney(s.taxableBenefit)} $`,
       `Impôt société: ${fmtMoney(s.corporateTax)} $`,
@@ -1018,7 +1018,12 @@ function ExerciceDetailView({
           <FlowStage
             n={2} title="Ce qui sort" tone="red"
             big={`${fmtMoney(s.charges)} $`} bigLabel="Total des charges"
-            lines={[['Salaires versés', `${fmtInt(s.payrollTotal)} $`], ['Dépenses', `${fmtMoney(s.expensesTotal)} $`]]}
+            lines={[
+              ['Commissions employés', `${fmtInt(s.payrollCompany)} $`],
+              ['Dépenses', `${fmtMoney(s.expensesTotal)} $`],
+              ...(s.productionCost > 0 ? [['Coût de production', `${fmtMoney(s.productionCost)} $`] as [string, string]] : []),
+              ...(s.payrollState > 0 ? [['Salaires de base (payés par l’IRS)', `hors charges · ${fmtInt(s.payrollState)} $`] as [string, string]] : []),
+            ]}
             caption="Les salaires payés + toutes les dépenses." />
           <FlowOp symbol="=" />
           <FlowStage
@@ -1170,7 +1175,7 @@ function ExerciceDetailView({
 
       <div className="rounded-xl border bg-card p-5" data-tour="ex-payroll">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">Paies employés — {fmtInt(s.payrollTotal)} $ versés</h3>
+          <h3 className="text-sm font-semibold">Paies employés — {fmtInt(s.payrollTotal)} $ versés{s.payrollState > 0 ? ` · dont ${fmtInt(s.payrollState)} $ pris en charge par l’IRS` : ''}</h3>
           <div className="flex items-center gap-2">
             {q.data.hoursCap > 0 || q.data.salaryCap > 0 ? (
               <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">

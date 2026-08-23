@@ -145,6 +145,7 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
   const gridByRole = new Map(gridRows.map((g) => [g.companyRoleId, g]));
 
   let payrollTotal = 0;
+  let payrollCompany = 0;
   for (const r of payRows) {
     const rawHours = Number(r.workedMin) / 60;
     const cappedHours = weeklyHoursCap > 0 ? Math.min(rawHours, weeklyHoursCap) : rawHours;
@@ -169,6 +170,7 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
     const paid = Math.min(theoretical, salaryTierCap(r.gradeName, !!r.gradeManage));
     if (!r.active && paid === 0) continue;
     payrollTotal += paid;
+    payrollCompany += Math.max(0, paid - base);
   }
 
   const salesGross = Number(salesAgg[0]?.gross ?? 0);
@@ -177,7 +179,7 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
   const caNet = round2(caGross - salesDiscount);
   const expenses = round2(Number(expRow[0]?.total ?? 0) + Number(cargaisonRevRow[0]?.importCost ?? 0));
   const payroll = round2(payrollTotal);
-  const charges = round2(expenses + payroll + productionCost);
+  const charges = round2(expenses + round2(payrollCompany) + productionCost);
   const benefit = round2(caNet - charges);
   return { caNet, expenses, payroll, charges, benefit };
 }

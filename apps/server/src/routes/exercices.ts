@@ -832,6 +832,8 @@ async function buildExerciceDetail(companyId: number, id: number) {
         deductions,
         theoretical,
         paid: Math.round(paid),
+        companyCost: Math.max(0, Math.round(paid) - base),
+        stateCost: Math.min(base, Math.round(paid)),
         excess: Math.round(Math.max(0, theoretical - paid)),
         notes: o?.notes ?? null,
         isPaid: o?.paid ?? false,
@@ -840,6 +842,8 @@ async function buildExerciceDetail(companyId: number, id: number) {
     });
     const payroll = payrollAll.filter((p) => p.active || p.paid > 0 || p.hours > 0);
     const payrollTotal = Math.round(payroll.reduce((s, p) => s + p.paid, 0));
+    const payrollCompany = Math.round(payroll.reduce((s, p) => s + p.companyCost, 0));
+    const payrollState = Math.round(payroll.reduce((s, p) => s + p.stateCost, 0));
     const excessToCompany = Math.round(payroll.reduce((s, p) => s + p.excess, 0));
 
     const salesGross = round2(Number(aggRows[0]?.gross ?? 0));
@@ -857,15 +861,15 @@ async function buildExerciceDetail(companyId: number, id: number) {
     const salaryDeductible = Math.round(
       payroll.reduce((s, p) => {
         const cap = (p.companyRoleId != null ? tierByRole.get(p.companyRoleId) : undefined) ?? SALARY_TIER_CAPS.employe;
-        return s + Math.min(p.paid, cap);
+        return s + Math.max(0, Math.min(p.paid, cap) - p.stateCost);
       }, 0),
     );
-    const salaryExcess = Math.max(0, payrollTotal - salaryDeductible);
+    const salaryExcess = Math.max(0, payrollCompany - salaryDeductible);
 
     const expensesTotalAll = round2(expensesTotal + cargaisonImportTotal);
     const expensesDeductibleAll = round2(expensesDeductible + cargaisonImportTotal);
 
-    const charges = round2(expensesTotalAll + payrollTotal + productionCost);
+    const charges = round2(expensesTotalAll + payrollCompany + productionCost);
     const benefit = round2(caNet - charges);
     const taxableBenefit = round2(Math.max(0, caNet - salaryDeductible - expensesDeductibleAll - productionCost));
     const taxes = await computeTaxes(taxableBenefit, effectiveDividends);
@@ -917,6 +921,8 @@ async function buildExerciceDetail(companyId: number, id: number) {
         expensesDeductible: expensesDeductibleAll,
         cargaisonImportCost: Math.round(cargaisonImportTotal),
         payrollTotal,
+        payrollCompany,
+        payrollState,
         salaryDeductible,
         salaryExcess,
         excessToCompany,
