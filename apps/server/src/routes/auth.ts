@@ -103,6 +103,12 @@ authRouter.get('/discord/callback', async (req, res) => {
         .catch((err) => logger.error({ err }, 'fivem login refresh failed'));
     }
 
+    const bannedRow = await db
+      .select({ banned: users.banned })
+      .from(users)
+      .where(eq(users.discordId, discordUser.id))
+      .limit(1);
+    if (bannedRow[0]?.banned) return loginError('banned');
     if (whitelistConfigured && !whitelisted) return loginError('not_whitelisted');
 
     const sid = await createSession(userId);

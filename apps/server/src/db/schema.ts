@@ -22,6 +22,9 @@ export const users = mysqlTable('users', {
   displayName: varchar('display_name', { length: 100 }).notNull(),
   avatarUrl: varchar('avatar_url', { length: 255 }),
   whitelisted: boolean('whitelisted').notNull().default(false),
+  banned: boolean('banned').notNull().default(false),
+  banReason: varchar('ban_reason', { length: 255 }),
+  bannedAt: timestamp('banned_at'),
   staffMode: boolean('staff_mode').notNull().default(true),
   lastWhitelistCheck: timestamp('last_whitelist_check'),
   createdAt: timestamp('created_at')
@@ -1057,6 +1060,21 @@ export const errorLog = mysqlTable('error_log', {
   method: varchar('method', { length: 10 }),
   path: varchar('path', { length: 255 }),
   userId: int('user_id'),
+  createdAt: timestamp('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const securityEvents = mysqlTable('security_events', {
+  id: int('id').autoincrement().primaryKey(),
+  ip: varchar('ip', { length: 45 }).notNull(),
+  kind: varchar('kind', { length: 32 }).notNull(),
+  pattern: varchar('pattern', { length: 200 }).notNull(),
+  method: varchar('method', { length: 10 }).notNull(),
+  path: varchar('path', { length: 500 }).notNull(),
+  userAgent: varchar('user_agent', { length: 300 }),
+  userId: int('user_id'),
+  status: int('status'),
   createdAt: timestamp('created_at')
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),

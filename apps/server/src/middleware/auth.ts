@@ -31,12 +31,14 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
   if (!sid) return res.status(401).json({ error: 'unauthenticated' });
   const user = await getSessionUser(sid);
   if (!user) return res.status(401).json({ error: 'unauthenticated' });
+  if (user.banned) return res.status(403).json({ error: 'banned' });
   if (!user.whitelisted) return res.status(403).json({ error: 'not_whitelisted' });
   req.user = user;
   next();
 });
 
 export function requireWhitelist(req: Request, res: Response, next: NextFunction) {
+  if (req.user?.banned) return res.status(403).json({ error: 'banned' });
   if (!req.user?.whitelisted) return res.status(403).json({ error: 'not_whitelisted' });
   next();
 }

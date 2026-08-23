@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, gt, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { errorLog } from '../db/schema';
+import { errorLog, securityEvents, users } from '../db/schema';
 import { requireAuth, requireAppRole } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { genErrorCode, recordError } from '../services/errorLog';
@@ -61,5 +61,46 @@ adminErrorsRouter.get(
   asyncHandler(async (_req, res) => {
     const rows = await db.select().from(errorLog).orderBy(desc(errorLog.createdAt)).limit(50);
     res.json({ errors: rows });
+  }),
+);
+
+adminErrorsRouter.get(
+  '/security/events',
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 100));
+    const rows = await db
+      .select({
+        id: securityEvents.id,
+        ip: securityEvents.ip,
+        kind: securityEvents.kind,
+        pattern: securityEvents.pattern,
+        method: securityEvents.method,
+        path: securityEvents.path,
+        userAgent: securityEvents.userAgent,
+        status: securityEvents.status,
+        createdAt: securityEvents.createdAt,
+        userName: users.displayName,
+        discordId: users.discordId,
+      })
+      .from(securityEvents)
+      .leftJoin(users, eq(users.id, securityEvents.userId))
+      .orderBy(desc(securityEvents.createdAt))
+      .limit(limit);
+    res.json({ events: rows });
+  }),
+);
+
+adminErrorsRouter.get(
+  '/security/summary',
+  asyncHandler(async (_req, res) => {
+    const since = new Date(Date.now() - 24 * 3600_000);
+    const byIp = await db
+      .select({ ip: securityEvents.ip, n: sql<number>`COUNT(*)`, kinds: sql<string>`GROUP_CONCAT(DISTINCT ${securityEvents.kind})` })
+      .from(securityEvents)
+      .where(gt(securityEvents.createdAt, since))
+      .groupBy(securityEvents.ip)
+      .orderBy(desc(sql`COUNT(*)`))
+      .limit(20);
+    res.json({ since, byIp });
   }),
 );

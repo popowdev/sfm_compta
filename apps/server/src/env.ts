@@ -37,6 +37,7 @@ const envSchema = z.object({
   DISCORD_STAFF_ROLE_ID: z.string().optional(),
   DISCORD_GOUVERNEMENT_ROLE_ID: z.string().optional(),
   ADMIN_DISCORD_IDS: z.string().optional(),
+  SECURITY_ALERT_DISCORD_IDS: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -5,6 +5,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import pinoHttp from 'pino-http';
 import rateLimit from 'express-rate-limit';
+import { securityWatch } from './services/securityWatch';
 import multer from 'multer';
 import { env } from './env';
 import { logger } from './logger';
@@ -108,6 +109,8 @@ const clientErrorLimiter = rateLimit({
   legacyHeaders: false,
   handler: rateLimited,
 });
+
+app.use(securityWatch);
 
 app.use('/health', healthRouter);
 app.use('/api/health', healthRouter);
