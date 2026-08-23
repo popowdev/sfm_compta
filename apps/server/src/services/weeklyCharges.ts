@@ -55,7 +55,7 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
     repByUser, custByUser, rawPeak,
   ] = await Promise.all([
     db.select({ total: sql<string>`COALESCE(SUM(${companyExpenses.amount}),0)` }).from(companyExpenses).where(and(eq(companyExpenses.companyId, companyId), ne(companyExpenses.category, 'salary'), gte(companyExpenses.expenseDate, start), lte(companyExpenses.expenseDate, end))),
-    db.select({ gross: sql<string>`COALESCE(SUM(${sales.subtotal}),0)`, discount: sql<string>`COALESCE(SUM(${sales.discount}),0)` }).from(sales).where(and(eq(sales.companyId, companyId), inDay(sales.createdAt))),
+    db.select({ gross: sql<string>`COALESCE(SUM(${sales.subtotal}),0)`, discount: sql<string>`COALESCE(SUM(${sales.discount}),0)`, cost: sql<string>`COALESCE(SUM(${sales.productionCost}),0)` }).from(sales).where(and(eq(sales.companyId, companyId), inDay(sales.createdAt))),
     db.select({ empId: sales.employeeId, ca: sql<string>`COALESCE(SUM(${sales.total}),0)` }).from(sales).where(and(eq(sales.companyId, companyId), inDay(sales.createdAt))).groupBy(sales.employeeId),
     db.select({ employeeId: companyEmployees.id, companyRoleId: companyEmployees.companyRoleId, gradeName: companyRoles.name, gradeManage: companyRoles.canManage, active: companyEmployees.active, hourlyRate: companyEmployees.hourlyRate, commissionRate: companyEmployees.commissionRate, workedMin: sql<string>`COALESCE(SUM(GREATEST(0, TIMESTAMPDIFF(MINUTE, ${timeEntries.clockIn}, ${timeEntries.clockOut}) - ${timeEntries.pauseMinutes})), 0)` }).from(companyEmployees).leftJoin(timeEntries, and(eq(timeEntries.employeeId, companyEmployees.id), eq(timeEntries.companyId, companyId), isNotNull(timeEntries.clockOut), inDay(timeEntries.clockIn))).leftJoin(companyRoles, eq(companyEmployees.companyRoleId, companyRoles.id)).where(eq(companyEmployees.companyId, companyId)).groupBy(companyEmployees.id),
     db.select().from(salaryGrid).where(eq(salaryGrid.companyId, companyId)),
@@ -74,6 +74,11 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
       ? db.select({ employeeId: timeEntries.employeeId, clockIn: timeEntries.clockIn, clockOut: timeEntries.clockOut }).from(timeEntries).where(and(eq(timeEntries.companyId, companyId), isNotNull(timeEntries.clockOut), inDay(timeEntries.clockIn)))
       : Promise.resolve([] as { employeeId: number; clockIn: string; clockOut: string | null }[]),
   ]);
+
+  const [garagePartsRow] = await Promise.all([
+    db.select({ c: sql<string>`COALESCE(SUM(${garageCustoms.costPrice}),0)` }).from(garageCustoms).where(and(eq(garageCustoms.companyId, companyId), inDay(garageCustoms.createdAt))),
+  ]);
+  const productionCost = round2(Number(salesAgg[0]?.cost ?? 0) + Number(garagePartsRow[0]?.c ?? 0));
 
   const [cargaisonRevRow, cargaisonShareRows] = await Promise.all([
     db.select({ total: sql<string>`COALESCE(SUM(${companyCargaisons.total}),0)`, importCost: sql<string>`COALESCE(SUM(${companyCargaisons.importCost}),0)` }).from(companyCargaisons).where(and(eq(companyCargaisons.companyId, companyId), inDay(companyCargaisons.createdAt))),
@@ -172,7 +177,7 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
   const caNet = round2(caGross - salesDiscount);
   const expenses = round2(Number(expRow[0]?.total ?? 0) + Number(cargaisonRevRow[0]?.importCost ?? 0));
   const payroll = round2(payrollTotal);
-  const charges = round2(expenses + payroll);
+  const charges = round2(expenses + payroll + productionCost);
   const benefit = round2(caNet - charges);
   return { caNet, expenses, payroll, charges, benefit };
 }

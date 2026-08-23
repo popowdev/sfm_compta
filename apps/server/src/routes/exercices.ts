@@ -865,9 +865,9 @@ async function buildExerciceDetail(companyId: number, id: number) {
     const expensesTotalAll = round2(expensesTotal + cargaisonImportTotal);
     const expensesDeductibleAll = round2(expensesDeductible + cargaisonImportTotal);
 
-    const charges = round2(expensesTotalAll + payrollTotal);
+    const charges = round2(expensesTotalAll + payrollTotal + productionCost);
     const benefit = round2(caNet - charges);
-    const taxableBenefit = round2(Math.max(0, caNet - salaryDeductible - expensesDeductibleAll));
+    const taxableBenefit = round2(Math.max(0, caNet - salaryDeductible - expensesDeductibleAll - productionCost));
     const taxes = await computeTaxes(taxableBenefit, effectiveDividends);
     const effectiveRate = taxableBenefit > 0 ? round2((taxes.corporateTax / taxableBenefit) * 100) : 0;
     const netAfterTax = round2(benefit - taxes.corporateTax - effectiveDividends - taxes.dividendTax);
