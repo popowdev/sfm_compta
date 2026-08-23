@@ -30,6 +30,7 @@ errorsRouter.post(
       method: 'CLIENT',
       path: d.path ?? null,
       userId: req.user?.id ?? null,
+      notify: !!req.user?.id,
     });
     res.json({ errorId: code });
   }),

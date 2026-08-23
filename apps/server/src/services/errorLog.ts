@@ -9,6 +9,9 @@ export function genErrorCode(): string {
   return randomBytes(4).toString('hex').toUpperCase();
 }
 
+const stripMarkup = (v: string): string =>
+  v.replace(/[<>]/g, (c) => (c === '<' ? '\u2039' : '\u203a')).replace(/[\u0000-\u001f]/g, ' ');
+
 export async function recordError(p: {
   code: string;
   source: 'server' | 'client';
@@ -17,15 +20,18 @@ export async function recordError(p: {
   method?: string | null;
   path?: string | null;
   userId?: number | null;
+  notify?: boolean;
 }): Promise<void> {
+  const message = stripMarkup((p.message || '').slice(0, 500));
+  const path = p.path ? stripMarkup(p.path.slice(0, 255)) : null;
   try {
     await db.insert(errorLog).values({
       code: p.code,
       source: p.source,
-      message: (p.message || '').slice(0, 500),
+      message,
       stack: p.stack ? p.stack.slice(0, 8000) : null,
       method: p.method ?? null,
-      path: p.path ? p.path.slice(0, 255) : null,
+      path,
       userId: p.userId ?? null,
     });
   } catch {
@@ -33,6 +39,7 @@ export async function recordError(p: {
   }
 
   // Alerte Discord (fire-and-forget) : ne doit jamais bloquer ni casser la requête.
+  if (p.notify === false) return;
   void (async () => {
     let userName: string | null = null;
     if (p.userId) {
@@ -46,9 +53,9 @@ export async function recordError(p: {
     await notifyErrorDetected({
       code: p.code,
       source: p.source,
-      message: p.message,
+      message,
       method: p.method,
-      path: p.path,
+      path,
       userName,
     });
   })();

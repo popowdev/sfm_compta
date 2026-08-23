@@ -101,6 +101,13 @@ const authLimiter = rateLimit({
   handler: rateLimited,
 });
 const fivemLimiter = rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: true, legacyHeaders: false, handler: rateLimited });
+const clientErrorLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimited,
+});
 
 app.use('/health', healthRouter);
 app.use('/api/health', healthRouter);
@@ -168,7 +175,7 @@ app.use('/api/irs/share-listings', irsShareListingsRouter);
 app.use('/api/messages', irsMessagesRouter);
 app.use('/api/admin/modules', adminModulesRouter);
 app.use('/api/fiscal', fiscalRouter);
-app.use('/api/errors', errorsRouter);
+app.use('/api/errors', clientErrorLimiter, errorsRouter);
 app.use('/api/admin/errors', adminErrorsRouter);
 app.use('/api/me/tickets', meTicketsRouter);
 app.use('/api/support/tickets', supportTicketsRouter);
