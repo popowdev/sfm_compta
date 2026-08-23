@@ -335,6 +335,20 @@ function ItemsManager({
         )}
       </div>
 
+      {allItems.some((it) => it.quantity < 0) && (
+        <div className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <div>
+            <div className="font-medium text-destructive">
+              {allItems.filter((it) => it.quantity < 0).length} article(s) en stock négatif
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Des ventes ont été encaissées sans stock suffisant. Régularise avec un mouvement d'entrée : tant que la quantité est négative, la valeur du stock affichée est faussée.
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <input
           className="h-9 w-48 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
@@ -392,7 +406,13 @@ function ItemsManager({
                         {it.categoryName}
                       </span>
                     )}
-                    {isLow && (
+                    {it.quantity < 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+                        <AlertTriangle className="h-3 w-3" />
+                        stock négatif
+                      </span>
+                    )}
+                    {isLow && it.quantity >= 0 && (
                       <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400">
                         <AlertTriangle className="h-3 w-3" />
                         stock bas

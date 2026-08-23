@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { and, desc, eq, gte, inArray, isNotNull, lte, ne, sql } from 'drizzle-orm';
-import { moduleConfigBool, moduleConfigNumber, EXPENSE_DEDUCTION_CAPS, SALARY_TIER_CAPS, type ExpenseCategory } from '@rp-compta/shared';
+import { moduleConfigBool, moduleConfigNumber, EXPENSE_DEDUCTION_CAPS, SALARY_TIER_CAPS, salaryTierCap, type ExpenseCategory } from '@rp-compta/shared';
 import { db } from '../db';
 import {
   exercices,
@@ -43,18 +43,6 @@ function methodAction(method: string): PermAction {
 function parseId(value: string | undefined): number | null {
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : null;
-}
-
-function salaryTierCap(roleName: string, canManage: boolean): number {
-  const n = roleName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const isCo = /\bco[\s-]?(patron|gerant|pdg|fondateur)/.test(n) || /^co[\s-]/.test(n);
-  if (canManage) {
-    if (isCo) return SALARY_TIER_CAPS.cogerant;
-    if (/(patron|pdg|gerant|chief|boss|directeur|president|fondateur|chef)/.test(n)) return SALARY_TIER_CAPS.gerant;
-    return SALARY_TIER_CAPS.manager;
-  }
-  if (/(manager|manageur|responsable|superviseur|chef)/.test(n)) return SALARY_TIER_CAPS.manager;
-  return SALARY_TIER_CAPS.employe;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -151,6 +139,18 @@ meExercicesRouter.post(
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
+    const overlap = await db
+      .select({ id: exercices.id, label: exercices.label })
+      .from(exercices)
+      .where(
+        and(
+          eq(exercices.companyId, companyId),
+          lte(exercices.startDate, parsed.data.endDate),
+          gte(exercices.endDate, parsed.data.startDate),
+        ),
+      )
+      .limit(1);
+    if (overlap[0]) return res.status(409).json({ error: 'overlapping_period', label: overlap[0].label });
     try {
       await db.insert(exercices).values({
         companyId,
@@ -404,6 +404,7 @@ async function buildExerciceDetail(companyId: number, id: number) {
         name: companyEmployees.name,
         companyRoleId: companyEmployees.companyRoleId,
         gradeName: companyRoles.name,
+        active: companyEmployees.active,
         hourlyRate: companyEmployees.hourlyRate,
         commissionRate: companyEmployees.commissionRate,
         workedMin: sql<string>`COALESCE(SUM(GREATEST(0, TIMESTAMPDIFF(MINUTE, ${timeEntries.clockIn}, ${timeEntries.clockOut}) - ${timeEntries.pauseMinutes})), 0)`,
@@ -420,7 +421,7 @@ async function buildExerciceDetail(companyId: number, id: number) {
         ),
       )
       .leftJoin(companyRoles, eq(companyEmployees.companyRoleId, companyRoles.id))
-      .where(and(eq(companyEmployees.companyId, companyId), eq(companyEmployees.active, true)))
+      .where(eq(companyEmployees.companyId, companyId))
       .groupBy(companyEmployees.id, companyRoles.name);
 
     const gridRows = await db.select().from(salaryGrid).where(eq(salaryGrid.companyId, companyId));
@@ -757,8 +758,15 @@ async function buildExerciceDetail(companyId: number, id: number) {
       for (const rows of [txCitDay, txConDay, txVipDay, pawnDay, chasseDay]) for (const r of rows) otherModByDay.set(r.date, (otherModByDay.get(r.date) ?? 0) + Number(r.total));
     }
 
+    const roleRows = await db
+      .select({ id: companyRoles.id, name: companyRoles.name, canManage: companyRoles.canManage })
+      .from(companyRoles)
+      .where(eq(companyRoles.companyId, companyId));
+    const tierByRole = new Map<number, number>();
+    for (const r of roleRows) tierByRole.set(r.id, salaryTierCap(r.name, r.canManage));
+
     const caByEmp = new Map(perfRows.map((r) => [r.employeeId, Number(r.ca)]));
-    const payroll = payRows.map((r) => {
+    const payrollAll = payRows.map((r) => {
       const rawHours = Number(r.workedMin) / 60;
       const hours = round2(rawHours);
       const caps = [ex.hoursCap, weeklyHoursCap].filter((c) => c > 0);
@@ -793,12 +801,15 @@ async function buildExerciceDetail(companyId: number, id: number) {
       const peakHours = peakEnabled ? Math.min((peakMinByEmp.get(r.employeeId) ?? 0) / 60, cappedHours) : 0;
       const peakBonus = peakHours > 0 && peakMultiplier > 1 ? Math.round(peakHours * rate * (peakMultiplier - 1)) : 0;
       const theoretical = Math.max(0, base + commission + garageCommission + taxiCommission + pawnshopCommission + chasseCommission + runsCommission + concessionCommission + cargaisonShare + bonus + peakBonus - deductions);
-      const paid = ex.salaryCap > 0 ? Math.min(theoretical, Math.round(ex.salaryCap)) : theoretical;
+      const gradeCap = (r.companyRoleId != null ? tierByRole.get(r.companyRoleId) : undefined) ?? SALARY_TIER_CAPS.employe;
+      const capped = ex.salaryCap > 0 ? Math.min(theoretical, Math.round(ex.salaryCap)) : theoretical;
+      const paid = Math.min(capped, gradeCap);
       return {
         employeeId: r.employeeId,
         name: r.name,
         companyRoleId: r.companyRoleId,
         gradeName: r.gradeName,
+        active: r.active,
         hours,
         cappedHours: round2(cappedHours),
         peakHours: round2(peakHours),
@@ -827,6 +838,7 @@ async function buildExerciceDetail(companyId: number, id: number) {
         paidAt: o?.paidAt ?? null,
       };
     });
+    const payroll = payrollAll.filter((p) => p.active || p.paid > 0 || p.hours > 0);
     const payrollTotal = Math.round(payroll.reduce((s, p) => s + p.paid, 0));
     const excessToCompany = Math.round(payroll.reduce((s, p) => s + p.excess, 0));
 
@@ -842,12 +854,6 @@ async function buildExerciceDetail(companyId: number, id: number) {
     const caNet = round2(caGross - salesDiscount);
     const grossMargin = round2(caNet - productionCost);
 
-    const roleRows = await db
-      .select({ id: companyRoles.id, name: companyRoles.name, canManage: companyRoles.canManage })
-      .from(companyRoles)
-      .where(eq(companyRoles.companyId, companyId));
-    const tierByRole = new Map<number, number>();
-    for (const r of roleRows) tierByRole.set(r.id, salaryTierCap(r.name, r.canManage));
     const salaryDeductible = Math.round(
       payroll.reduce((s, p) => {
         const cap = (p.companyRoleId != null ? tierByRole.get(p.companyRoleId) : undefined) ?? SALARY_TIER_CAPS.employe;

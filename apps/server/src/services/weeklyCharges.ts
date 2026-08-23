@@ -1,5 +1,5 @@
 import { and, eq, gte, inArray, isNotNull, lte, ne, sql, type AnyColumn, type SQL } from 'drizzle-orm';
-import { moduleConfigBool, moduleConfigNumber } from '@rp-compta/shared';
+import { moduleConfigBool, moduleConfigNumber, salaryTierCap } from '@rp-compta/shared';
 import { db } from '../db';
 import {
   companyModules, companyExpenses, companyEmployees, companyRoles, salaryGrid, timeEntries,
@@ -57,7 +57,7 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
     db.select({ total: sql<string>`COALESCE(SUM(${companyExpenses.amount}),0)` }).from(companyExpenses).where(and(eq(companyExpenses.companyId, companyId), ne(companyExpenses.category, 'salary'), gte(companyExpenses.expenseDate, start), lte(companyExpenses.expenseDate, end))),
     db.select({ gross: sql<string>`COALESCE(SUM(${sales.subtotal}),0)`, discount: sql<string>`COALESCE(SUM(${sales.discount}),0)` }).from(sales).where(and(eq(sales.companyId, companyId), inDay(sales.createdAt))),
     db.select({ empId: sales.employeeId, ca: sql<string>`COALESCE(SUM(${sales.total}),0)` }).from(sales).where(and(eq(sales.companyId, companyId), inDay(sales.createdAt))).groupBy(sales.employeeId),
-    db.select({ employeeId: companyEmployees.id, companyRoleId: companyEmployees.companyRoleId, hourlyRate: companyEmployees.hourlyRate, commissionRate: companyEmployees.commissionRate, workedMin: sql<string>`COALESCE(SUM(GREATEST(0, TIMESTAMPDIFF(MINUTE, ${timeEntries.clockIn}, ${timeEntries.clockOut}) - ${timeEntries.pauseMinutes})), 0)` }).from(companyEmployees).leftJoin(timeEntries, and(eq(timeEntries.employeeId, companyEmployees.id), eq(timeEntries.companyId, companyId), isNotNull(timeEntries.clockOut), inDay(timeEntries.clockIn))).leftJoin(companyRoles, eq(companyEmployees.companyRoleId, companyRoles.id)).where(and(eq(companyEmployees.companyId, companyId), eq(companyEmployees.active, true))).groupBy(companyEmployees.id),
+    db.select({ employeeId: companyEmployees.id, companyRoleId: companyEmployees.companyRoleId, gradeName: companyRoles.name, gradeManage: companyRoles.canManage, active: companyEmployees.active, hourlyRate: companyEmployees.hourlyRate, commissionRate: companyEmployees.commissionRate, workedMin: sql<string>`COALESCE(SUM(GREATEST(0, TIMESTAMPDIFF(MINUTE, ${timeEntries.clockIn}, ${timeEntries.clockOut}) - ${timeEntries.pauseMinutes})), 0)` }).from(companyEmployees).leftJoin(timeEntries, and(eq(timeEntries.employeeId, companyEmployees.id), eq(timeEntries.companyId, companyId), isNotNull(timeEntries.clockOut), inDay(timeEntries.clockIn))).leftJoin(companyRoles, eq(companyEmployees.companyRoleId, companyRoles.id)).where(eq(companyEmployees.companyId, companyId)).groupBy(companyEmployees.id),
     db.select().from(salaryGrid).where(eq(salaryGrid.companyId, companyId)),
     db.select({ id: companyEmployees.id, userId: companyEmployees.userId }).from(companyEmployees).where(eq(companyEmployees.companyId, companyId)),
     db.select({ employeeId: companyRuns.employeeId, comm: sql<string>`COALESCE(SUM(${companyRuns.commission}),0)` }).from(companyRuns).where(and(eq(companyRuns.companyId, companyId), inDay(companyRuns.createdAt))).groupBy(companyRuns.employeeId),
@@ -160,7 +160,9 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
     const cargaisonShare = Math.round(cargaisonShareByEmp.get(r.employeeId) ?? 0);
     const peakHours = peakEnabled ? Math.min((peakMinByEmp.get(r.employeeId) ?? 0) / 60, cappedHours) : 0;
     const peakBonus = peakHours > 0 && peakMultiplier > 1 ? Math.round(peakHours * rate * (peakMultiplier - 1)) : 0;
-    const paid = Math.max(0, base + caisseCommission + garageCommission + taxiCommission + pawnshopCommission + chasseCommission + runsCommission + concessionCommission + cargaisonShare + peakBonus);
+    const theoretical = Math.max(0, base + caisseCommission + garageCommission + taxiCommission + pawnshopCommission + chasseCommission + runsCommission + concessionCommission + cargaisonShare + peakBonus);
+    const paid = Math.min(theoretical, salaryTierCap(r.gradeName, !!r.gradeManage));
+    if (!r.active && paid === 0) continue;
     payrollTotal += paid;
   }
 

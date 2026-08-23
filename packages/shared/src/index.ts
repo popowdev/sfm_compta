@@ -498,6 +498,18 @@ export const SALARY_TIER_CAPS = {
 } as const;
 export type SalaryTier = keyof typeof SALARY_TIER_CAPS;
 
+export function salaryTierCap(roleName: string | null | undefined, canManage: boolean): number {
+  const n = (roleName ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const isCo = /\bco[\s-]?(patron|gerant|pdg|fondateur)/.test(n) || /^co[\s-]/.test(n);
+  if (canManage) {
+    if (isCo) return SALARY_TIER_CAPS.cogerant;
+    if (/(patron|pdg|gerant|chief|boss|directeur|president|fondateur|chef)/.test(n)) return SALARY_TIER_CAPS.gerant;
+    return SALARY_TIER_CAPS.manager;
+  }
+  if (/(manager|manageur|responsable|superviseur|chef)/.test(n)) return SALARY_TIER_CAPS.manager;
+  return SALARY_TIER_CAPS.employe;
+}
+
 export const ASSOCIATION_MEMBER_ROLES = [
   { key: 'president', label: 'Président' },
   { key: 'tresorier', label: 'Trésorier' },

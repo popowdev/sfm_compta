@@ -1,6 +1,6 @@
 import { Router, type Request } from 'express';
 import { and, desc, eq, gte, inArray, isNotNull, lte, sql, type AnyColumn, type SQL } from 'drizzle-orm';
-import { moduleConfigBool, moduleConfigNumber } from '@rp-compta/shared';
+import { moduleConfigBool, moduleConfigNumber, salaryTierCap } from '@rp-compta/shared';
 import { db } from '../db';
 import {
   exercices, exercicePayroll, companyEmployees, companyRoles, salaryGrid, companyModules, timeEntries,
@@ -28,7 +28,7 @@ meMyPayRouter.get(
     if (!acc) return res.status(404).json({ error: 'not_member' });
 
     const empRows = await db
-      .select({ id: companyEmployees.id, name: companyEmployees.name, iban: companyEmployees.iban, hourlyRate: companyEmployees.hourlyRate, commissionRate: companyEmployees.commissionRate, companyRoleId: companyEmployees.companyRoleId, userId: companyEmployees.userId, gradeName: companyRoles.name })
+      .select({ id: companyEmployees.id, name: companyEmployees.name, iban: companyEmployees.iban, hourlyRate: companyEmployees.hourlyRate, commissionRate: companyEmployees.commissionRate, companyRoleId: companyEmployees.companyRoleId, userId: companyEmployees.userId, gradeName: companyRoles.name, gradeManage: companyRoles.canManage })
       .from(companyEmployees)
       .leftJoin(companyRoles, eq(companyEmployees.companyRoleId, companyRoles.id))
       .where(and(eq(companyEmployees.companyId, companyId), eq(companyEmployees.userId, req.user!.id)))
@@ -56,6 +56,7 @@ meMyPayRouter.get(
     const g = grid[0];
     const rate = g && Number(g.hourlyRate) > 0 ? Number(g.hourlyRate) : Number(emp.hourlyRate);
     const baseSalary = g ? Number(g.baseSalary) : 0;
+    const gradeCap = salaryTierCap(emp.gradeName, !!emp.gradeManage);
 
     const weekWindow = (offset: number) => {
       const { monday: start, sunday: end, label } = bizWeek(new Date(), offset);
@@ -122,7 +123,8 @@ meMyPayRouter.get(
       const deductions = o ? Math.round(Number(o.deductions)) : 0;
       const theoretical = Math.max(0, base + caisseCommission + garageCommission + taxiCommission + pawnshopCommission + chasseCommission + runsCommission + concessionCommission + cargaisonShare + bonus + peakBonus - deductions);
       const salaryCap = ex ? Number(ex.salaryCap) : 0;
-      const paid = salaryCap > 0 ? Math.min(theoretical, Math.round(salaryCap)) : theoretical;
+      const capped = salaryCap > 0 ? Math.min(theoretical, Math.round(salaryCap)) : theoretical;
+      const paid = Math.min(capped, gradeCap);
 
       let fzHours = rawHours, fzCapped = cappedHours, fzBase = base, fzCaisse = caisseCommission,
         fzGarage = garageCommission, fzTaxi = taxiCommission, fzPawn = pawnshopCommission,
