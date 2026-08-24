@@ -82,19 +82,37 @@ export function fmtClock(seconds: number): string {
   return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`;
 }
 
+// Le serveur stocke et renvoie les pointages en UTC, au format "YYYY-MM-DD HH:MM:SS",
+// sans marqueur de fuseau : sans le "Z" le navigateur les lirait comme des heures
+// locales et afficherait 11h30 pour un service pris a 13h30.
+const PARIS = 'Europe/Paris';
+
+function utcDate(dt: string): Date {
+  const iso = dt.includes('T') ? dt : dt.replace(' ', 'T');
+  return new Date(/[Zz]$|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`);
+}
+
 export function fmtTime(dt: string): string {
-  return dt.slice(11, 16);
+  const d = utcDate(dt);
+  if (Number.isNaN(d.getTime())) return dt.slice(11, 16);
+  return d.toLocaleTimeString('fr-FR', { timeZone: PARIS, hour: '2-digit', minute: '2-digit' });
 }
 
 export function fmtDay(dt: string): { date: string; weekday: string } {
-  const d = new Date(`${dt.slice(0, 10)}T00:00:00`);
+  const d = utcDate(dt);
   if (Number.isNaN(d.getTime())) return { date: dt.slice(0, 10), weekday: '' };
   return {
-    date: d.toLocaleDateString('fr-FR'),
-    weekday: d.toLocaleDateString('fr-FR', { weekday: 'long' }),
+    date: d.toLocaleDateString('fr-FR', { timeZone: PARIS }),
+    weekday: d.toLocaleDateString('fr-FR', { timeZone: PARIS, weekday: 'long' }),
   };
 }
 
+export function dayKey(dt: string): string {
+  const d = utcDate(dt);
+  if (Number.isNaN(d.getTime())) return dt.slice(0, 10);
+  return new Intl.DateTimeFormat('fr-CA', { timeZone: PARIS, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
+
 export function parseLocal(dt: string): number {
-  return new Date(dt.replace(' ', 'T')).getTime();
+  return utcDate(dt).getTime();
 }

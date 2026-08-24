@@ -38,6 +38,7 @@ import {
   fmtClock,
   fmtTime,
   fmtDay,
+  dayKey,
   parseLocal,
   type AddTimeEntryInput,
   type EditTimeEntryInput,
@@ -205,7 +206,7 @@ function MyClock({ companyId, pausesEnabled }: { companyId: number; pausesEnable
           </div>
           {current && (
             <div className="text-sm text-muted-foreground">
-              Début : {current.clockIn.slice(11, 19)}
+              Début : {fmtTime(current.clockIn)}
               {paused && <span className="ml-2 font-medium text-amber-400">· en pause</span>}
             </div>
           )}
@@ -493,7 +494,7 @@ function TeamView({ companyId }: { companyId: number }) {
     setEditEmpName(emp.name);
     setF({
       employeeId: String(emp.id),
-      date: t.clockIn.slice(0, 10),
+      date: dayKey(t.clockIn),
       clockIn: fmtTime(t.clockIn),
       clockOut: t.clockOut ? fmtTime(t.clockOut) : '',
     });
