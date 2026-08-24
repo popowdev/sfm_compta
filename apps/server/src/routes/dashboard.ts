@@ -141,12 +141,12 @@ meDashboardRouter.get(
         .from(exercices)
         .where(and(eq(exercices.companyId, companyId), eq(exercices.status, 'open'))),
       db
-        .select({ date: bizDayStr(garageRepairs.createdAt), total: sql<string>`COALESCE(SUM(${garageRepairs.total}), 0)` })
+        .select({ date: bizDayStr(garageRepairs.createdAt), total: sql<string>`COALESCE(SUM(${garageRepairs.total}), 0)`, n: sql<number>`COUNT(*)` })
         .from(garageRepairs)
         .where(and(eq(garageRepairs.companyId, companyId), gte(bizDayStr(garageRepairs.createdAt), sinceStr)))
         .groupBy(bizDayStr(garageRepairs.createdAt)),
       db
-        .select({ date: bizDayStr(garageCustoms.createdAt), total: sql<string>`COALESCE(SUM(${garageCustoms.finalPrice}), 0)` })
+        .select({ date: bizDayStr(garageCustoms.createdAt), total: sql<string>`COALESCE(SUM(${garageCustoms.finalPrice}), 0)`, n: sql<number>`COUNT(*)` })
         .from(garageCustoms)
         .where(and(eq(garageCustoms.companyId, companyId), gte(bizDayStr(garageCustoms.createdAt), sinceStr)))
         .groupBy(bizDayStr(garageCustoms.createdAt)),
@@ -177,14 +177,14 @@ meDashboardRouter.get(
       taxiCitDays, taxiCoDays, taxiVipDays, pawnSellDays, chasseSellDays, runsDays, concDays, cargDays,
       concCostRow, chasseBuyRow, pawnBuyRow,
     ] = await Promise.all([
-      db.select({ date: dTaxiCit, total: sql<string>`COALESCE(SUM(${taxiCitoyens.total}),0)` }).from(taxiCitoyens).where(and(eq(taxiCitoyens.companyId, companyId), gte(dTaxiCit, sinceStr))).groupBy(dTaxiCit),
-      db.select({ date: dTaxiCo, total: sql<string>`COALESCE(SUM(${taxiConcitoyens.total}),0)` }).from(taxiConcitoyens).where(and(eq(taxiConcitoyens.companyId, companyId), gte(dTaxiCo, sinceStr))).groupBy(dTaxiCo),
-      db.select({ date: dTaxiVip, total: sql<string>`COALESCE(SUM(${taxiVip.total}),0)` }).from(taxiVip).where(and(eq(taxiVip.companyId, companyId), gte(dTaxiVip, sinceStr))).groupBy(dTaxiVip),
-      db.select({ date: dPawn, total: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.type, 'sell'), gte(dPawn, sinceStr))).groupBy(dPawn),
-      db.select({ date: dChasse, total: sql<string>`COALESCE(SUM(${chasseTransactions.total}),0)` }).from(chasseTransactions).where(and(eq(chasseTransactions.companyId, companyId), eq(chasseTransactions.type, 'sell'), gte(dChasse, sinceStr))).groupBy(dChasse),
-      db.select({ date: dRuns, total: sql<string>`COALESCE(SUM(${companyRuns.total}),0)` }).from(companyRuns).where(and(eq(companyRuns.companyId, companyId), gte(dRuns, sinceStr))).groupBy(dRuns),
-      db.select({ date: dConc, total: sql<string>`COALESCE(SUM(${concessionSales.salePrice}),0)` }).from(concessionSales).where(and(eq(concessionSales.companyId, companyId), gte(dConc, sinceStr))).groupBy(dConc),
-      db.select({ date: dCarg, total: sql<string>`COALESCE(SUM(${companyCargaisons.total}),0)` }).from(companyCargaisons).where(and(eq(companyCargaisons.companyId, companyId), gte(dCarg, sinceStr))).groupBy(dCarg),
+      db.select({ date: dTaxiCit, total: sql<string>`COALESCE(SUM(${taxiCitoyens.total}),0)`, n: sql<number>`COUNT(*)` }).from(taxiCitoyens).where(and(eq(taxiCitoyens.companyId, companyId), gte(dTaxiCit, sinceStr))).groupBy(dTaxiCit),
+      db.select({ date: dTaxiCo, total: sql<string>`COALESCE(SUM(${taxiConcitoyens.total}),0)`, n: sql<number>`COUNT(*)` }).from(taxiConcitoyens).where(and(eq(taxiConcitoyens.companyId, companyId), gte(dTaxiCo, sinceStr))).groupBy(dTaxiCo),
+      db.select({ date: dTaxiVip, total: sql<string>`COALESCE(SUM(${taxiVip.total}),0)`, n: sql<number>`COUNT(*)` }).from(taxiVip).where(and(eq(taxiVip.companyId, companyId), gte(dTaxiVip, sinceStr))).groupBy(dTaxiVip),
+      db.select({ date: dPawn, total: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)`, n: sql<number>`COUNT(*)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.type, 'sell'), gte(dPawn, sinceStr))).groupBy(dPawn),
+      db.select({ date: dChasse, total: sql<string>`COALESCE(SUM(${chasseTransactions.total}),0)`, n: sql<number>`COUNT(*)` }).from(chasseTransactions).where(and(eq(chasseTransactions.companyId, companyId), eq(chasseTransactions.type, 'sell'), gte(dChasse, sinceStr))).groupBy(dChasse),
+      db.select({ date: dRuns, total: sql<string>`COALESCE(SUM(${companyRuns.total}),0)`, n: sql<number>`COUNT(*)` }).from(companyRuns).where(and(eq(companyRuns.companyId, companyId), gte(dRuns, sinceStr))).groupBy(dRuns),
+      db.select({ date: dConc, total: sql<string>`COALESCE(SUM(${concessionSales.salePrice}),0)`, n: sql<number>`COUNT(*)` }).from(concessionSales).where(and(eq(concessionSales.companyId, companyId), gte(dConc, sinceStr))).groupBy(dConc),
+      db.select({ date: dCarg, total: sql<string>`COALESCE(SUM(${companyCargaisons.total}),0)`, n: sql<number>`COUNT(*)` }).from(companyCargaisons).where(and(eq(companyCargaisons.companyId, companyId), gte(dCarg, sinceStr))).groupBy(dCarg),
       db.select({ c: sql<string>`COALESCE(SUM(${concessionSales.purchasePrice}),0)` }).from(concessionSales).where(and(eq(concessionSales.companyId, companyId), gte(dConc, sinceStr))),
       db.select({ c: sql<string>`COALESCE(SUM(${chasseTransactions.total}),0)` }).from(chasseTransactions).where(and(eq(chasseTransactions.companyId, companyId), eq(chasseTransactions.type, 'buy'), gte(dChasse, sinceStr))),
       db.select({ c: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.type, 'buy'), gte(dPawn, sinceStr))),
@@ -195,16 +195,18 @@ meDashboardRouter.get(
     if (seeCaisse) for (const r of dayRows) dayMap.set(r.date, Number(r.total));
 
     let garageTotal = 0;
+    let moduleTxCount = 0;
     if (seeGarage) {
       for (const r of [...garageRepDays, ...garageCustDays]) {
         if (!slotSet.has(r.date)) continue;
         const v = Number(r.total);
         garageTotal += v;
+        moduleTxCount += Number(r.n ?? 0);
         dayMap.set(r.date, (dayMap.get(r.date) ?? 0) + v);
       }
     }
 
-    const moduleDayGroups: { rows: { date: string; total: string }[]; see: boolean }[] = [
+    const moduleDayGroups: { rows: { date: string; total: string; n?: number }[]; see: boolean }[] = [
       { rows: taxiCitDays, see: seeTaxi },
       { rows: taxiCoDays, see: seeTaxi },
       { rows: taxiVipDays, see: seeTaxi },
@@ -221,6 +223,7 @@ meDashboardRouter.get(
         if (!slotSet.has(r.date)) continue;
         const v = Number(r.total);
         moduleTotal += v;
+        moduleTxCount += Number(r.n ?? 0);
         dayMap.set(r.date, (dayMap.get(r.date) ?? 0) + v);
       }
     }
@@ -240,7 +243,7 @@ meDashboardRouter.get(
       sales: seeAnyRevenue
         ? {
             total: round2(salesTotal),
-            count: seeCaisse ? Number(salesAgg[0]?.count ?? 0) : 0,
+            count: (seeCaisse ? Number(salesAgg[0]?.count ?? 0) : 0) + moduleTxCount,
             margin: round2(salesTotal - salesCost),
             byDay,
             topProducts: seeCaisse ? topRows.map((r) => ({ name: r.name, revenue: round2(Number(r.revenue)) })) : [],
