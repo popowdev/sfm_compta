@@ -4,19 +4,12 @@ import { db } from '../db';
 import { userAppRoles } from '../db/schema';
 import { env } from '../env';
 
-const MANAGED_ROLES: AppRole[] = ['staff', 'gouvernement'];
-
-function adminIds(): string[] {
-  return (env.ADMIN_DISCORD_IDS ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
+// Le role 'staff' n'est plus synchronise depuis Discord : il s'attribue uniquement
+// a la main depuis l'administration, pour garder la maitrise de qui l'obtient.
+const MANAGED_ROLES: AppRole[] = ['gouvernement'];
 
 export function computeManagedRoles(discordId: string, guildRoles: string[]): AppRole[] {
   const set = new Set<AppRole>();
-  if (adminIds().includes(discordId)) set.add('staff');
-  if (env.DISCORD_STAFF_ROLE_ID && guildRoles.includes(env.DISCORD_STAFF_ROLE_ID)) set.add('staff');
   if (env.DISCORD_GOUVERNEMENT_ROLE_ID && guildRoles.includes(env.DISCORD_GOUVERNEMENT_ROLE_ID)) {
     set.add('gouvernement');
   }

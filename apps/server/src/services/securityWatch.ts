@@ -15,6 +15,7 @@ const RULES: { kind: string; label: string; re: RegExp }[] = [
   { kind: 'traversal', label: 'traversée de répertoire', re: /(\.\.[/\\]){2,}|%2e%2e(%2f|%5c)|\/etc\/(passwd|shadow)|\/proc\/self/i },
   { kind: 'secret_file', label: 'vol de fichier sensible', re: /\/\.(env|git|htaccess|htpasswd|ssh|aws|npmrc|DS_Store)(\/|$|\.)|\/(id_rsa|web\.config|wp-config\.php|composer\.lock)$/i },
   { kind: 'admin_probe', label: 'sondage admin', re: /\/api\/admin\/(impersonate|login-as|users|sessions|config|settings|roles|staff)|\/(phpmyadmin|wp-admin|wp-login|adminer|xmlrpc\.php)/i },
+  { kind: 'cms_probe', label: 'sondage CMS', re: /\/(phpmyadmin|wp-admin|wp-login|wp-content|adminer|xmlrpc\.php|cgi-bin)/i },
   { kind: 'cmd_injection', label: 'injection de commande', re: /(;|\||`|\$\()\s*(cat|ls|whoami|curl|wget|nc|bash|sh)\s|\/bin\/(bash|sh)\b/i },
 ];
 
@@ -65,7 +66,11 @@ export function securityWatch(req: Request, res: Response, next: NextFunction): 
   const path = String(req.originalUrl || req.url || '').slice(0, 500);
   const ua = String(req.headers['user-agent'] ?? '').slice(0, 300) || null;
   res.on('finish', () => {
-    void record({ ip, hit, method, path, ua, userId: req.user?.id ?? null, status: res.statusCode });
+    const userId = req.user?.id ?? null;
+    // Le serveur a repondu en succes a un compte authentifie : les gardes de
+    // permission ont valide l acces, ce n est pas une intrusion.
+    if (hit.kind === 'admin_probe' && userId != null && res.statusCode < 400) return;
+    void record({ ip, hit, method, path, ua, userId, status: res.statusCode });
   });
   next();
 }
