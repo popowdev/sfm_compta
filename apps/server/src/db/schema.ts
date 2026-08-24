@@ -1439,6 +1439,19 @@ export const concessionVehicles = mysqlTable('concession_vehicles', {
   createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const concessionPurchases = mysqlTable('concession_purchases', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  vehicleName: varchar('vehicle_name', { length: 150 }).notNull(),
+  quantity: int('quantity').notNull().default(1),
+  unitPrice: decimal('unit_price', { precision: 12, scale: 2 }).notNull().default('0'),
+  total: decimal('total', { precision: 14, scale: 2 }).notNull().default('0'),
+  supplier: varchar('supplier', { length: 120 }),
+  note: varchar('note', { length: 255 }),
+  createdByUserId: int('created_by_user_id'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const concessionSales = mysqlTable('concession_sales', {
   id: int('id').autoincrement().primaryKey(),
   companyId: int('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),

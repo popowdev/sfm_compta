@@ -1,13 +1,14 @@
 import { Router, type Request } from 'express';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { moduleConfigBool, moduleConfigNumber } from '@rp-compta/shared';
 import { db } from '../db';
-import { concessionVehicles, concessionSales, companies, companyModules, companyEmployees, companyClients, users } from '../db/schema';
+import { concessionVehicles, concessionSales, concessionPurchases, companies, companyModules, companyEmployees, companyClients, users } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
+import { bizDate, bizWeek } from '../services/bizTime';
 import { emitInvalidate } from '../realtime/socket';
 import { concessionImageUpload, concessionImageUrl } from '../services/upload';
 import { DEFAULT_CONCESSION_VEHICLES } from '../data/concessionDefaults';
@@ -383,5 +384,107 @@ meConcessionRouter.post(
     await db.update(companies).set({ showroomToken: token }).where(eq(companies.id, companyId));
     emitInvalidate(['irs', `company:${companyId}`], [['concession', companyId]]);
     res.json({ ok: true, token });
+  }),
+);
+
+const purchaseCreate = z.object({
+  vehicleName: z.string().trim().min(1).max(150),
+  quantity: z.coerce.number().int().min(1).max(1000).default(1),
+  unitPrice: priceVal,
+  supplier: z.string().trim().max(120).optional(),
+  note: z.string().trim().max(255).optional(),
+});
+
+meConcessionRouter.get(
+  '/purchases',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    const { monday, sunday } = bizWeek();
+    const rows = await db
+      .select({
+        id: concessionPurchases.id,
+        vehicleName: concessionPurchases.vehicleName,
+        quantity: concessionPurchases.quantity,
+        unitPrice: concessionPurchases.unitPrice,
+        total: concessionPurchases.total,
+        supplier: concessionPurchases.supplier,
+        note: concessionPurchases.note,
+        createdAt: concessionPurchases.createdAt,
+        authorName: users.displayName,
+      })
+      .from(concessionPurchases)
+      .leftJoin(users, eq(users.id, concessionPurchases.createdByUserId))
+      .where(eq(concessionPurchases.companyId, companyId))
+      .orderBy(desc(concessionPurchases.createdAt))
+      .limit(200);
+    const weekAgg = await db
+      .select({ total: sql<string>`COALESCE(SUM(${concessionPurchases.total}),0)`, count: sql<number>`COUNT(*)` })
+      .from(concessionPurchases)
+      .where(
+        and(
+          eq(concessionPurchases.companyId, companyId),
+          gte(bizDate(concessionPurchases.createdAt), monday),
+          lte(bizDate(concessionPurchases.createdAt), sunday),
+        ),
+      );
+    res.json({
+      canManage: g.canManage,
+      weekTotal: Math.round(Number(weekAgg[0]?.total ?? 0)),
+      weekCount: Number(weekAgg[0]?.count ?? 0),
+      purchases: rows.map((r) => ({
+        ...r,
+        quantity: Number(r.quantity),
+        unitPrice: Math.round(Number(r.unitPrice)),
+        total: Math.round(Number(r.total)),
+      })),
+    });
+  }),
+);
+
+meConcessionRouter.post(
+  '/purchases',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    if (!companyId) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    const p = purchaseCreate.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: 'bad_request' });
+    const quantity = p.data.quantity;
+    const unitPrice = Math.round(p.data.unitPrice);
+    const total = unitPrice * quantity;
+    const ins = await db.insert(concessionPurchases).values({
+      companyId,
+      vehicleName: p.data.vehicleName,
+      quantity,
+      unitPrice: String(unitPrice),
+      total: String(total),
+      supplier: p.data.supplier || null,
+      note: p.data.note || null,
+      createdByUserId: req.user!.id,
+    });
+    emitInvalidate(['irs', `company:${companyId}`], [['concession', companyId]]);
+    res.status(201).json({ ok: true, id: ins[0].insertId, total });
+  }),
+);
+
+meConcessionRouter.delete(
+  '/purchases/:id',
+  asyncHandler(async (req, res) => {
+    const companyId = parseId(req.params.companyId);
+    const id = parseId(req.params.id);
+    if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
+    const g = await gate(req, companyId);
+    if (!g.ok) return res.status(g.status).json({ error: g.error });
+    if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
+    const r = await db
+      .delete(concessionPurchases)
+      .where(and(eq(concessionPurchases.id, id), eq(concessionPurchases.companyId, companyId)));
+    if (!r[0].affectedRows) return res.status(404).json({ error: 'not_found' });
+    emitInvalidate(['irs', `company:${companyId}`], [['concession', companyId]]);
+    res.json({ ok: true });
   }),
 );

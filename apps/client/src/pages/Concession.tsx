@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useCompany, useModulePerms } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CarFront, Plus, Trash2, Boxes, Receipt, TrendingUp, Coins, X, MoreVertical, Search, ExternalLink, Copy, RefreshCw, Tag, Upload } from 'lucide-react';
+import { CarFront, Plus, Trash2, Boxes, Receipt, TrendingUp, Coins, X, MoreVertical, Search, ExternalLink, Copy, RefreshCw, Tag, Upload, ShoppingCart } from 'lucide-react';
 import { fmtInt } from '@/lib/declarations';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -13,6 +13,9 @@ import {
   addVehicle, updateVehicle, deleteVehicle, uploadVehicleImage,
   addSale, deleteSale, regenerateShowroomToken,
   type ConcessionVehicle, type ConcessionSale, type ConcessionShowroom, type VehicleType, type PastClient,
+  getConcessionPurchases,
+  addPurchase,
+  deletePurchase,
 } from '@/lib/concession';
 import { getClients } from '@/lib/clients';
 
@@ -50,7 +53,7 @@ function Autocomplete<T>({ value, onChange, onPick, placeholder, options, getLab
 const money = (n: number) => `${fmtInt(n)} $`;
 const fmtDay = (s: string) => new Date(String(s).replace(' ', 'T')).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 
-type Tab = 'catalogue' | 'ventes';
+type Tab = 'catalogue' | 'ventes' | 'achats';
 
 export default function Concession() {
   const { companyId, isLoading } = useCompany();
@@ -85,10 +88,12 @@ export default function Concession() {
       <div className="flex flex-wrap items-center gap-1 rounded-xl border bg-card p-1">
         <TabBtn k="catalogue" label="Catalogue" icon={Boxes} />
         <TabBtn k="ventes" label="Ventes" icon={Receipt} />
+        <TabBtn k="achats" label="Achats" icon={ShoppingCart} />
       </div>
 
       {tab === 'catalogue' && <CatalogueTab companyId={companyId} vehicles={vehicles} canManage={canManage} />}
       {tab === 'ventes' && <VentesTab companyId={companyId} vehicles={vehicles} canWrite={canWrite} pastClients={pastClients} />}
+      {tab === 'achats' && <AchatsTab companyId={companyId} canManage={canManage} />}
     </div>
   );
 }
@@ -498,6 +503,144 @@ function ModalShell({ title, onClose, children }: { title: string; onClose: () =
           <button type="button" onClick={onClose} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"><X className="h-4 w-4" /></button>
         </div>
         {children}
+      </div>
+    </div>
+  );
+}
+
+function AchatsTab({ companyId, canManage }: { companyId: number; canManage: boolean }) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const q = useQuery({ queryKey: ['concession', companyId, 'purchases'], queryFn: () => getConcessionPurchases(companyId) });
+  const inv = () => {
+    queryClient.invalidateQueries({ queryKey: ['concession', companyId, 'purchases'] });
+    queryClient.invalidateQueries({ queryKey: ['concession', companyId, 'overview'] });
+  };
+  const [name, setName] = useState('');
+  const [qty, setQty] = useState('1');
+  const [price, setPrice] = useState('');
+  const [supplier, setSupplier] = useState('');
+
+  const add = useMutation({
+    mutationFn: () =>
+      addPurchase(companyId, {
+        vehicleName: name.trim(),
+        quantity: Math.max(1, Math.floor(Number(qty) || 1)),
+        unitPrice: Math.max(0, Math.floor(Number(price) || 0)),
+        supplier: supplier.trim() || undefined,
+      }),
+    onSuccess: () => {
+      toast('Achat enregistré.', 'success');
+      setName(''); setQty('1'); setPrice(''); setSupplier('');
+      inv();
+    },
+    onError: () => toast("Échec de l'enregistrement.", 'error'),
+  });
+  const del = useMutation({ mutationFn: (id: number) => deletePurchase(companyId, id), onSuccess: inv, onError: () => toast('Échec.', 'error') });
+
+  if (q.isLoading) return <Skeleton className="h-64 rounded-xl" />;
+  if (!q.data) return <EmptyState icon={ShoppingCart} title="Achats" hint="Indisponible." />;
+  const { purchases, weekTotal, weekCount } = q.data;
+  const total = Math.max(0, Math.floor(Number(price) || 0)) * Math.max(1, Math.floor(Number(qty) || 1));
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">
+        <span className="font-medium text-amber-300">Ce que tu paies pour approvisionner ton parc.</span>{' '}
+        <span className="text-muted-foreground">
+          Ces achats sont la seule chose déduite en charge dans ta comptabilité — le prix d’achat affiché sur une fiche
+          véhicule ne sert qu’à calculer la marge et la commission du vendeur.
+        </span>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Kpi icon={ShoppingCart} label="Achats de la semaine" value={money(weekTotal)} sub={`${weekCount} achat${weekCount > 1 ? 's' : ''}`} accent="text-destructive" />
+        <Kpi icon={Boxes} label="Achats enregistrés" value={`${purchases.length}`} sub="historique" accent="text-sky-400" />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        {canManage && (
+          <form
+            className="space-y-4 rounded-2xl border bg-card p-6 lg:col-span-1"
+            onSubmit={(e) => { e.preventDefault(); if (!add.isPending && name.trim() && total > 0) add.mutate(); }}
+          >
+            <h3 className="text-sm font-semibold">Enregistrer un achat</h3>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs text-muted-foreground">Véhicule</span>
+              <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex. Bravado Banshee" />
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs text-muted-foreground">Quantité</span>
+                <input type="number" min="1" step="1" className={inputCls} value={qty} onChange={(e) => setQty(e.target.value)} />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs text-muted-foreground">Prix unitaire ($)</span>
+                <input type="number" min="0" step="1" className={inputCls} value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" />
+              </label>
+            </div>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs text-muted-foreground">Fournisseur (optionnel)</span>
+              <input className={inputCls} value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="Ex. Import Los Santos" />
+            </label>
+            <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-xs text-muted-foreground">Total payé</span>
+                <span className="text-lg font-bold text-destructive">{money(total)}</span>
+              </div>
+            </div>
+            <Button type="submit" className="w-full" disabled={add.isPending || !name.trim() || total <= 0}>
+              <Plus className="h-4 w-4" /> {add.isPending ? 'Enregistrement…' : "Enregistrer l'achat"}
+            </Button>
+          </form>
+        )}
+
+        <div className={`rounded-2xl border bg-card p-6 ${canManage ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+          <h3 className="mb-3 text-sm font-semibold">Historique des achats</h3>
+          {purchases.length === 0 ? (
+            <EmptyState icon={ShoppingCart} title="Aucun achat enregistré" hint={canManage ? 'Enregistre ton premier approvisionnement.' : 'Rien pour le moment.'} />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="py-2 text-left font-semibold">Date</th>
+                    <th className="py-2 text-left font-semibold">Véhicule</th>
+                    <th className="py-2 text-right font-semibold">Qté</th>
+                    <th className="py-2 text-right font-semibold">Prix unit.</th>
+                    <th className="py-2 text-right font-semibold">Total</th>
+                    <th className="py-2 text-left font-semibold">Fournisseur</th>
+                    {canManage && <th className="py-2" />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {purchases.map((p) => (
+                    <tr key={p.id} className="border-b align-top last:border-b-0">
+                      <td className="py-2 whitespace-nowrap text-muted-foreground">{new Date(p.createdAt).toLocaleDateString('fr-FR')}</td>
+                      <td className="py-2 font-medium">{p.vehicleName}</td>
+                      <td className="py-2 text-right">{p.quantity}</td>
+                      <td className="py-2 text-right text-muted-foreground">{money(p.unitPrice)}</td>
+                      <td className="py-2 text-right font-semibold text-destructive">{money(p.total)}</td>
+                      <td className="py-2 text-muted-foreground">{p.supplier ?? '—'}</td>
+                      {canManage && (
+                        <td className="py-2 text-right">
+                          <button
+                            type="button"
+                            className="rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            onClick={async () => { if (await confirm({ title: 'Supprimer cet achat ?', message: `${p.vehicleName} · ${money(p.total)}`, destructive: true })) del.mutate(p.id); }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

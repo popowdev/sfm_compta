@@ -25,6 +25,7 @@ import {
   chasseTransactions,
   companyRuns,
   concessionSales,
+  concessionPurchases,
   companyCargaisons,
   cargaisonParticipants,
 } from '../db/schema';
@@ -750,7 +751,6 @@ async function buildExerciceDetail(companyId: number, id: number) {
         addRev(concessionRevByEmp, r.userId, Number(r.total));
         concessionRevenueTotal += Number(r.total);
         concessionTxCount += Number(r.count);
-        concessionPurchaseTotal += Number(r.purchase);
         const empId = r.userId != null ? empByUser.get(r.userId) : undefined;
         if (empId != null) {
           concessionCommByEmp.set(empId, (concessionCommByEmp.get(empId) ?? 0) + Number(r.comm));
@@ -766,6 +766,17 @@ async function buildExerciceDetail(companyId: number, id: number) {
       ]);
       pawnshopBuyTotal = Number(pawnBuyRow[0]?.c ?? 0);
       chasseBuyTotal = Number(chasseBuyRow[0]?.c ?? 0);
+      const concPurchRow = await db
+        .select({ c: sql<string>`COALESCE(SUM(${concessionPurchases.total}),0)` })
+        .from(concessionPurchases)
+        .where(
+          and(
+            eq(concessionPurchases.companyId, companyId),
+            gte(bizDate(concessionPurchases.createdAt), ex.startDate),
+            lte(bizDate(concessionPurchases.createdAt), ex.endDate),
+          ),
+        );
+      concessionPurchaseTotal = Number(concPurchRow[0]?.c ?? 0);
     }
 
     const roleRows = await db

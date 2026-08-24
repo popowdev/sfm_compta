@@ -113,3 +113,26 @@ export interface ShowroomData {
   vehicles: ShowroomVehicle[];
 }
 export const getShowroom = (token: string) => apiFetch<ShowroomData>(`/api/showroom/${encodeURIComponent(token)}`);
+
+export interface ConcessionPurchase {
+  id: number;
+  vehicleName: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  supplier: string | null;
+  note: string | null;
+  createdAt: string;
+  authorName: string | null;
+}
+export interface PurchaseInput {
+  vehicleName: string;
+  quantity: number;
+  unitPrice: number;
+  supplier?: string;
+  note?: string;
+}
+export const getConcessionPurchases = (c: number) =>
+  apiFetch<{ canManage: boolean; weekTotal: number; weekCount: number; purchases: ConcessionPurchase[] }>(`${base(c)}/purchases`);
+export const addPurchase = (c: number, b: PurchaseInput) => post(`${base(c)}/purchases`, b);
+export const deletePurchase = (c: number, id: number) => del(`${base(c)}/purchases/${id}`);
