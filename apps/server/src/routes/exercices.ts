@@ -703,6 +703,9 @@ async function buildExerciceDetail(companyId: number, id: number) {
     let chasseRevenueTotal = 0;
     let concessionRevenueTotal = 0;
     let concessionTxCount = 0;
+    let concessionPurchaseTotal = 0;
+    let pawnshopBuyTotal = 0;
+    let chasseBuyTotal = 0;
     let taxiTxCount = 0;
     let pawnshopTxCount = 0;
     let chasseTxCount = 0;
@@ -724,7 +727,7 @@ async function buildExerciceDetail(companyId: number, id: number) {
         db.select({ userId: taxiVip.driverUserId, total: sql<string>`COALESCE(SUM(${taxiVip.total}),0)`, count: sql<number>`COUNT(*)` }).from(taxiVip).where(and(eq(taxiVip.companyId, companyId), gte(bizDate(taxiVip.createdAt), ex.startDate), lte(bizDate(taxiVip.createdAt), ex.endDate))).groupBy(taxiVip.driverUserId),
         db.select({ userId: pawnshopTransactions.createdByUserId, total: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)`, count: sql<number>`COUNT(*)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.type, 'sell'), gte(bizDate(pawnshopTransactions.createdAt), ex.startDate), lte(bizDate(pawnshopTransactions.createdAt), ex.endDate))).groupBy(pawnshopTransactions.createdByUserId),
         db.select({ userId: chasseTransactions.createdByUserId, total: sql<string>`COALESCE(SUM(${chasseTransactions.total}),0)`, count: sql<number>`COUNT(*)` }).from(chasseTransactions).where(and(eq(chasseTransactions.companyId, companyId), eq(chasseTransactions.type, 'sell'), gte(bizDate(chasseTransactions.createdAt), ex.startDate), lte(bizDate(chasseTransactions.createdAt), ex.endDate))).groupBy(chasseTransactions.createdByUserId),
-        db.select({ userId: concessionSales.createdByUserId, comm: sql<string>`COALESCE(SUM(${concessionSales.commission}),0)`, total: sql<string>`COALESCE(SUM(${concessionSales.salePrice}),0)`, margin: sql<string>`COALESCE(SUM(${concessionSales.salePrice} - ${concessionSales.purchasePrice}),0)`, count: sql<number>`COUNT(*)` }).from(concessionSales).where(and(eq(concessionSales.companyId, companyId), gte(bizDate(concessionSales.createdAt), ex.startDate), lte(bizDate(concessionSales.createdAt), ex.endDate))).groupBy(concessionSales.createdByUserId),
+        db.select({ userId: concessionSales.createdByUserId, comm: sql<string>`COALESCE(SUM(${concessionSales.commission}),0)`, total: sql<string>`COALESCE(SUM(${concessionSales.salePrice}),0)`, purchase: sql<string>`COALESCE(SUM(${concessionSales.purchasePrice}),0)`, margin: sql<string>`COALESCE(SUM(${concessionSales.salePrice} - ${concessionSales.purchasePrice}),0)`, count: sql<number>`COUNT(*)` }).from(concessionSales).where(and(eq(concessionSales.companyId, companyId), gte(bizDate(concessionSales.createdAt), ex.startDate), lte(bizDate(concessionSales.createdAt), ex.endDate))).groupBy(concessionSales.createdByUserId),
         db.select({ date: bizDayStr(concessionSales.createdAt), total: sql<string>`COALESCE(SUM(${concessionSales.salePrice}),0)` }).from(concessionSales).where(and(eq(concessionSales.companyId, companyId), gte(bizDate(concessionSales.createdAt), ex.startDate), lte(bizDate(concessionSales.createdAt), ex.endDate))).groupBy(bizDayStr(concessionSales.createdAt)),
         db.select({ date: dTxCit, total: sql<string>`COALESCE(SUM(${taxiCitoyens.total}),0)` }).from(taxiCitoyens).where(and(eq(taxiCitoyens.companyId, companyId), gte(bizDate(taxiCitoyens.createdAt), ex.startDate), lte(bizDate(taxiCitoyens.createdAt), ex.endDate))).groupBy(dTxCit),
         db.select({ date: dTxCon, total: sql<string>`COALESCE(SUM(${taxiConcitoyens.total}),0)` }).from(taxiConcitoyens).where(and(eq(taxiConcitoyens.companyId, companyId), gte(bizDate(taxiConcitoyens.createdAt), ex.startDate), lte(bizDate(taxiConcitoyens.createdAt), ex.endDate))).groupBy(dTxCon),
@@ -747,6 +750,7 @@ async function buildExerciceDetail(companyId: number, id: number) {
         addRev(concessionRevByEmp, r.userId, Number(r.total));
         concessionRevenueTotal += Number(r.total);
         concessionTxCount += Number(r.count);
+        concessionPurchaseTotal += Number(r.purchase);
         const empId = r.userId != null ? empByUser.get(r.userId) : undefined;
         if (empId != null) {
           concessionCommByEmp.set(empId, (concessionCommByEmp.get(empId) ?? 0) + Number(r.comm));
@@ -756,6 +760,12 @@ async function buildExerciceDetail(companyId: number, id: number) {
       }
       for (const r of concessionDay) concessionByDay.set(r.date, (concessionByDay.get(r.date) ?? 0) + Number(r.total));
       for (const rows of [txCitDay, txConDay, txVipDay, pawnDay, chasseDay]) for (const r of rows) otherModByDay.set(r.date, (otherModByDay.get(r.date) ?? 0) + Number(r.total));
+      const [pawnBuyRow, chasseBuyRow] = await Promise.all([
+        db.select({ c: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.type, 'buy'), gte(bizDate(pawnshopTransactions.createdAt), ex.startDate), lte(bizDate(pawnshopTransactions.createdAt), ex.endDate))),
+        db.select({ c: sql<string>`COALESCE(SUM(${chasseTransactions.total}),0)` }).from(chasseTransactions).where(and(eq(chasseTransactions.companyId, companyId), eq(chasseTransactions.type, 'buy'), gte(bizDate(chasseTransactions.createdAt), ex.startDate), lte(bizDate(chasseTransactions.createdAt), ex.endDate))),
+      ]);
+      pawnshopBuyTotal = Number(pawnBuyRow[0]?.c ?? 0);
+      chasseBuyTotal = Number(chasseBuyRow[0]?.c ?? 0);
     }
 
     const roleRows = await db
@@ -849,7 +859,9 @@ async function buildExerciceDetail(companyId: number, id: number) {
     const salesGross = round2(Number(aggRows[0]?.gross ?? 0));
     const salesDiscount = round2(Number(aggRows[0]?.discount ?? 0));
     const salesNet = round2(Number(aggRows[0]?.net ?? 0));
-    const productionCost = round2(Number(aggRows[0]?.cost ?? 0) + garagePartsCost);
+    const productionCost = round2(
+      Number(aggRows[0]?.cost ?? 0) + garagePartsCost + concessionPurchaseTotal + pawnshopBuyTotal + chasseBuyTotal,
+    );
     const salesCount = Number(aggRows[0]?.count ?? 0) + garageTxCount + concessionTxCount + taxiTxCount + pawnshopTxCount + chasseTxCount + runsTxCount + cargaisonTxCount;
     const componentPurchases = round2(Number(purchRows[0]?.purchases ?? 0));
 

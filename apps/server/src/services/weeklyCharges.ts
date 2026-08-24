@@ -67,7 +67,7 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
     db.select({ userId: taxiVip.driverUserId, total: sql<string>`COALESCE(SUM(${taxiVip.total}),0)` }).from(taxiVip).where(and(eq(taxiVip.companyId, companyId), inDay(taxiVip.createdAt))).groupBy(taxiVip.driverUserId),
     db.select({ userId: pawnshopTransactions.createdByUserId, total: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.type, 'sell'), inDay(pawnshopTransactions.createdAt))).groupBy(pawnshopTransactions.createdByUserId),
     db.select({ userId: chasseTransactions.createdByUserId, total: sql<string>`COALESCE(SUM(${chasseTransactions.total}),0)` }).from(chasseTransactions).where(and(eq(chasseTransactions.companyId, companyId), eq(chasseTransactions.type, 'sell'), inDay(chasseTransactions.createdAt))).groupBy(chasseTransactions.createdByUserId),
-    db.select({ userId: concessionSales.createdByUserId, comm: sql<string>`COALESCE(SUM(${concessionSales.commission}),0)`, total: sql<string>`COALESCE(SUM(${concessionSales.salePrice}),0)` }).from(concessionSales).where(and(eq(concessionSales.companyId, companyId), inDay(concessionSales.createdAt))).groupBy(concessionSales.createdByUserId),
+    db.select({ userId: concessionSales.createdByUserId, comm: sql<string>`COALESCE(SUM(${concessionSales.commission}),0)`, total: sql<string>`COALESCE(SUM(${concessionSales.salePrice}),0)`, purchase: sql<string>`COALESCE(SUM(${concessionSales.purchasePrice}),0)` }).from(concessionSales).where(and(eq(concessionSales.companyId, companyId), inDay(concessionSales.createdAt))).groupBy(concessionSales.createdByUserId),
     db.select({ userId: garageRepairs.mechanicUserId, commission: sql<string>`COALESCE(SUM(${garageRepairs.commissionAmount}),0)`, revenue: sql<string>`COALESCE(SUM(${garageRepairs.total}),0)` }).from(garageRepairs).where(and(eq(garageRepairs.companyId, companyId), inDay(garageRepairs.createdAt))).groupBy(garageRepairs.mechanicUserId),
     db.select({ userId: garageCustoms.mechanicUserId, commission: sql<string>`COALESCE(SUM(${garageCustoms.commissionAmount}),0)`, revenue: sql<string>`COALESCE(SUM(${garageCustoms.finalPrice}),0)` }).from(garageCustoms).where(and(eq(garageCustoms.companyId, companyId), inDay(garageCustoms.createdAt))).groupBy(garageCustoms.mechanicUserId),
     peakEnabled && peakMultiplier > 1
@@ -75,10 +75,19 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
       : Promise.resolve([] as { employeeId: number; clockIn: string; clockOut: string | null }[]),
   ]);
 
-  const [garagePartsRow] = await Promise.all([
+  const [garagePartsRow, pawnBuyRow, chasseBuyRow] = await Promise.all([
     db.select({ c: sql<string>`COALESCE(SUM(${garageCustoms.costPrice}),0)` }).from(garageCustoms).where(and(eq(garageCustoms.companyId, companyId), inDay(garageCustoms.createdAt))),
+    db.select({ c: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.type, 'buy'), inDay(pawnshopTransactions.createdAt))),
+    db.select({ c: sql<string>`COALESCE(SUM(${chasseTransactions.total}),0)` }).from(chasseTransactions).where(and(eq(chasseTransactions.companyId, companyId), eq(chasseTransactions.type, 'buy'), inDay(chasseTransactions.createdAt))),
   ]);
-  const productionCost = round2(Number(salesAgg[0]?.cost ?? 0) + Number(garagePartsRow[0]?.c ?? 0));
+  const concessionPurchase = concessionRows.reduce((s2, r) => s2 + Number(r.purchase ?? 0), 0);
+  const productionCost = round2(
+    Number(salesAgg[0]?.cost ?? 0) +
+      Number(garagePartsRow[0]?.c ?? 0) +
+      concessionPurchase +
+      Number(pawnBuyRow[0]?.c ?? 0) +
+      Number(chasseBuyRow[0]?.c ?? 0),
+  );
 
   const [cargaisonRevRow, cargaisonShareRows] = await Promise.all([
     db.select({ total: sql<string>`COALESCE(SUM(${companyCargaisons.total}),0)`, importCost: sql<string>`COALESCE(SUM(${companyCargaisons.importCost}),0)` }).from(companyCargaisons).where(and(eq(companyCargaisons.companyId, companyId), inDay(companyCargaisons.createdAt))),
