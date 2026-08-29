@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCompany, useModulePerms } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CarFront, Plus, Trash2, Boxes, Receipt, TrendingUp, Coins, X, MoreVertical, Search, ExternalLink, Copy, RefreshCw, Tag, Upload, ShoppingCart } from 'lucide-react';
@@ -29,30 +29,60 @@ function Autocomplete<T>({ value, onChange, onPick, placeholder, options, getLab
   browseOnFocus?: boolean; maxResults?: number;
 }) {
   const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
   const q = value.trim().toLowerCase();
   const limit = maxResults ?? 8;
-  const hay = (o: T) => (getSearchText ? getSearchText(o) : getLabel(o)).toLowerCase();
-  const matches = q ? options.filter((o) => hay(o).includes(q)).slice(0, limit) : browseOnFocus ? options.slice(0, limit) : [];
-  const showList = open && (q.length > 0 || (browseOnFocus === true && matches.length > 0));
+  const matches = useMemo(() => {
+    const hay = (o: T) => (getSearchText ? getSearchText(o) : getLabel(o)).toLowerCase();
+    const base = q ? options.filter((o) => hay(o).includes(q)) : browseOnFocus ? options : [];
+    return base.slice(0, limit);
+  }, [q, options, limit, browseOnFocus, getSearchText, getLabel]);
+  useEffect(() => { setHi(0); }, [q]);
+  useEffect(() => {
+    if (!open) return;
+    listRef.current?.querySelector<HTMLElement>(`[data-i="${hi}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [hi, open]);
+  const choose = (o: T) => { onPick(o); setOpen(false); };
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') { setOpen(false); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!open) { setOpen(true); return; }
+      setHi((i) => (e.key === 'ArrowDown' ? Math.min(i + 1, matches.length - 1) : Math.max(i - 1, 0)));
+      return;
+    }
+    if (e.key === 'Enter' && open && matches[hi]) { e.preventDefault(); choose(matches[hi]); }
+  };
+  const visible = open && (q.length > 0 || (browseOnFocus === true && matches.length > 0));
   return (
     <div className="relative">
       <input className={inputCls} value={value} autoFocus={autoFocus} placeholder={placeholder}
         onChange={(e) => { onChange(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)} onBlur={() => window.setTimeout(() => setOpen(false), 120)} />
-      {showList && (
-        <div className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-popover p-1 shadow-lg">
+        onClick={() => setOpen(true)} onKeyDown={onKey}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)} />
+      {visible && (
+        <div ref={listRef} className="absolute z-30 mt-1 max-h-80 w-full overflow-auto rounded-md border bg-popover p-1 shadow-xl">
           {matches.length === 0 ? (
             <div className="px-2 py-2 text-xs text-muted-foreground">{emptyHint ?? 'Aucun résultat — saisie libre conservée.'}</div>
-          ) : matches.map((o) => (
-            <button type="button" key={getKey(o)} onMouseDown={(e) => { e.preventDefault(); onPick(o); setOpen(false); }}
-              className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent">
-              <span className="flex min-w-0 items-center gap-2">
-                <span className="truncate">{getLabel(o)}</span>
-                {getSub?.(o) ? <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">{getSub(o)}</span> : null}
-              </span>
-              {renderRight && <span className="shrink-0 text-xs text-muted-foreground">{renderRight(o)}</span>}
-            </button>
-          ))}
+          ) : (
+            <>
+              <div className="flex items-center justify-between px-2 pb-1 pt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                <span>{matches.length}{options.length > matches.length ? ` sur ${options.length}` : ''} résultat{matches.length > 1 ? 's' : ''}</span>
+                <span className="hidden sm:inline">↑↓ puis Entrée</span>
+              </div>
+              {matches.map((o, i) => (
+                <button type="button" key={getKey(o)} data-i={i}
+                  onMouseDown={(e) => { e.preventDefault(); choose(o); }}
+                  onMouseEnter={() => setHi(i)}
+                  className={`flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm ${i === hi ? 'bg-accent' : ''}`}>
+                  <span className="min-w-0 flex-1 truncate font-medium">{getLabel(o)}</span>
+                  {getSub?.(o) ? <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">{getSub(o)}</span> : null}
+                  {renderRight && <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">{renderRight(o)}</span>}
+                </button>
+              ))}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -66,7 +96,7 @@ type Tab = 'catalogue' | 'ventes' | 'achats';
 export default function Concession() {
   const { companyId, isLoading } = useCompany();
   const canManage = useModulePerms('concession').canDelete;
-  const [tab, setTab] = useState<Tab>('catalogue');
+  const [tab, setTab] = useState<Tab>('ventes');
   const q = useQuery({ queryKey: ['concession', companyId, 'overview'], queryFn: () => getConcessionOverview(companyId), enabled: !!companyId });
 
   if (isLoading || q.isLoading) return <div className="space-y-4"><Skeleton className="h-24 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
@@ -94,9 +124,9 @@ export default function Concession() {
       {canWrite && <ShowroomBanner companyId={companyId} showroom={showroom} canManage={canManage} />}
 
       <div className="flex flex-wrap items-center gap-1 rounded-xl border bg-card p-1">
-        <TabBtn k="catalogue" label="Catalogue" icon={Boxes} />
         <TabBtn k="ventes" label="Ventes" icon={Receipt} />
         <TabBtn k="achats" label="Achats" icon={ShoppingCart} />
+        <TabBtn k="catalogue" label="Catalogue" icon={Boxes} />
       </div>
 
       {tab === 'catalogue' && <CatalogueTab companyId={companyId} vehicles={vehicles} canManage={canManage} />}
@@ -463,7 +493,7 @@ function SaleModal({ companyId, vehicles, pastClients, onClose, onSaved }: { com
   });
 
   return (
-    <ModalShell title="Nouvelle vente de véhicule" onClose={onClose}>
+    <ModalShell title="Nouvelle vente de véhicule" onClose={onClose} wide>
       <form className="space-y-3 p-5" onSubmit={(e) => { e.preventDefault(); if (valid && !save.isPending) save.mutate(); }}>
         <div className="flex items-end gap-2">
           <label className="block min-w-0 flex-1 text-sm">
@@ -473,7 +503,12 @@ function SaleModal({ companyId, vehicles, pastClients, onClose, onSaved }: { com
               options={vehiclePool} getLabel={(v) => v.name} getKey={(v) => v.id}
               getSearchText={(v) => `${v.name} ${v.category}`} getSub={(v) => v.category}
               browseOnFocus maxResults={12}
-              renderRight={(v) => `${money(v.purchasePrice)} → ${money(v.salePrice)}`}
+              renderRight={(v) => (
+                <span className="flex items-center gap-2">
+                  <span>{money(v.purchasePrice)} → {money(v.salePrice)}</span>
+                  <span className="font-semibold text-emerald-400">+{money(v.salePrice - v.purchasePrice)}</span>
+                </span>
+              )}
               onChange={(v) => { setVehicleName(v); setVehicleId(null); }}
               onPick={(v) => { setVehicleId(v.id); setVehicleName(v.name); setBuy(String(v.purchasePrice)); setSell(String(v.salePrice)); }}
               emptyHint="Aucun modèle — le nom saisi sera utilisé tel quel." />
@@ -517,10 +552,10 @@ function SaleModal({ companyId, vehicles, pastClients, onClose, onSaved }: { com
   );
 }
 
-function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function ModalShell({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-xl border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className={`w-full ${wide ? 'max-w-2xl' : 'max-w-md'} rounded-xl border bg-card shadow-xl`} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b px-5 py-4">
           <h2 className="text-sm font-semibold">{title}</h2>
           <button type="button" onClick={onClose} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"><X className="h-4 w-4" /></button>
