@@ -984,6 +984,12 @@ function ExerciceDetailView({
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8" data-tour="ex-kpis">
         <Kpi icon={ShoppingCart} label="Chiffre d'affaires" value={`${fmtMoney(s.caNet)} $`} accent="text-primary" />
         <Kpi icon={ShoppingCart} label="Nombre de ventes" value={`${s.salesCount}`} />
+        {!stocksEnabled && s.concessionCost > 0 && (
+          <>
+            <Kpi icon={TrendingUp} label="Marge brute" value={`${fmtMoney(s.grossMargin)} $`} accent="text-sky-400" />
+            <Kpi icon={Package} label="Achat véhicules" value={`${fmtMoney(s.concessionCost)} $`} accent="text-amber-400" />
+          </>
+        )}
         {stocksEnabled && (
           <>
             <Kpi icon={TrendingUp} label="Marge brute" value={`${fmtMoney(s.grossMargin)} $`} accent="text-sky-400" />
@@ -1021,7 +1027,8 @@ function ExerciceDetailView({
             lines={[
               ['Commissions employés', `${fmtInt(s.payrollCompany)} $`],
               ['Dépenses', `${fmtMoney(s.expensesTotal)} $`],
-              ...(s.productionCost > 0 ? [['Coût de production', `${fmtMoney(s.productionCost)} $`] as [string, string]] : []),
+              ...(s.concessionCost > 0 ? [['Achat des véhicules', `${fmtMoney(s.concessionCost)} $`] as [string, string]] : []),
+              ...(s.productionCost - s.concessionCost > 0 ? [['Coût de production', `${fmtMoney(s.productionCost - s.concessionCost)} $`] as [string, string]] : []),
               ...(s.payrollState > 0 ? [['Salaires de base (payés par l’IRS)', `hors charges · ${fmtInt(s.payrollState)} $`] as [string, string]] : []),
             ]}
             caption="Les salaires payés + toutes les dépenses." />

@@ -25,7 +25,6 @@ import {
   chasseTransactions,
   companyRuns,
   concessionSales,
-  concessionPurchases,
   companyCargaisons,
   cargaisonParticipants,
 } from '../db/schema';
@@ -704,7 +703,7 @@ async function buildExerciceDetail(companyId: number, id: number) {
     let chasseRevenueTotal = 0;
     let concessionRevenueTotal = 0;
     let concessionTxCount = 0;
-    let concessionPurchaseTotal = 0;
+    let concessionCostTotal = 0;
     let pawnshopBuyTotal = 0;
     let chasseBuyTotal = 0;
     let taxiTxCount = 0;
@@ -750,6 +749,7 @@ async function buildExerciceDetail(companyId: number, id: number) {
       for (const r of concessionSell) {
         addRev(concessionRevByEmp, r.userId, Number(r.total));
         concessionRevenueTotal += Number(r.total);
+        concessionCostTotal += Number(r.purchase);
         concessionTxCount += Number(r.count);
         const empId = r.userId != null ? empByUser.get(r.userId) : undefined;
         if (empId != null) {
@@ -766,17 +766,6 @@ async function buildExerciceDetail(companyId: number, id: number) {
       ]);
       pawnshopBuyTotal = Number(pawnBuyRow[0]?.c ?? 0);
       chasseBuyTotal = Number(chasseBuyRow[0]?.c ?? 0);
-      const concPurchRow = await db
-        .select({ c: sql<string>`COALESCE(SUM(${concessionPurchases.total}),0)` })
-        .from(concessionPurchases)
-        .where(
-          and(
-            eq(concessionPurchases.companyId, companyId),
-            gte(bizDate(concessionPurchases.createdAt), ex.startDate),
-            lte(bizDate(concessionPurchases.createdAt), ex.endDate),
-          ),
-        );
-      concessionPurchaseTotal = Number(concPurchRow[0]?.c ?? 0);
     }
 
     const roleRows = await db
@@ -871,7 +860,7 @@ async function buildExerciceDetail(companyId: number, id: number) {
     const salesDiscount = round2(Number(aggRows[0]?.discount ?? 0));
     const salesNet = round2(Number(aggRows[0]?.net ?? 0));
     const productionCost = round2(
-      Number(aggRows[0]?.cost ?? 0) + garagePartsCost + concessionPurchaseTotal + pawnshopBuyTotal + chasseBuyTotal,
+      Number(aggRows[0]?.cost ?? 0) + garagePartsCost + concessionCostTotal + pawnshopBuyTotal + chasseBuyTotal,
     );
     const salesCount = Number(aggRows[0]?.count ?? 0) + garageTxCount + concessionTxCount + taxiTxCount + pawnshopTxCount + chasseTxCount + runsTxCount + cargaisonTxCount;
     const componentPurchases = round2(Number(purchRows[0]?.purchases ?? 0));
@@ -937,6 +926,7 @@ async function buildExerciceDetail(companyId: number, id: number) {
         caNet,
         totalRevenue: caNet,
         productionCost,
+        concessionCost: Math.round(concessionCostTotal),
         grossMargin,
         componentPurchases,
         salesCount,

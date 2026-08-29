@@ -97,6 +97,7 @@ export interface ExerciceSummary {
   caNet: number;
   totalRevenue: number;
   productionCost: number;
+  concessionCost: number;
   grossMargin: number;
   componentPurchases: number;
   salesCount: number;

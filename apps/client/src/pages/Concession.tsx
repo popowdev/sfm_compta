@@ -21,27 +21,35 @@ import { getClients } from '@/lib/clients';
 
 const inputCls = 'h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
 
-function Autocomplete<T>({ value, onChange, onPick, placeholder, options, getLabel, getKey, renderRight, autoFocus, emptyHint }: {
+function Autocomplete<T>({ value, onChange, onPick, placeholder, options, getLabel, getKey, getSearchText, getSub, renderRight, autoFocus, emptyHint, browseOnFocus, maxResults }: {
   value: string; onChange: (v: string) => void; onPick: (o: T) => void;
   placeholder?: string; options: T[]; getLabel: (o: T) => string; getKey: (o: T) => string | number;
+  getSearchText?: (o: T) => string; getSub?: (o: T) => string | null;
   renderRight?: (o: T) => React.ReactNode; autoFocus?: boolean; emptyHint?: string;
+  browseOnFocus?: boolean; maxResults?: number;
 }) {
   const [open, setOpen] = useState(false);
   const q = value.trim().toLowerCase();
-  const matches = q ? options.filter((o) => getLabel(o).toLowerCase().includes(q)).slice(0, 8) : [];
+  const limit = maxResults ?? 8;
+  const hay = (o: T) => (getSearchText ? getSearchText(o) : getLabel(o)).toLowerCase();
+  const matches = q ? options.filter((o) => hay(o).includes(q)).slice(0, limit) : browseOnFocus ? options.slice(0, limit) : [];
+  const showList = open && (q.length > 0 || (browseOnFocus === true && matches.length > 0));
   return (
     <div className="relative">
       <input className={inputCls} value={value} autoFocus={autoFocus} placeholder={placeholder}
         onChange={(e) => { onChange(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)} onBlur={() => window.setTimeout(() => setOpen(false), 120)} />
-      {open && q.length > 0 && (
+      {showList && (
         <div className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-popover p-1 shadow-lg">
           {matches.length === 0 ? (
             <div className="px-2 py-2 text-xs text-muted-foreground">{emptyHint ?? 'Aucun résultat — saisie libre conservée.'}</div>
           ) : matches.map((o) => (
             <button type="button" key={getKey(o)} onMouseDown={(e) => { e.preventDefault(); onPick(o); setOpen(false); }}
               className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent">
-              <span className="truncate">{getLabel(o)}</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate">{getLabel(o)}</span>
+                {getSub?.(o) ? <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">{getSub(o)}</span> : null}
+              </span>
               {renderRight && <span className="shrink-0 text-xs text-muted-foreground">{renderRight(o)}</span>}
             </button>
           ))}
@@ -403,6 +411,9 @@ interface ClientOption { id: number | null; name: string; hint: string }
 function SaleModal({ companyId, vehicles, pastClients, onClose, onSaved }: { companyId: number; vehicles: ConcessionVehicle[]; pastClients: PastClient[]; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const available = useMemo(() => vehicles.filter((v) => v.available), [vehicles]);
+  const [cat, setCat] = useState('');
+  const cats = useMemo(() => Array.from(new Set(available.map((v) => v.category).filter(Boolean))).sort((x, y) => x.localeCompare(y)), [available]);
+  const vehiclePool = useMemo(() => (cat ? available.filter((v) => v.category === cat) : available), [available, cat]);
   const clientsQuery = useQuery({ queryKey: ['clients', companyId], queryFn: () => getClients(companyId), enabled: !!companyId, retry: false });
   const clientOptions = useMemo<ClientOption[]>(() => {
     const seen = new Set<string>();
@@ -454,15 +465,27 @@ function SaleModal({ companyId, vehicles, pastClients, onClose, onSaved }: { com
   return (
     <ModalShell title="Nouvelle vente de véhicule" onClose={onClose}>
       <form className="space-y-3 p-5" onSubmit={(e) => { e.preventDefault(); if (valid && !save.isPending) save.mutate(); }}>
-        <label className="block text-sm">
-          <span className="mb-1 block text-xs text-muted-foreground">Véhicule {vehicleId ? '· lié au catalogue' : ''}</span>
-          <Autocomplete<ConcessionVehicle>
-            value={vehicleName} placeholder="Tape pour rechercher un modèle…" autoFocus
-            options={available} getLabel={(v) => v.name} getKey={(v) => v.id} renderRight={(v) => money(v.salePrice)}
-            onChange={(v) => { setVehicleName(v); setVehicleId(null); }}
-            onPick={(v) => { setVehicleId(v.id); setVehicleName(v.name); setBuy(String(v.purchasePrice)); setSell(String(v.salePrice)); }}
-            emptyHint="Aucun modèle — le nom saisi sera utilisé tel quel." />
-        </label>
+        <div className="flex items-end gap-2">
+          <label className="block min-w-0 flex-1 text-sm">
+            <span className="mb-1 block text-xs text-muted-foreground">Véhicule {vehicleId ? '· prix importés du catalogue' : ''}</span>
+            <Autocomplete<ConcessionVehicle>
+              value={vehicleName} placeholder="Nom ou catégorie — clique pour parcourir…" autoFocus
+              options={vehiclePool} getLabel={(v) => v.name} getKey={(v) => v.id}
+              getSearchText={(v) => `${v.name} ${v.category}`} getSub={(v) => v.category}
+              browseOnFocus maxResults={12}
+              renderRight={(v) => `${money(v.purchasePrice)} → ${money(v.salePrice)}`}
+              onChange={(v) => { setVehicleName(v); setVehicleId(null); }}
+              onPick={(v) => { setVehicleId(v.id); setVehicleName(v.name); setBuy(String(v.purchasePrice)); setSell(String(v.salePrice)); }}
+              emptyHint="Aucun modèle — le nom saisi sera utilisé tel quel." />
+          </label>
+          <label className="block w-44 shrink-0 text-sm">
+            <span className="mb-1 block text-xs text-muted-foreground">Catégorie</span>
+            <select className={inputCls} value={cat} onChange={(e) => { setCat(e.target.value); setVehicleId(null); }}>
+              <option value="">Toutes · {available.length}</option>
+              {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-sm"><span className="mb-1 block text-xs text-muted-foreground">Prix d'achat</span><input type="number" min="0" step="1" className={inputCls} value={buy} onChange={(e) => setBuy(e.target.value)} placeholder="0" /></label>
           <label className="block text-sm"><span className="mb-1 block text-xs text-muted-foreground">Prix de vente</span><input type="number" min="0" step="1" className={inputCls} value={sell} onChange={(e) => setSell(e.target.value)} placeholder="0" /></label>

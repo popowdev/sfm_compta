@@ -4,7 +4,7 @@ import { db } from '../db';
 import {
   companyModules, companyExpenses, companyEmployees, companyRoles, salaryGrid, timeEntries,
   sales, garageRepairs, garageCustoms, taxiCitoyens, taxiConcitoyens, taxiVip,
-  pawnshopTransactions, chasseTransactions, companyRuns, concessionSales, concessionPurchases,
+  pawnshopTransactions, chasseTransactions, companyRuns, concessionSales,
   companyCargaisons, cargaisonParticipants,
 } from '../db/schema';
 import { bizDate, bizPeakMinutes } from './bizTime';
@@ -80,14 +80,11 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
     db.select({ c: sql<string>`COALESCE(SUM(${pawnshopTransactions.total}),0)` }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.type, 'buy'), inDay(pawnshopTransactions.createdAt))),
     db.select({ c: sql<string>`COALESCE(SUM(${chasseTransactions.total}),0)` }).from(chasseTransactions).where(and(eq(chasseTransactions.companyId, companyId), eq(chasseTransactions.type, 'buy'), inDay(chasseTransactions.createdAt))),
   ]);
-  const [concPurchRow] = await Promise.all([
-    db.select({ c: sql<string>`COALESCE(SUM(${concessionPurchases.total}),0)` }).from(concessionPurchases).where(and(eq(concessionPurchases.companyId, companyId), inDay(concessionPurchases.createdAt))),
-  ]);
-  const concessionPurchase = Number(concPurchRow[0]?.c ?? 0);
+  const concessionCost = concessionRows.reduce((s, r) => s + Number(r.purchase ?? 0), 0);
   const productionCost = round2(
     Number(salesAgg[0]?.cost ?? 0) +
       Number(garagePartsRow[0]?.c ?? 0) +
-      concessionPurchase +
+      concessionCost +
       Number(pawnBuyRow[0]?.c ?? 0) +
       Number(chasseBuyRow[0]?.c ?? 0),
   );
