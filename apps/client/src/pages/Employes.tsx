@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { frDay, weekRange } from '@/lib/bizWeek';
 import { useModulePerms } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -139,7 +140,12 @@ export default function Employes() {
   const toast = useToast();
 
   const q = useQuery({ queryKey: ['employees', companyId], queryFn: () => getEmployees(companyId) });
-  const perfQ = useQuery({ queryKey: ['employees-perf', companyId], queryFn: () => getEmployeesPerformance(companyId) });
+  const [perfScope, setPerfScope] = useState<'semaine' | 'total'>('semaine');
+  const perfWeek = useMemo(() => weekRange(), []);
+  const perfQ = useQuery({
+    queryKey: ['employees-perf', companyId, perfScope],
+    queryFn: () => getEmployeesPerformance(companyId, perfScope === 'semaine' ? perfWeek : undefined),
+  });
   const grid = useQuery({ queryKey: ['salary-grid', companyId], queryFn: () => getSalaryGrid(companyId) });
   const gridRate = (roleId: number | null) =>
     grid.data?.grid.find((g) => g.companyRoleId === roleId)?.hourlyRate ?? 0;
@@ -500,8 +506,28 @@ export default function Employes() {
                   </div>
 
                   <div className="mt-4 rounded-lg border bg-muted/30 p-3">
-                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Performance <span className="normal-case text-muted-foreground/70">· tous modules</span>
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Performance{' '}
+                        <span className="normal-case text-muted-foreground/70">
+                          · tous modules ·{' '}
+                          {perfScope === 'semaine'
+                            ? `semaine du ${frDay(perfWeek.from)} au ${frDay(perfWeek.to)}`
+                            : 'depuis l’embauche'}
+                        </span>
+                      </div>
+                      <div className="flex overflow-hidden rounded-md border text-[11px]">
+                        {(['semaine', 'total'] as const).map((k) => (
+                          <button
+                            key={k}
+                            type="button"
+                            onClick={() => setPerfScope(k)}
+                            className={`px-2 py-1 ${perfScope === k ? 'bg-accent font-semibold' : 'text-muted-foreground hover:bg-accent/50'}`}
+                          >
+                            {k === 'semaine' ? 'Cette semaine' : 'Total'}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     {(() => {
                       const perf = perfQ.data?.performance[e.id];

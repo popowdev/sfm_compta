@@ -81,8 +81,10 @@ export interface EmployeePerf {
   hours: number;
   totalRevenue: number;
 }
-export const getEmployeesPerformance = (companyId: number) =>
-  apiFetch<{ performance: Record<number, EmployeePerf> }>(`${eBase(companyId)}/performance`);
+export const getEmployeesPerformance = (companyId: number, range?: { from: string; to: string }) =>
+  apiFetch<{ performance: Record<number, EmployeePerf>; from: string | null; to: string | null }>(
+    `${eBase(companyId)}/performance${range ? `?from=${range.from}&to=${range.to}` : ''}`,
+  );
 
 export interface Warning { id: number; reason: string; createdAt: string }
 export interface PersonnelRow {
