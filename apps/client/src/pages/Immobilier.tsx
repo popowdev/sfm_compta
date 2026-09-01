@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { mondayOf } from '@/lib/bizWeek';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -46,12 +47,6 @@ function fmtDateTime(d: string | null): string {
   if (!d) return '—';
   const dt = new Date(d);
   return Number.isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-function mondayOf(date: Date): string {
-  const d = new Date(date);
-  const day = (d.getDay() + 6) % 7;
-  d.setDate(d.getDate() - day);
-  return d.toISOString().slice(0, 10);
 }
 
 type Tab = 'locations' | 'ventes' | 'parametres';

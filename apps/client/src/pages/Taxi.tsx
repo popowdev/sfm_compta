@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { weekRange } from '@/lib/bizWeek';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, Pencil, Trash2, Car, Route, DollarSign, Users, Crown, Settings, Search, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -24,14 +25,6 @@ const PAGE = 15;
 function fmtDateTime(d: string): string {
   const dt = new Date(d);
   return Number.isNaN(dt.getTime()) ? d : dt.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-function weekRange(): { from: string; to: string } {
-  const now = new Date();
-  const day = (now.getDay() + 6) % 7;
-  const mon = new Date(now); mon.setDate(now.getDate() - day);
-  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
-  return { from: iso(mon), to: iso(sun) };
 }
 
 type Tab = 'citoyens' | 'concitoyens' | 'vip' | 'settings';
