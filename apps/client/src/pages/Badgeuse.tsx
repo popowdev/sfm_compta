@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { parisDay } from '@/lib/bizWeek';
 import { useCompany } from '@/lib/useCompany';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -53,9 +54,7 @@ const inputCls =
   'h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring';
 
 function today(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return parisDay();
 }
 
 function useNow(active: boolean): number {

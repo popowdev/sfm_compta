@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { parisDateTime } from '@/lib/bizWeek';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, ChevronRight, Trash2, Lock } from 'lucide-react';
 import type { ModuleKey } from '@rp-compta/shared';
@@ -702,9 +703,7 @@ function CompanyDetail({ company }: { company: Company }) {
 }
 
 function nowLocal(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  return parisDateTime();
 }
 function fmtIncident(s: string): string {
   const d = new Date(s.replace(' ', 'T'));

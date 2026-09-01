@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { frDay, weekRange } from '@/lib/bizWeek';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -490,14 +491,8 @@ function VehiclesTab({ companyId, canWrite }: { companyId: number; canWrite: boo
 }
 
 function billingWeek(offset: number): { from: string; to: string; label: string } {
-  const now = new Date();
-  now.setDate(now.getDate() + offset * 7);
-  const day = (now.getDay() + 6) % 7;
-  const mon = new Date(now); mon.setDate(now.getDate() - day);
-  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const fmt = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-  return { from: iso(mon), to: iso(sun), label: `${fmt(mon)} → ${fmt(sun)}` };
+  const { from, to } = weekRange(new Date(), offset);
+  return { from, to, label: `${frDay(from)} → ${frDay(to)}` };
 }
 
 function GarageBilling({ companyId }: { companyId: number }) {

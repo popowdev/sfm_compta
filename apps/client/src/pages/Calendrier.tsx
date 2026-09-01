@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { parisDay, parisMidnight, parisStamp } from '@/lib/bizWeek';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Plus, X, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -63,11 +64,7 @@ export default function Calendrier() {
   const toast = useToast();
   const confirm = useConfirm();
   const [view, setView] = useState<'semaine' | 'jour' | 'liste'>('semaine');
-  const [anchor, setAnchor] = useState(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
+  const [anchor, setAnchor] = useState(() => parisMidnight());
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const weekStart = startOfWeek(anchor);
@@ -95,8 +92,7 @@ export default function Calendrier() {
   const [booking, setBooking] = useState<string | null>(null); // date key prefill
 
   const days = view === 'jour' ? [anchor] : Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = parisMidnight();
 
   const shift = (dir: number) => setAnchor((a) => addDays(a, (view === 'jour' ? 1 : 7) * dir));
   const goToday = () => {
@@ -351,8 +347,8 @@ function BookingModal({
     if (!entityKey && entities[0]) setEntityKey(`${entities[0].type}:${entities[0].id}`);
   }, [entities, entityKey]);
 
-  const now = dtStr(new Date());
-  const todayKey = dateKey(new Date());
+  const now = parisStamp();
+  const todayKey = parisDay();
   const { startAt, endAt } = bookSlotRange(date, slot);
   const isPast = startAt <= now;
   const taken = events.some((e) => startAt < e.endAt && endAt > e.startAt);
