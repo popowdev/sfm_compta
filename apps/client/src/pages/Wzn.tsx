@@ -172,6 +172,18 @@ function LikesCell({ companyId, article, onSaved }: { companyId: number; article
   );
 }
 
+function weekOptions(): { value: string; label: string }[] {
+  const base = mondayOf();
+  const out: { value: string; label: string }[] = [];
+  for (let i = -1; i <= 4; i += 1) {
+    const from = shiftWeek(base, i);
+    const r = weekRange(new Date(`${from}T12:00:00Z`));
+    const tag = i === 0 ? ' · semaine en cours' : i === 1 ? ' · la semaine prochaine' : '';
+    out.push({ value: from, label: `Semaine du ${frDay(r.from)} au ${frDay(r.to)}${tag}` });
+  }
+  return out;
+}
+
 function ArticleModal({ companyId, onClose, onSaved }: { companyId: number; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const [title, setTitle] = useState('');
@@ -221,9 +233,12 @@ function ArticleModal({ companyId, onClose, onSaved }: { companyId: number; onCl
           </div>
           <label className="block text-sm">
             <span className="mb-1 block text-xs text-muted-foreground">Première semaine payée</span>
-            <input type="date" className={inputCls} value={startWeek}
-              onChange={(e) => setStartWeek(e.target.value ? mondayOf(new Date(`${e.target.value}T12:00:00Z`)) : startWeek)} />
-            <span className="mt-1 block text-[11px] text-muted-foreground">Ramené au lundi de la semaine choisie. Par défaut, le lundi qui suit.</span>
+            <select className={inputCls} value={startWeek} onChange={(e) => setStartWeek(e.target.value)}>
+              {weekOptions().map((w) => (
+                <option key={w.value} value={w.value}>{w.label}</option>
+              ))}
+            </select>
+            <span className="mt-1 block text-[11px] text-muted-foreground">L'article est payé pendant 4 semaines à partir de celle-ci.</span>
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-xs text-muted-foreground">Note (optionnel)</span>
