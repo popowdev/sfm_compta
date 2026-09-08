@@ -35,6 +35,7 @@ import { computeTaxes } from '../services/declarations';
 import { emitInvalidate } from '../realtime/socket';
 import { recordAudit } from '../services/audit';
 import { bizDate, bizDayStr, bizWeek, bizPeakMinutes } from '../services/bizTime';
+import { wznRevenue } from '../services/wzn';
 
 function methodAction(method: string): PermAction {
   return method === 'POST' ? 'create' : method === 'PUT' ? 'edit' : method === 'DELETE' ? 'delete' : 'view';
@@ -865,7 +866,8 @@ async function buildExerciceDetail(companyId: number, id: number) {
     const salesCount = Number(aggRows[0]?.count ?? 0) + garageTxCount + concessionTxCount + taxiTxCount + pawnshopTxCount + chasseTxCount + runsTxCount + cargaisonTxCount;
     const componentPurchases = round2(Number(purchRows[0]?.purchases ?? 0));
 
-    const moduleRevenue = round2(taxiRevenueTotal + pawnshopRevenueTotal + chasseRevenueTotal + runsRevenueTotal + concessionRevenueTotal + cargaisonRevenueTotal);
+    const wznRevenueTotal = await wznRevenue(companyId, ex.startDate);
+    const moduleRevenue = round2(taxiRevenueTotal + pawnshopRevenueTotal + chasseRevenueTotal + runsRevenueTotal + concessionRevenueTotal + cargaisonRevenueTotal + wznRevenueTotal);
     const caGross = round2(salesGross + ex.revenue + garageRevenue + moduleRevenue);
     const caNet = round2(caGross - salesDiscount);
     const grossMargin = round2(caNet - productionCost);
@@ -908,6 +910,7 @@ async function buildExerciceDetail(companyId: number, id: number) {
         chasseRevenue: Math.round(chasseRevenueTotal),
         runsRevenue: Math.round(runsRevenueTotal),
         concessionRevenue: Math.round(concessionRevenueTotal),
+        wznRevenue: Math.round(wznRevenueTotal),
         cargaisonRevenue: Math.round(cargaisonRevenueTotal),
         moduleRevenue,
         garageCommission: Math.round(payroll.reduce((s, p) => s + p.garageCommission, 0)),

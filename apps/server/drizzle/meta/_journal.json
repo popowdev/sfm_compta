@@ -386,6 +386,13 @@
       "when": 1788881581028,
       "tag": "0054_garage_contract_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "5",
+      "when": 1788882252433,
+      "tag": "0055_wzn_articles",
+      "breakpoints": true
     }
   ]
 }

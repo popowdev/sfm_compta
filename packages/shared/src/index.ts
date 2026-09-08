@@ -38,6 +38,7 @@ export const MODULE_KEYS = [
   'chasse',
   'concession',
   'cargaison',
+  'wzn',
 ] as const;
 export type ModuleKey = (typeof MODULE_KEYS)[number];
 
@@ -85,6 +86,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'chasse', label: 'Chasse', group: 'Commerce', defaultEnabled: false, companyPage: true },
   { key: 'concession', label: 'Concession auto', group: 'Commerce', defaultEnabled: false, companyPage: true, staffOnly: true },
   { key: 'cargaison', label: 'Cargaison / commandes', group: 'Commerce', defaultEnabled: false, companyPage: true },
+  { key: 'wzn', label: 'Articles de presse', group: 'Commerce', defaultEnabled: false, companyPage: true },
 ];
 
 export interface ModuleConfigBoolField {
@@ -364,6 +366,44 @@ export const MODULE_CONFIG: Partial<Record<ModuleKey, ModuleConfigField[]>> = {
       step: 1,
       suffix: '%',
       help: 'Part reversée à l’employé qui fait la run (le reste va à l’entreprise). Fixe pour tous les employés.',
+    },
+  ],
+  wzn: [
+    {
+      key: 'priceVideo',
+      label: 'Article vidéo ($)',
+      type: 'number',
+      default: 20000,
+      min: 0,
+      max: 10000000,
+      help: 'Montant versé chaque semaine tant que l\u2019article est actif.',
+    },
+    {
+      key: 'priceEcrit',
+      label: 'Article écrit ($)',
+      type: 'number',
+      default: 5000,
+      min: 0,
+      max: 10000000,
+      help: 'Montant versé chaque semaine tant que l\u2019article est actif.',
+    },
+    {
+      key: 'priceLike',
+      label: 'Valeur d\u2019un like ($)',
+      type: 'number',
+      default: 600,
+      min: 0,
+      max: 100000,
+      help: 'Multiplié par le nombre de likes de l\u2019article.',
+    },
+    {
+      key: 'weeks',
+      label: 'Semaines de diffusion',
+      type: 'number',
+      default: 4,
+      min: 1,
+      max: 52,
+      help: 'Durée pendant laquelle un article est payé, à partir du lundi suivant son activation.',
     },
   ],
   cargaison: [

@@ -1,4 +1,5 @@
 import {
+  Newspaper,
   FileText,
   HandCoins,
   BookOpen,
@@ -62,6 +63,7 @@ const ICONS: Record<ModuleKey, LucideIcon> = {
   chasse: Target,
   concession: CarFront,
   cargaison: PackageCheck,
+  wzn: Newspaper,
 };
 
 export function moduleIcon(key: string): LucideIcon {

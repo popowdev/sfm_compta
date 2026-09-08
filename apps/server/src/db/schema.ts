@@ -983,6 +983,22 @@ export const exercicePayroll = mysqlTable(
   (t) => ({ uq: unique('uq_exercice_payroll').on(t.exerciceId, t.employeeId) }),
 );
 
+export const wznArticles = mysqlTable('wzn_articles', {
+  id: int('id').autoincrement().primaryKey(),
+  companyId: int('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  title: varchar('title', { length: 150 }).notNull(),
+  type: mysqlEnum('type', ['video', 'ecrit']).notNull().default('ecrit'),
+  likes: int('likes').notNull().default(0),
+  active: boolean('active').notNull().default(true),
+  startWeek: date('start_week', { mode: 'string' }).notNull(),
+  weeks: int('weeks').notNull().default(4),
+  notes: varchar('notes', { length: 255 }),
+  createdByUserId: int('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 export const garageContractPayments = mysqlTable(
   'garage_contract_payments',
   {

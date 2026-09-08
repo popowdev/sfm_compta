@@ -8,6 +8,7 @@ import {
   companyCargaisons, cargaisonParticipants,
 } from '../db/schema';
 import { bizDate, bizPeakMinutes } from './bizTime';
+import { wznRevenue } from './wzn';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -124,7 +125,7 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
     if (empId == null) return;
     map.set(empId, (map.get(empId) ?? 0) + total);
   };
-  let moduleRevenue = 0;
+  let moduleRevenue = await wznRevenue(companyId, start);
   for (const r of taxiC) { addRev(taxiRevByEmp, r.userId, Number(r.total)); moduleRevenue += Number(r.total); }
   for (const r of taxiCo) { addRev(taxiRevByEmp, r.userId, Number(r.total)); moduleRevenue += Number(r.total); }
   for (const r of taxiV) { addRev(taxiRevByEmp, r.userId, Number(r.total)); moduleRevenue += Number(r.total); }
