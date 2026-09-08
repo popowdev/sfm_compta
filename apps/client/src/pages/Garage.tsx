@@ -15,7 +15,7 @@ import {
   saveGarageSettings, addGarageType, updateGarageType,
   deleteGarageType, addGaragePack, deleteGaragePack, getGarageContracts, addGarageContract, updateGarageContract, deleteGarageContract,
   getGarageVehicles, addGarageVehicle, deleteGarageVehicle, getGarageRepairs, addGarageRepair, setRepairPaid,
-  deleteGarageRepair, getGarageCustoms, addGarageCustom, setCustomPaid, deleteGarageCustom, getGarageBilling,
+  deleteGarageRepair, getGarageCustoms, addGarageCustom, setCustomPaid, deleteGarageCustom, getGarageBilling, setGarageContractPaid,
   type GarageVehicle, type GarageRepair, type GarageCustom, type GarageMember, type GarageConfig, type GarageContract,
 } from '@/lib/garage';
 
@@ -499,6 +499,11 @@ function GarageBilling({ companyId }: { companyId: number }) {
   const [offset, setOffset] = useState(0);
   const wk = billingWeek(offset);
   const q = useQuery({ queryKey: ['garage-billing', companyId, wk.from, wk.to], queryFn: () => getGarageBilling(companyId, wk.from, wk.to) });
+  const qc = useQueryClient();
+  const togglePaid = useMutation({
+    mutationFn: (v: { contractId: number; paid: boolean }) => setGarageContractPaid(companyId, v.contractId, wk.from, v.paid),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['garage-billing', companyId] }),
+  });
   const rows = (q.data?.rows ?? []).filter((r) => r.repairsCount + r.customsCount > 0);
   const grand = rows.reduce((a, r) => a + r.total, 0);
   const nav = 'grid h-8 w-8 place-items-center rounded-md border text-sm disabled:opacity-40 hover:bg-accent';
@@ -526,6 +531,7 @@ function GarageBilling({ companyId }: { companyId: number }) {
                 <th className="py-2 text-right font-semibold">Réparations</th>
                 <th className="py-2 text-right font-semibold">Customs</th>
                 <th className="py-2 text-right font-semibold">À facturer</th>
+                <th className="py-2 text-right font-semibold">Réglé</th>
               </tr>
             </thead>
             <tbody>
@@ -534,12 +540,18 @@ function GarageBilling({ companyId }: { companyId: number }) {
                   <td className="py-2 font-medium">{r.name}{r.active ? '' : ' (inactif)'}</td>
                   <td className="py-2 text-right text-muted-foreground">{r.repairsCount ? `${fmtInt(r.repairsTotal)} $ · ${r.repairsCount}` : '—'}</td>
                   <td className="py-2 text-right text-muted-foreground">{r.customsCount ? `${fmtInt(r.customsTotal)} $ · ${r.customsCount}` : '—'}</td>
-                  <td className="py-2 text-right font-semibold text-emerald-400">{fmtInt(r.total)} $</td>
+                  <td className={`py-2 text-right font-semibold ${r.paid ? 'text-muted-foreground line-through' : 'text-emerald-400'}`}>{fmtInt(r.total)} $</td>
+                  <td className="py-2 text-right">
+                    <input type="checkbox" className="h-4 w-4 accent-emerald-500" checked={r.paid}
+                      disabled={togglePaid.isPending}
+                      onChange={(e) => togglePaid.mutate({ contractId: r.contractId, paid: e.target.checked })} />
+                  </td>
                 </tr>
               ))}
               <tr className="border-t-2 font-semibold">
                 <td className="py-2" colSpan={3}>Total à facturer</td>
                 <td className="py-2 text-right text-emerald-400">{fmtInt(grand)} $</td>
+                <td className="py-2 text-right text-xs text-muted-foreground">{fmtInt(q.data?.paidTotal ?? 0)} $ réglé{(q.data?.paidTotal ?? 0) > 1 ? 's' : ''}</td>
               </tr>
             </tbody>
           </table>

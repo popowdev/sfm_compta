@@ -16,6 +16,7 @@ import {
   companyRoles,
   companyEmployees,
   vehicleModels,
+  garageContractPayments,
 } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
@@ -166,11 +167,16 @@ meGarageRouter.get('/billing', asyncHandler(async (req, res) => {
   const repWhere = and(eq(garageRepairs.companyId, companyId), sql`${garageRepairs.contractId} IS NOT NULL`, gte(bizDate(garageRepairs.createdAt), fromQ), lte(bizDate(garageRepairs.createdAt), toQ));
   const cusWhere = and(eq(garageCustoms.companyId, companyId), sql`${garageCustoms.contractId} IS NOT NULL`, gte(bizDate(garageCustoms.createdAt), fromQ), lte(bizDate(garageCustoms.createdAt), toQ));
 
-  const [rep, cus, contracts] = await Promise.all([
+  const [rep, cus, contracts, payRows] = await Promise.all([
     db.select({ contractId: garageRepairs.contractId, count: sql<number>`COUNT(*)`, total: sql<string>`COALESCE(SUM(${garageRepairs.total}),0)` }).from(garageRepairs).where(repWhere).groupBy(garageRepairs.contractId),
     db.select({ contractId: garageCustoms.contractId, count: sql<number>`COUNT(*)`, total: sql<string>`COALESCE(SUM(${garageCustoms.finalPrice}),0)` }).from(garageCustoms).where(cusWhere).groupBy(garageCustoms.contractId),
     db.select({ id: garageContracts.id, name: garageContracts.name, active: garageContracts.active }).from(garageContracts).where(eq(garageContracts.companyId, companyId)),
+    db
+      .select({ contractId: garageContractPayments.contractId, paid: garageContractPayments.paid })
+      .from(garageContractPayments)
+      .where(and(eq(garageContractPayments.companyId, companyId), eq(garageContractPayments.weekStart, fromQ))),
   ]);
+  const paidByContract = new Map(payRows.map((r) => [r.contractId, r.paid]));
   const repById = new Map(rep.map((r) => [r.contractId, r]));
   const cusById = new Map(cus.map((c) => [c.contractId, c]));
   const rows = contracts
@@ -179,12 +185,49 @@ meGarageRouter.get('/billing', asyncHandler(async (req, res) => {
       const cu = cusById.get(c.id);
       const repairsTotal = Math.round(Number(r?.total ?? 0));
       const customsTotal = Math.round(Number(cu?.total ?? 0));
-      return { contractId: c.id, name: c.name, active: c.active, repairsCount: Number(r?.count ?? 0), repairsTotal, customsCount: Number(cu?.count ?? 0), customsTotal, total: repairsTotal + customsTotal };
+      return { paid: paidByContract.get(c.id) ?? false, contractId: c.id, name: c.name, active: c.active, repairsCount: Number(r?.count ?? 0), repairsTotal, customsCount: Number(cu?.count ?? 0), customsTotal, total: repairsTotal + customsTotal };
     })
     .filter((x) => x.repairsCount || x.customsCount || x.active)
     .sort((a, b) => b.total - a.total);
   const grandTotal = rows.reduce((s, r) => s + r.total, 0);
-  res.json({ from: fromQ, to: toQ, rows, grandTotal });
+  const paidTotal = rows.filter((r) => r.paid).reduce((s, r) => s + r.total, 0);
+  res.json({ from: fromQ, to: toQ, rows, grandTotal, paidTotal });
+}));
+
+meGarageRouter.put('/billing/:contractId/paid', asyncHandler(async (req, res) => {
+  const companyId = parseId(req.params.companyId);
+  const contractId = parseId(req.params.contractId);
+  if (!companyId || !contractId) return res.status(400).json({ error: 'bad_request' });
+  if (!(await requireWrite(req, companyId, res))) return;
+  const p = z
+    .object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), paid: z.boolean() })
+    .safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: 'bad_request' });
+  const [owned] = await db
+    .select({ id: garageContracts.id })
+    .from(garageContracts)
+    .where(and(eq(garageContracts.id, contractId), eq(garageContracts.companyId, companyId)))
+    .limit(1);
+  if (!owned) return res.status(404).json({ error: 'not_found' });
+  await db
+    .insert(garageContractPayments)
+    .values({
+      companyId,
+      contractId,
+      weekStart: p.data.from,
+      paid: p.data.paid,
+      paidAt: p.data.paid ? new Date() : null,
+      paidByUserId: p.data.paid ? req.user!.id : null,
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        paid: p.data.paid,
+        paidAt: p.data.paid ? new Date() : null,
+        paidByUserId: p.data.paid ? req.user!.id : null,
+      },
+    });
+  emitCompta(companyId, [['garage-billing', companyId]]);
+  res.json({ ok: true });
 }));
 
 async function requireWrite(req: Request, companyId: number, res: import('express').Response): Promise<boolean> {
@@ -479,6 +522,29 @@ meGarageRouter.get('/repairs', asyncHandler(async (req, res) => {
   });
 }));
 
+async function rememberVehicle(companyId: number, plate?: string | null, model?: string | null, clientName?: string | null): Promise<void> {
+  const pl = (plate ?? '').trim().toUpperCase();
+  if (!pl) return;
+  const [known] = await db
+    .select({ id: garageVehicles.id, model: garageVehicles.model })
+    .from(garageVehicles)
+    .where(and(eq(garageVehicles.companyId, companyId), eq(garageVehicles.plate, pl)))
+    .limit(1);
+  const md = (model ?? '').trim() || null;
+  if (known) {
+    if (md && !known.model) await db.update(garageVehicles).set({ model: md }).where(eq(garageVehicles.id, known.id));
+    return;
+  }
+  const parts = (clientName ?? '').trim().split(/\s+/).filter(Boolean);
+  await db.insert(garageVehicles).values({
+    companyId,
+    plate: pl,
+    model: md,
+    ownerFirstName: parts[0] ?? null,
+    ownerLastName: parts.slice(1).join(' ') || null,
+  });
+}
+
 const repairSchema = z.object({
   mechanicName: z.string().trim().max(140).optional(),
   mechanicUserId: z.coerce.number().int().positive().nullish(),
@@ -556,6 +622,7 @@ meGarageRouter.post('/repairs', asyncHandler(async (req, res) => {
     description: d.description || null,
     createdByUserId: req.user!.id,
   });
+  await rememberVehicle(companyId, d.plate, d.model, d.clientName);
   emitCompta(companyId, [['garage-repairs', companyId], ['garage-customs', companyId], ['garage-earnings', companyId], ['garage-billing', companyId]]);
   res.status(201).json({ ok: true, total });
 }));
@@ -639,6 +706,7 @@ meGarageRouter.post('/customs', asyncHandler(async (req, res) => {
     description: d.description || null,
     createdByUserId: req.user!.id,
   });
+  await rememberVehicle(companyId, d.plate, d.model, d.clientName);
   emitCompta(companyId, [['garage-repairs', companyId], ['garage-customs', companyId], ['garage-earnings', companyId], ['garage-billing', companyId]]);
   res.status(201).json({ ok: true, finalPrice, profit });
 }));

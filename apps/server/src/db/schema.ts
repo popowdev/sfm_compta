@@ -983,6 +983,24 @@ export const exercicePayroll = mysqlTable(
   (t) => ({ uq: unique('uq_exercice_payroll').on(t.exerciceId, t.employeeId) }),
 );
 
+export const garageContractPayments = mysqlTable(
+  'garage_contract_payments',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    companyId: int('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    contractId: int('contract_id')
+      .notNull()
+      .references(() => garageContracts.id, { onDelete: 'cascade' }),
+    weekStart: date('week_start', { mode: 'string' }).notNull(),
+    paid: boolean('paid').notNull().default(false),
+    paidAt: timestamp('paid_at'),
+    paidByUserId: int('paid_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (t) => ({ uq: unique('uq_garage_contract_payment').on(t.contractId, t.weekStart) }),
+);
+
 export const catalogItems = mysqlTable('catalog_items', {
   id: int('id').autoincrement().primaryKey(),
   companyId: int('company_id')

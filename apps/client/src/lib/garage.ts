@@ -37,13 +37,13 @@ export const updateGarageModel = (c: number, id: number, b: { name: string; manu
 export const deleteGarageModel = (c: number, id: number) => del(`${base(c)}/models/${id}`);
 export const getGarageEarnings = (c: number) => apiFetch<{ earnings: GarageEarning[] }>(`${base(c)}/earnings`);
 
-export interface GarageBillingRow { contractId: number; name: string; active: boolean; repairsCount: number; repairsTotal: number; customsCount: number; customsTotal: number; total: number }
+export interface GarageBillingRow { paid: boolean; contractId: number; name: string; active: boolean; repairsCount: number; repairsTotal: number; customsCount: number; customsTotal: number; total: number }
 export const getGarageBilling = (c: number, from?: string, to?: string) => {
   const p = new URLSearchParams();
   if (from) p.set('from', from);
   if (to) p.set('to', to);
   const qs = p.toString();
-  return apiFetch<{ from: string; to: string; rows: GarageBillingRow[]; grandTotal: number }>(`${base(c)}/billing${qs ? `?${qs}` : ''}`);
+  return apiFetch<{ from: string; to: string; rows: GarageBillingRow[]; grandTotal: number; paidTotal: number }>(`${base(c)}/billing${qs ? `?${qs}` : ''}`);
 };
 export const saveGarageSettings = (c: number, b: GarageSettings) => apiFetch<{ ok: boolean }>(`${base(c)}/settings`, { method: 'PUT', body: JSON.stringify(b) });
 export const addGarageType = (c: number, b: { name: string; price: number }) => post(`${base(c)}/types`, b);
@@ -72,3 +72,9 @@ export const getGarageCustoms = (c: number) => apiFetch<{ canWrite: boolean; cus
 export const addGarageCustom = (c: number, b: unknown) => post(`${base(c)}/customs`, b);
 export const setCustomPaid = (c: number, id: number, paid: boolean) => patch(`${base(c)}/customs/${id}`, { paid });
 export const deleteGarageCustom = (c: number, id: number) => del(`${base(c)}/customs/${id}`);
+
+export const setGarageContractPaid = (c: number, contractId: number, from: string, paid: boolean) =>
+  apiFetch<{ ok: boolean }>(`${base(c)}/billing/${contractId}/paid`, {
+    method: 'PUT',
+    body: JSON.stringify({ from, paid }),
+  });
