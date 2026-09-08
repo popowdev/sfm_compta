@@ -9,7 +9,7 @@ import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
 import { bizDate, bizWeek } from '../services/bizTime';
-import { emitInvalidate } from '../realtime/socket';
+import { emitCompta } from '../realtime/socket';
 import { concessionImageUpload, concessionImageUrl } from '../services/upload';
 import { DEFAULT_CONCESSION_VEHICLES } from '../data/concessionDefaults';
 
@@ -199,7 +199,7 @@ meConcessionRouter.post(
       available: p.data.available ?? true,
       sortOrder: Number(maxOrder[0]?.m ?? 0) + 1,
     });
-    emitInvalidate(['irs', `company:${companyId}`], [['concession', companyId]]);
+    emitCompta(companyId, [['concession', companyId]]);
     res.status(201).json({ ok: true });
   }),
 );
@@ -227,7 +227,7 @@ meConcessionRouter.patch(
     if (p.data.available !== undefined) set.available = p.data.available;
     if (!Object.keys(set).length) return res.status(400).json({ error: 'bad_request' });
     await db.update(concessionVehicles).set(set).where(and(eq(concessionVehicles.id, id), eq(concessionVehicles.companyId, companyId)));
-    emitInvalidate(['irs', `company:${companyId}`], [['concession', companyId]]);
+    emitCompta(companyId, [['concession', companyId]]);
     res.json({ ok: true });
   }),
 );
@@ -241,7 +241,7 @@ meConcessionRouter.delete(
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     await db.delete(concessionVehicles).where(and(eq(concessionVehicles.id, id), eq(concessionVehicles.companyId, companyId)));
-    emitInvalidate(['irs', `company:${companyId}`], [['concession', companyId]]);
+    emitCompta(companyId, [['concession', companyId]]);
     res.json({ ok: true });
   }),
 );
@@ -353,7 +353,7 @@ meConcessionRouter.post(
       note: p.data.note || null,
       createdByUserId: req.user!.id,
     });
-    emitInvalidate(['irs', `company:${companyId}`], [['concession', companyId]]);
+    emitCompta(companyId, [['concession', companyId]]);
     res.status(201).json({ ok: true, commission });
   }),
 );
@@ -367,7 +367,7 @@ meConcessionRouter.delete(
     const g = await gate(req, companyId);
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     await db.delete(concessionSales).where(and(eq(concessionSales.id, id), eq(concessionSales.companyId, companyId)));
-    emitInvalidate(['irs', `company:${companyId}`], [['concession', companyId]]);
+    emitCompta(companyId, [['concession', companyId]]);
     res.json({ ok: true });
   }),
 );
@@ -382,7 +382,7 @@ meConcessionRouter.post(
     if (!g.canManage) return res.status(403).json({ error: 'forbidden' });
     const token = randomBytes(16).toString('hex');
     await db.update(companies).set({ showroomToken: token }).where(eq(companies.id, companyId));
-    emitInvalidate(['irs', `company:${companyId}`], [['concession', companyId]]);
+    emitCompta(companyId, [['concession', companyId]]);
     res.json({ ok: true, token });
   }),
 );
@@ -466,7 +466,7 @@ meConcessionRouter.post(
       note: p.data.note || null,
       createdByUserId: req.user!.id,
     });
-    emitInvalidate(['irs', `company:${companyId}`], [['concession', companyId]]);
+    emitCompta(companyId, [['concession', companyId]]);
     res.status(201).json({ ok: true, id: ins[0].insertId, total });
   }),
 );
@@ -484,7 +484,7 @@ meConcessionRouter.delete(
       .delete(concessionPurchases)
       .where(and(eq(concessionPurchases.id, id), eq(concessionPurchases.companyId, companyId)));
     if (!r[0].affectedRows) return res.status(404).json({ error: 'not_found' });
-    emitInvalidate(['irs', `company:${companyId}`], [['concession', companyId]]);
+    emitCompta(companyId, [['concession', companyId]]);
     res.json({ ok: true });
   }),
 );

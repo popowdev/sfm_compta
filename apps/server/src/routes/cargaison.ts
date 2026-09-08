@@ -7,7 +7,7 @@ import { companyCargaisons, cargaisonParticipants, companyEmployees, companyModu
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, canManageCompany, type PermAction } from '../services/access';
-import { emitInvalidate } from '../realtime/socket';
+import { emitCompta } from '../realtime/socket';
 import { bizDate, bizWeek } from '../services/bizTime';
 
 function parseId(v: string | undefined): number | null {
@@ -212,7 +212,7 @@ meCargaisonRouter.post(
         validIds.map((employeeId) => ({ companyId, cargaisonId, employeeId, share: String(share) })),
       );
     }
-    emitInvalidate(['irs', `company:${companyId}`], [['cargaison', companyId]]);
+    emitCompta(companyId, [['cargaison', companyId]]);
     res.status(201).json({ ok: true, total, importCost, employeeShare, companyShare, sharePerEmployee: share });
   }),
 );
@@ -227,7 +227,7 @@ meCargaisonRouter.delete(
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     if (!(await canManageCompany(req.user!.id, companyId))) return res.status(403).json({ error: 'forbidden' });
     await db.delete(companyCargaisons).where(and(eq(companyCargaisons.id, id), eq(companyCargaisons.companyId, companyId)));
-    emitInvalidate(['irs', `company:${companyId}`], [['cargaison', companyId]]);
+    emitCompta(companyId, [['cargaison', companyId]]);
     res.json({ ok: true });
   }),
 );

@@ -6,7 +6,7 @@ import { chasseItems, chasseTransactions, users } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
-import { emitInvalidate } from '../realtime/socket';
+import { emitCompta } from '../realtime/socket';
 
 function parseId(v: string | undefined): number | null {
   const n = Number(v);
@@ -140,7 +140,7 @@ meChasseRouter.post(
       venteClient: p.data.venteClient,
       sortOrder: Number(maxOrder[0]?.m ?? 0) + 1,
     });
-    emitInvalidate(['irs', `company:${companyId}`], [['chasse', companyId]]);
+    emitCompta(companyId, [['chasse', companyId]]);
     res.status(201).json({ ok: true });
   }),
 );
@@ -163,7 +163,7 @@ meChasseRouter.patch(
     if (p.data.active !== undefined) set.active = p.data.active;
     if (!Object.keys(set).length) return res.status(400).json({ error: 'bad_request' });
     await db.update(chasseItems).set(set).where(and(eq(chasseItems.id, id), eq(chasseItems.companyId, companyId)));
-    emitInvalidate(['irs', `company:${companyId}`], [['chasse', companyId]]);
+    emitCompta(companyId, [['chasse', companyId]]);
     res.json({ ok: true });
   }),
 );
@@ -179,7 +179,7 @@ meChasseRouter.delete(
     const tx = await db.select({ id: chasseTransactions.id }).from(chasseTransactions).where(and(eq(chasseTransactions.companyId, companyId), eq(chasseTransactions.itemId, id))).limit(1);
     if (tx[0]) return res.status(409).json({ error: 'has_transactions' });
     await db.delete(chasseItems).where(and(eq(chasseItems.id, id), eq(chasseItems.companyId, companyId)));
-    emitInvalidate(['irs', `company:${companyId}`], [['chasse', companyId]]);
+    emitCompta(companyId, [['chasse', companyId]]);
     res.json({ ok: true });
   }),
 );
@@ -262,7 +262,7 @@ async function recordTx(req: Request, res: import('express').Response, type: 'bu
     note: p.data.note || null,
     createdByUserId: req.user!.id,
   });
-  emitInvalidate(['irs', `company:${companyId}`], [['chasse', companyId]]);
+  emitCompta(companyId, [['chasse', companyId]]);
   res.status(201).json({ ok: true, total });
 }
 
@@ -285,7 +285,7 @@ meChasseRouter.delete(
       if ((stock.get(tx.itemId) ?? 0) - Number(tx.qty) < 0) return res.status(409).json({ error: 'would_go_negative' });
     }
     await db.delete(chasseTransactions).where(and(eq(chasseTransactions.id, id), eq(chasseTransactions.companyId, companyId)));
-    emitInvalidate(['irs', `company:${companyId}`], [['chasse', companyId]]);
+    emitCompta(companyId, [['chasse', companyId]]);
     res.json({ ok: true });
   }),
 );

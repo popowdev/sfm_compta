@@ -7,7 +7,7 @@ import { companyRuns, companyEmployees, companyModules, users } from '../db/sche
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, canManageCompany, type PermAction } from '../services/access';
-import { emitInvalidate } from '../realtime/socket';
+import { emitCompta } from '../realtime/socket';
 import { bizDate, bizWeek } from '../services/bizTime';
 
 function parseId(v: string | undefined): number | null {
@@ -150,7 +150,7 @@ meRunsRouter.post(
       note: p.data.note || null,
       createdByUserId: req.user!.id,
     });
-    emitInvalidate(['irs', `company:${companyId}`], [['runs', companyId]]);
+    emitCompta(companyId, [['runs', companyId]]);
     res.status(201).json({ ok: true, total, commission });
   }),
 );
@@ -165,7 +165,7 @@ meRunsRouter.delete(
     if (!g.ok) return res.status(g.status).json({ error: g.error });
     if (!(await canManageCompany(req.user!.id, companyId))) return res.status(403).json({ error: 'forbidden' });
     await db.delete(companyRuns).where(and(eq(companyRuns.id, id), eq(companyRuns.companyId, companyId)));
-    emitInvalidate(['irs', `company:${companyId}`], [['runs', companyId]]);
+    emitCompta(companyId, [['runs', companyId]]);
     res.json({ ok: true });
   }),
 );

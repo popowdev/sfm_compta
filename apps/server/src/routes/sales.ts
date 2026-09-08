@@ -19,7 +19,7 @@ import {
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
-import { emitInvalidate } from '../realtime/socket';
+import { emitCompta } from '../realtime/socket';
 import { recordAudit } from '../services/audit';
 
 function methodAction(method: string): PermAction {
@@ -466,7 +466,7 @@ meSalesRouter.post(
       return newSaleId;
     });
 
-    emitInvalidate(['irs', `company:${companyId}`], [
+    emitCompta(companyId, [
       ['sales', companyId],
       ['stocks', companyId],
       ['clients', companyId],
@@ -559,7 +559,7 @@ meSalesRouter.delete(
       targetLabel: `#${id}`,
       detail: `entreprise ${companyId}`,
     });
-    emitInvalidate(['irs', `company:${companyId}`], [
+    emitCompta(companyId, [
       ['sales', companyId],
       ['stocks', companyId],
       ['clients', companyId],

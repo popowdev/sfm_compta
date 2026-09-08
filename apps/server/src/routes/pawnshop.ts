@@ -6,7 +6,7 @@ import { pawnshopItems, pawnshopTransactions, users } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
-import { emitInvalidate } from '../realtime/socket';
+import { emitCompta } from '../realtime/socket';
 import { DEFAULT_PAWNSHOP_ITEMS } from '../data/pawnshopDefaults';
 
 function parseId(v: string | undefined): number | null {
@@ -157,7 +157,7 @@ mePawnshopRouter.post(
       venteClient: p.data.venteClient,
       sortOrder: Number(maxOrder[0]?.m ?? 0) + 1,
     });
-    emitInvalidate(['irs', `company:${companyId}`], [['pawnshop', companyId]]);
+    emitCompta(companyId, [['pawnshop', companyId]]);
     res.status(201).json({ ok: true });
   }),
 );
@@ -181,7 +181,7 @@ mePawnshopRouter.patch(
     if (p.data.active !== undefined) set.active = p.data.active;
     if (!Object.keys(set).length) return res.status(400).json({ error: 'bad_request' });
     await db.update(pawnshopItems).set(set).where(and(eq(pawnshopItems.id, id), eq(pawnshopItems.companyId, companyId)));
-    emitInvalidate(['irs', `company:${companyId}`], [['pawnshop', companyId]]);
+    emitCompta(companyId, [['pawnshop', companyId]]);
     res.json({ ok: true });
   }),
 );
@@ -197,7 +197,7 @@ mePawnshopRouter.delete(
     const tx = await db.select({ id: pawnshopTransactions.id }).from(pawnshopTransactions).where(and(eq(pawnshopTransactions.companyId, companyId), eq(pawnshopTransactions.itemId, id))).limit(1);
     if (tx[0]) return res.status(409).json({ error: 'has_transactions' });
     await db.delete(pawnshopItems).where(and(eq(pawnshopItems.id, id), eq(pawnshopItems.companyId, companyId)));
-    emitInvalidate(['irs', `company:${companyId}`], [['pawnshop', companyId]]);
+    emitCompta(companyId, [['pawnshop', companyId]]);
     res.json({ ok: true });
   }),
 );
@@ -280,7 +280,7 @@ async function recordTx(req: Request, res: import('express').Response, type: 'bu
     note: p.data.note || null,
     createdByUserId: req.user!.id,
   });
-  emitInvalidate(['irs', `company:${companyId}`], [['pawnshop', companyId]]);
+  emitCompta(companyId, [['pawnshop', companyId]]);
   res.status(201).json({ ok: true, total });
 }
 
@@ -303,7 +303,7 @@ mePawnshopRouter.delete(
       if ((stock.get(tx.itemId) ?? 0) - Number(tx.qty) < 0) return res.status(409).json({ error: 'would_go_negative' });
     }
     await db.delete(pawnshopTransactions).where(and(eq(pawnshopTransactions.id, id), eq(pawnshopTransactions.companyId, companyId)));
-    emitInvalidate(['irs', `company:${companyId}`], [['pawnshop', companyId]]);
+    emitCompta(companyId, [['pawnshop', companyId]]);
     res.json({ ok: true });
   }),
 );

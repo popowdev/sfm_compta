@@ -81,3 +81,12 @@ export function emitInvalidate(rooms: string | string[], keys: (string | number)
 export function emitInvalidateAll(keys: (string | number)[][]): void {
   io?.emit(SOCKET_EVENTS.dataInvalidate, keys);
 }
+
+const ACCOUNTING_KEYS = ['exercices', 'exercice', 'dashboard', 'my-pay', 'employees-perf', 'stats'] as const;
+
+export function emitCompta(companyId: number, ownKeys: (string | number)[][] = []): void {
+  emitInvalidate(
+    ['irs', `company:${companyId}`],
+    [...ownKeys, ...ACCOUNTING_KEYS.map((k) => [k, companyId] as (string | number)[])],
+  );
+}

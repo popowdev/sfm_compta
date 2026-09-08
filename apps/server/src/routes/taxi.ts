@@ -1,6 +1,6 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import type { ModuleKey } from '@rp-compta/shared';
 import { db } from '../db';
 import {
@@ -16,7 +16,8 @@ import {
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
-import { emitInvalidate } from '../realtime/socket';
+import { emitCompta } from '../realtime/socket';
+import { bizDate } from '../services/bizTime';
 
 function parseId(v: string | undefined): number | null {
   const n = Number(v);
@@ -56,8 +57,8 @@ const listQuery = z.object({
 });
 function dateFilters(col: typeof taxiCitoyens.createdAt, from?: string, to?: string) {
   return [
-    from ? sql`${col} >= ${from + ' 00:00:00'}` : undefined,
-    to ? sql`${col} <= ${to + ' 23:59:59'}` : undefined,
+    from ? gte(bizDate(col), from) : undefined,
+    to ? lte(bizDate(col), to) : undefined,
   ].filter(Boolean);
 }
 
@@ -101,7 +102,7 @@ meTaxiRouter.put(
     if (!p.success) return res.status(400).json({ error: 'bad_request' });
     await getSettings(companyId);
     await db.update(taxiSettings).set({ pricePerKm: String(round2(p.data.pricePerKm)), pricePerClient: String(round2(p.data.pricePerClient)) }).where(eq(taxiSettings.companyId, companyId));
-    emitInvalidate(['irs', `company:${companyId}`], [['taxi-config', companyId]]);
+    emitCompta(companyId, [['taxi-config', companyId]]);
     res.json({ ok: true });
   }),
 );
@@ -127,7 +128,7 @@ meTaxiRouter.post(
       fixedPrice: String(round2(p.data.fixedPrice)),
       pricePerKm: p.data.pricePerKm == null ? null : String(round2(p.data.pricePerKm)),
     });
-    emitInvalidate(['irs', `company:${companyId}`], [['taxi-config', companyId]]);
+    emitCompta(companyId, [['taxi-config', companyId]]);
     res.status(201).json({ ok: true, id: Number(inserted[0].insertId) });
   }),
 );
@@ -149,7 +150,7 @@ meTaxiRouter.patch(
     if (!Object.keys(patch).length) return res.status(400).json({ error: 'bad_request' });
     const r = await db.update(taxiVipTypes).set(patch).where(and(eq(taxiVipTypes.id, id), eq(taxiVipTypes.companyId, companyId)));
     if (!r[0].affectedRows) return res.status(404).json({ error: 'not_found' });
-    emitInvalidate(['irs', `company:${companyId}`], [['taxi-config', companyId]]);
+    emitCompta(companyId, [['taxi-config', companyId]]);
     res.json({ ok: true });
   }),
 );
@@ -164,7 +165,7 @@ meTaxiRouter.delete(
     if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
     const r = await db.delete(taxiVipTypes).where(and(eq(taxiVipTypes.id, id), eq(taxiVipTypes.companyId, companyId)));
     if (!r[0].affectedRows) return res.status(404).json({ error: 'not_found' });
-    emitInvalidate(['irs', `company:${companyId}`], [['taxi-config', companyId]]);
+    emitCompta(companyId, [['taxi-config', companyId]]);
     res.json({ ok: true });
   }),
 );
@@ -230,7 +231,7 @@ meTaxiRouter.post(
     const total = round2(p.data.km * ppk);
     const d = resolveDriver(req, p.data.driverUserId, p.data.driverName);
     const ins = await db.insert(taxiCitoyens).values({ companyId, ...d, km: String(round2(p.data.km)), pricePerKm: String(ppk), total: String(total), notes: p.data.notes || null, createdByUserId: req.user!.id });
-    emitInvalidate(['irs', `company:${companyId}`], [['taxi-citoyens', companyId]]);
+    emitCompta(companyId, [['taxi-citoyens', companyId]]);
     res.status(201).json({ ok: true, id: Number(ins[0].insertId), total });
   }),
 );
@@ -259,7 +260,7 @@ meTaxiRouter.patch(
     if (!Object.keys(patch).length) return res.status(400).json({ error: 'bad_request' });
     const r = await db.update(taxiCitoyens).set(patch).where(and(eq(taxiCitoyens.id, id), eq(taxiCitoyens.companyId, companyId)));
     if (!r[0].affectedRows) return res.status(404).json({ error: 'not_found' });
-    emitInvalidate(['irs', `company:${companyId}`], [['taxi-citoyens', companyId]]);
+    emitCompta(companyId, [['taxi-citoyens', companyId]]);
     res.json({ ok: true });
   }),
 );
@@ -274,7 +275,7 @@ meTaxiRouter.delete(
     if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
     const r = await db.delete(taxiCitoyens).where(and(eq(taxiCitoyens.id, id), eq(taxiCitoyens.companyId, companyId)));
     if (!r[0].affectedRows) return res.status(404).json({ error: 'not_found' });
-    emitInvalidate(['irs', `company:${companyId}`], [['taxi-citoyens', companyId]]);
+    emitCompta(companyId, [['taxi-citoyens', companyId]]);
     res.json({ ok: true });
   }),
 );
@@ -331,7 +332,7 @@ meTaxiRouter.post(
     const total = round2(p.data.clients * ppc);
     const d = resolveDriver(req, p.data.driverUserId, p.data.driverName);
     const ins = await db.insert(taxiConcitoyens).values({ companyId, ...d, clients: p.data.clients, pricePerClient: String(ppc), total: String(total), notes: p.data.notes || null, createdByUserId: req.user!.id });
-    emitInvalidate(['irs', `company:${companyId}`], [['taxi-concitoyens', companyId]]);
+    emitCompta(companyId, [['taxi-concitoyens', companyId]]);
     res.status(201).json({ ok: true, id: Number(ins[0].insertId), total });
   }),
 );
@@ -360,7 +361,7 @@ meTaxiRouter.patch(
     if (!Object.keys(patch).length) return res.status(400).json({ error: 'bad_request' });
     const r = await db.update(taxiConcitoyens).set(patch).where(and(eq(taxiConcitoyens.id, id), eq(taxiConcitoyens.companyId, companyId)));
     if (!r[0].affectedRows) return res.status(404).json({ error: 'not_found' });
-    emitInvalidate(['irs', `company:${companyId}`], [['taxi-concitoyens', companyId]]);
+    emitCompta(companyId, [['taxi-concitoyens', companyId]]);
     res.json({ ok: true });
   }),
 );
@@ -375,7 +376,7 @@ meTaxiRouter.delete(
     if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
     const r = await db.delete(taxiConcitoyens).where(and(eq(taxiConcitoyens.id, id), eq(taxiConcitoyens.companyId, companyId)));
     if (!r[0].affectedRows) return res.status(404).json({ error: 'not_found' });
-    emitInvalidate(['irs', `company:${companyId}`], [['taxi-concitoyens', companyId]]);
+    emitCompta(companyId, [['taxi-concitoyens', companyId]]);
     res.json({ ok: true });
   }),
 );
@@ -439,7 +440,7 @@ meTaxiRouter.post(
     if (!calc) return res.status(400).json({ error: 'invalid_type' });
     const d = resolveDriver(req, p.data.driverUserId, p.data.driverName);
     const ins = await db.insert(taxiVip).values({ companyId, ...d, typeId: p.data.typeId, typeName: calc.typeName, km: p.data.km == null ? null : String(round2(p.data.km)), total: String(calc.total), notes: p.data.notes || null, createdByUserId: req.user!.id });
-    emitInvalidate(['irs', `company:${companyId}`], [['taxi-vip', companyId]]);
+    emitCompta(companyId, [['taxi-vip', companyId]]);
     res.status(201).json({ ok: true, id: Number(ins[0].insertId), total: calc.total });
   }),
 );
@@ -472,7 +473,7 @@ meTaxiRouter.patch(
     }
     if (!Object.keys(patch).length) return res.status(400).json({ error: 'bad_request' });
     await db.update(taxiVip).set(patch).where(and(eq(taxiVip.id, id), eq(taxiVip.companyId, companyId)));
-    emitInvalidate(['irs', `company:${companyId}`], [['taxi-vip', companyId]]);
+    emitCompta(companyId, [['taxi-vip', companyId]]);
     res.json({ ok: true });
   }),
 );
@@ -487,7 +488,7 @@ meTaxiRouter.delete(
     if (!g.canWrite) return res.status(403).json({ error: 'forbidden' });
     const r = await db.delete(taxiVip).where(and(eq(taxiVip.id, id), eq(taxiVip.companyId, companyId)));
     if (!r[0].affectedRows) return res.status(404).json({ error: 'not_found' });
-    emitInvalidate(['irs', `company:${companyId}`], [['taxi-vip', companyId]]);
+    emitCompta(companyId, [['taxi-vip', companyId]]);
     res.json({ ok: true });
   }),
 );

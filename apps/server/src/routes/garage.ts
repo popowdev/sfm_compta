@@ -19,6 +19,7 @@ import {
 } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
+import { emitCompta } from '../realtime/socket';
 import { getModuleAccess, isStaff } from '../services/access';
 import { bizDate, bizWeek } from '../services/bizTime';
 
@@ -555,6 +556,7 @@ meGarageRouter.post('/repairs', asyncHandler(async (req, res) => {
     description: d.description || null,
     createdByUserId: req.user!.id,
   });
+  emitCompta(companyId, [['garage-repairs', companyId], ['garage-customs', companyId], ['garage-earnings', companyId], ['garage-billing', companyId]]);
   res.status(201).json({ ok: true, total });
 }));
 
@@ -565,6 +567,7 @@ meGarageRouter.patch('/repairs/:id', asyncHandler(async (req, res) => {
   const p = z.object({ paid: z.boolean() }).safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: 'bad_request' });
   await db.update(garageRepairs).set({ paid: p.data.paid }).where(and(eq(garageRepairs.id, id), eq(garageRepairs.companyId, companyId)));
+  emitCompta(companyId, [['garage-repairs', companyId], ['garage-customs', companyId], ['garage-earnings', companyId], ['garage-billing', companyId]]);
   res.json({ ok: true });
 }));
 meGarageRouter.delete('/repairs/:id', asyncHandler(async (req, res) => {
@@ -572,6 +575,7 @@ meGarageRouter.delete('/repairs/:id', asyncHandler(async (req, res) => {
   if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
   if (!(await requireWrite(req, companyId, res))) return;
   await db.delete(garageRepairs).where(and(eq(garageRepairs.id, id), eq(garageRepairs.companyId, companyId)));
+  emitCompta(companyId, [['garage-repairs', companyId], ['garage-customs', companyId], ['garage-earnings', companyId], ['garage-billing', companyId]]);
   res.json({ ok: true });
 }));
 
@@ -635,6 +639,7 @@ meGarageRouter.post('/customs', asyncHandler(async (req, res) => {
     description: d.description || null,
     createdByUserId: req.user!.id,
   });
+  emitCompta(companyId, [['garage-repairs', companyId], ['garage-customs', companyId], ['garage-earnings', companyId], ['garage-billing', companyId]]);
   res.status(201).json({ ok: true, finalPrice, profit });
 }));
 
@@ -645,6 +650,7 @@ meGarageRouter.patch('/customs/:id', asyncHandler(async (req, res) => {
   const p = z.object({ paid: z.boolean() }).safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: 'bad_request' });
   await db.update(garageCustoms).set({ paid: p.data.paid }).where(and(eq(garageCustoms.id, id), eq(garageCustoms.companyId, companyId)));
+  emitCompta(companyId, [['garage-repairs', companyId], ['garage-customs', companyId], ['garage-earnings', companyId], ['garage-billing', companyId]]);
   res.json({ ok: true });
 }));
 meGarageRouter.delete('/customs/:id', asyncHandler(async (req, res) => {
@@ -652,5 +658,6 @@ meGarageRouter.delete('/customs/:id', asyncHandler(async (req, res) => {
   if (!companyId || !id) return res.status(400).json({ error: 'bad_request' });
   if (!(await requireWrite(req, companyId, res))) return;
   await db.delete(garageCustoms).where(and(eq(garageCustoms.id, id), eq(garageCustoms.companyId, companyId)));
+  emitCompta(companyId, [['garage-repairs', companyId], ['garage-customs', companyId], ['garage-earnings', companyId], ['garage-billing', companyId]]);
   res.json({ ok: true });
 }));

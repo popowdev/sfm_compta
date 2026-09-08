@@ -7,7 +7,7 @@ import { companyExpenses } from '../db/schema';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
-import { emitInvalidate } from '../realtime/socket';
+import { emitCompta } from '../realtime/socket';
 import { recordAudit } from '../services/audit';
 
 function methodAction(method: string): PermAction {
@@ -102,7 +102,7 @@ meExpensesRouter.post(
       notes: d.notes ?? null,
       createdByUserId: req.user!.id,
     });
-    emitInvalidate(['irs', `company:${companyId}`], [['expenses', companyId]]);
+    emitCompta(companyId, [['expenses', companyId]]);
     res.status(201).json({ ok: true });
   }),
 );
@@ -130,7 +130,7 @@ meExpensesRouter.put(
       })
       .where(and(eq(companyExpenses.id, id), eq(companyExpenses.companyId, companyId)));
     if (!result[0].affectedRows) return res.status(404).json({ error: 'not_found' });
-    emitInvalidate(['irs', `company:${companyId}`], [['expenses', companyId]]);
+    emitCompta(companyId, [['expenses', companyId]]);
     res.json({ ok: true });
   }),
 );
@@ -155,7 +155,7 @@ meExpensesRouter.delete(
       targetLabel: `#${id}`,
       detail: `entreprise ${companyId}`,
     });
-    emitInvalidate(['irs', `company:${companyId}`], [['expenses', companyId]]);
+    emitCompta(companyId, [['expenses', companyId]]);
     res.json({ ok: true });
   }),
 );
