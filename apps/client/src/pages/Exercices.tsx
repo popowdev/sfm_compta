@@ -949,6 +949,9 @@ function ExerciceDetailView({
   if (s.pawnshopRevenue > 0) caLines.push(['· dont Pawnshop', `${fmtMoney(s.pawnshopRevenue)} $`]);
   if (s.chasseRevenue > 0) caLines.push(['· dont Chasse', `${fmtMoney(s.chasseRevenue)} $`]);
   if (s.runsRevenue > 0) caLines.push(['· dont Runs', `${fmtMoney(s.runsRevenue)} $`]);
+  if (s.concessionRevenue > 0) caLines.push(['· dont Concession', `${fmtMoney(s.concessionRevenue)} $`]);
+  if (s.cargaisonRevenue > 0) caLines.push(['· dont Cargaison', `${fmtMoney(s.cargaisonRevenue)} $`]);
+  if (s.wznRevenue > 0) caLines.push(['· dont Articles de presse', `${fmtMoney(s.wznRevenue)} $`]);
   caLines.push(['Remises accordées', `− ${fmtMoney(s.salesDiscount)} $`]);
   const totalCa = perfByEmployee.reduce((a, p) => a + p.ca, 0);
   const payData = salesByPayment.map((p) => ({ name: PAY_LABEL[p.method] ?? p.method, value: p.total }));

@@ -28,6 +28,8 @@ export interface WznConfig {
 export interface WznOverview {
   week: string;
   canWrite: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
   canManage: boolean;
   config: WznConfig;
   articles: WznArticle[];

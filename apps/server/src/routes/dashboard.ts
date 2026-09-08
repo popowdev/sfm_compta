@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { and, asc, desc, eq, gte, sql } from 'drizzle-orm';
 import { db } from '../db';
+import { wznRevenue } from '../services/wzn';
 import {
   sales,
   garageRepairs,
@@ -31,6 +32,11 @@ function parseId(value: string | undefined): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 const round2 = (n: number) => Math.round(n * 100) / 100;
+const mondayOfDay = (day: string): string => {
+  const d = new Date(`${day}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+};
 
 export const meDashboardRouter = Router({ mergeParams: true });
 meDashboardRouter.use(requireAuth);
@@ -65,11 +71,13 @@ meDashboardRouter.get(
     const [
       seeCaisse, seeStocks, seeRh, seeClients, seeExercices,
       seeGarage, seeTaxi, seePawnshop, seeChasse, seeRuns, seeConcession, seeCargaison,
+      seeWzn,
     ] = await Promise.all([
       can('caisse'), can('stocks'), can('rh'), can('clients'), can('exercices'),
       can('garage'), can('taxi'), can('pawnshop'), can('chasse'), can('runs'), can('concession'), can('cargaison'),
+      can('wzn'),
     ]);
-    const seeAnyRevenue = seeCaisse || seeGarage || seeTaxi || seePawnshop || seeChasse || seeRuns || seeConcession || seeCargaison;
+    const seeAnyRevenue = seeCaisse || seeGarage || seeTaxi || seePawnshop || seeChasse || seeRuns || seeConcession || seeCargaison || seeWzn;
 
     const slots = bizDayList(7);
     const sinceStr = slots[0] ?? bizToday();
@@ -225,6 +233,17 @@ meDashboardRouter.get(
         moduleTotal += v;
         moduleTxCount += Number(r.n ?? 0);
         dayMap.set(r.date, (dayMap.get(r.date) ?? 0) + v);
+      }
+    }
+
+    if (seeWzn) {
+      const lundis = new Set(slots.map((d) => mondayOfDay(d)));
+      for (const lundi of lundis) {
+        const v = await wznRevenue(companyId, lundi);
+        if (!v) continue;
+        moduleTotal += v;
+        const cible = slotSet.has(lundi) ? lundi : slots[0];
+        if (cible) dayMap.set(cible, (dayMap.get(cible) ?? 0) + v);
       }
     }
 

@@ -26,6 +26,12 @@ export interface WznArticleWeek {
   counted: boolean;
 }
 
+export function mondayOf(day: string): string {
+  const d = new Date(`${day}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
 export function addWeeks(monday: string, n: number): string {
   const d = new Date(`${monday}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n * 7);
@@ -49,8 +55,9 @@ export async function wznConfig(companyId: number): Promise<WznConfig> {
 
 export async function wznWeek(
   companyId: number,
-  weekMonday: string,
+  week: string,
 ): Promise<{ config: WznConfig; articles: WznArticleWeek[]; total: number }> {
+  const weekMonday = mondayOf(week);
   const config = await wznConfig(companyId);
   const rows = await db.select().from(wznArticles).where(eq(wznArticles.companyId, companyId));
   const articles = rows

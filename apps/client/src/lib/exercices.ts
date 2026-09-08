@@ -82,6 +82,9 @@ export interface ExerciceSummary {
   pawnshopRevenue: number;
   chasseRevenue: number;
   runsRevenue: number;
+  concessionRevenue: number;
+  cargaisonRevenue: number;
+  wznRevenue: number;
   moduleRevenue: number;
   garageCommission: number;
   taxiCommission: number;

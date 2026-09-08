@@ -45,7 +45,7 @@ export default function Wzn() {
   if (isLoading || q.isLoading) return <div className="space-y-4"><Skeleton className="h-24 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
   if (!q.data) return <EmptyState icon={Newspaper} title="Articles de presse" hint="Module indisponible." />;
 
-  const { articles, total, config, canWrite, canManage } = q.data;
+  const { articles, total, config, canCreate, canEdit, canManage } = q.data;
   const actifs = articles.filter((a) => a.counted);
   const likesTotal = actifs.reduce((s, a) => s + a.likes, 0);
   const range = weekRange(new Date(`${week}T12:00:00Z`));
@@ -71,7 +71,7 @@ export default function Wzn() {
             <Button variant="outline" onClick={() => setWeek(shiftWeek(week, 1))} aria-label="Semaine suivante"><ChevronRight className="h-4 w-4" /></Button>
             {week !== thisWeek && <Button variant="outline" onClick={() => setWeek(thisWeek)}>Revenir à cette semaine</Button>}
           </div>
-          {canWrite && <Button onClick={() => setModal(true)}><Plus className="h-4 w-4" />Nouvel article</Button>}
+          {canCreate && <Button onClick={() => setModal(true)}><Plus className="h-4 w-4" />Nouvel article</Button>}
         </div>
 
         {articles.length === 0 ? (
@@ -87,7 +87,7 @@ export default function Wzn() {
                   <th className="py-2 text-center font-semibold">Diffusion</th>
                   <th className="py-2 text-right font-semibold">Cette semaine</th>
                   {canManage && <th className="py-2 text-center font-semibold">Actif</th>}
-                  {canWrite && <th className="py-2 text-right font-semibold"></th>}
+                  {canManage && <th className="py-2 text-right font-semibold"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -101,7 +101,7 @@ export default function Wzn() {
                       </span>
                     </td>
                     <td className="py-2 text-right">
-                      {canWrite ? <LikesCell companyId={companyId} article={a} onSaved={inv} /> : <span>{fmtInt(a.likes)}</span>}
+                      {canEdit ? <LikesCell companyId={companyId} article={a} onSaved={inv} /> : <span>{fmtInt(a.likes)}</span>}
                     </td>
                     <td className="py-2 text-center text-xs text-muted-foreground">
                       {a.weekIndex < 1 ? `démarre le ${frDay(a.startWeek)}`
@@ -118,7 +118,7 @@ export default function Wzn() {
                           onChange={(e) => toggle.mutate({ id: a.id, active: e.target.checked })} />
                       </td>
                     )}
-                    {canWrite && (
+                    {canManage && (
                       <td className="py-2 text-right">
                         <button type="button" className="text-muted-foreground hover:text-destructive"
                           onClick={async () => { if (await confirm({ title: 'Supprimer cet article ?', message: a.title, destructive: true })) remove.mutate(a.id); }}>
@@ -132,7 +132,7 @@ export default function Wzn() {
                   <td className="py-2" colSpan={4}>Recette de la semaine</td>
                   <td className="py-2 text-right text-emerald-400">{money(total)}</td>
                   {canManage && <td />}
-                  {canWrite && <td />}
+                  {canManage && <td />}
                 </tr>
               </tbody>
             </table>

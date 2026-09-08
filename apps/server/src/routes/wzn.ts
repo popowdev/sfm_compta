@@ -8,7 +8,7 @@ import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess, actionDenied, type PermAction } from '../services/access';
 import { emitCompta } from '../realtime/socket';
 import { bizWeek } from '../services/bizTime';
-import { addWeeks, wznWeek } from '../services/wzn';
+import { addWeeks, mondayOf, wznWeek } from '../services/wzn';
 
 function parseId(v: string | undefined): number | null {
   const n = Number(v);
@@ -25,7 +25,7 @@ async function gate(req: Request, companyId: number) {
   if (!acc.enabled || acc.blocked) return { ok: false as const, status: 403, error: 'module_unavailable' };
   if (!acc.canView) return { ok: false as const, status: 403, error: 'forbidden' };
   if (actionDenied(acc, methodAction(req.method))) return { ok: false as const, status: 403, error: 'forbidden' };
-  return { ok: true as const, canWrite: acc.canWrite, canManage: acc.canDelete };
+  return { ok: true as const, canWrite: acc.canWrite, canCreate: acc.canCreate, canEdit: acc.canEdit, canManage: acc.canDelete };
 }
 
 const dateRe = /^\d{4}-\d{2}-\d{2}$/;
@@ -43,7 +43,7 @@ meWznRouter.get(
     const { monday } = bizWeek();
     const week = typeof req.query.week === 'string' && dateRe.test(req.query.week) ? req.query.week : monday;
     const data = await wznWeek(companyId, week);
-    res.json({ week, canWrite: g.canWrite, canManage: g.canManage, ...data });
+    res.json({ week, canWrite: g.canWrite, canCreate: g.canCreate, canEdit: g.canEdit, canManage: g.canManage, ...data });
   }),
 );
 
@@ -65,7 +65,7 @@ meWznRouter.post(
     const p = articleSchema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: 'bad_request' });
     const { config } = await wznWeek(companyId, bizWeek().monday);
-    const start = p.data.startWeek ?? addWeeks(bizWeek().monday, 1);
+    const start = mondayOf(p.data.startWeek ?? addWeeks(bizWeek().monday, 1));
     await db.insert(wznArticles).values({
       companyId,
       title: p.data.title,
@@ -103,7 +103,7 @@ meWznRouter.patch(
     if (p.data.title !== undefined) set.title = p.data.title;
     if (p.data.type !== undefined) set.type = p.data.type;
     if (p.data.likes !== undefined) set.likes = p.data.likes;
-    if (p.data.startWeek !== undefined) set.startWeek = p.data.startWeek;
+    if (p.data.startWeek !== undefined) set.startWeek = mondayOf(p.data.startWeek);
     if (p.data.notes !== undefined) set.notes = p.data.notes || null;
     if (Object.keys(set).length === 0) return res.json({ ok: true });
     const r = await db
