@@ -1,0 +1,99 @@
+LICENCE D'UTILISATION AVEC ATTRIBUTION OBLIGATOIRE
+
+Copyright (c) 2026 Surf Smart — Killian Brzezinski.
+Tous droits réservés.
+
+Contact : https://surfsmart.fr
+
+
+1. DÉFINITIONS
+
+« Le Logiciel » désigne l'ensemble du code source, des scripts, des feuilles de
+style, des ressources graphiques et de la documentation contenus dans ce dépôt.
+
+« L'Auteur » désigne Surf Smart — Killian Brzezinski, titulaire des droits
+patrimoniaux sur le Logiciel.
+
+« Le Titulaire » désigne toute personne physique ou morale qui utilise,
+héberge, exécute, modifie ou distribue le Logiciel.
+
+
+2. CONCESSION DE DROITS
+
+L'Auteur concède au Titulaire un droit d'usage, de modification et
+d'hébergement du Logiciel, à titre non exclusif et non transférable.
+
+Cette concession est CONDITIONNELLE. Elle n'est valable que si la condition
+d'attribution définie à l'article 3 est respectée de façon continue.
+
+
+3. CONDITION D'ATTRIBUTION
+
+Le Titulaire doit faire figurer, sur CHAQUE page publiquement accessible de
+toute instance du Logiciel, une mention d'attribution répondant à toutes les
+exigences suivantes :
+
+  a) le texte « Développé par Surf Smart » ou une formulation équivalente
+     désignant explicitement Surf Smart comme auteur ;
+
+  b) un lien hypertexte fonctionnel vers https://surfsmart.fr ;
+
+  c) une mention lisible sans interaction : taille de police d'au moins 80 %
+     de celle du texte courant du pied de page, contraste suffisant pour être
+     lue, et non masquée par une propriété CSS, un attribut ou un script ;
+
+  d) une mention présente dans le document HTML servi, et non injectée
+     uniquement à la demande de l'utilisateur.
+
+Le Titulaire doit en outre conserver intacts le présent fichier de licence et
+le fichier NOTICE dans toute copie ou redistribution du Logiciel, y compris
+sous forme modifiée.
+
+
+4. INTERDICTIONS
+
+Sont interdits sans accord écrit préalable de l'Auteur :
+
+  a) le retrait, l'altération ou la dissimulation de la mention d'attribution
+     prévue à l'article 3 ;
+  b) la revente, la sous-licence ou la mise à disposition du Logiciel à des
+     tiers à titre onéreux ;
+  c) la présentation du Logiciel, en tout ou partie, comme une création du
+     Titulaire ou d'un tiers ;
+  d) le retrait des mentions de copyright figurant dans les fichiers source.
+
+
+5. RÉSILIATION
+
+Le non-respect de l'article 3 ou de l'article 4 entraîne la résiliation
+automatique et immédiate de la concession prévue à l'article 2, sans mise en
+demeure préalable.
+
+À compter de cette résiliation, toute utilisation, tout hébergement et toute
+exécution du Logiciel constituent une contrefaçon au sens des articles L.335-2
+et L.335-3 du Code de la propriété intellectuelle français, et exposent le
+Titulaire aux sanctions civiles et pénales correspondantes.
+
+L'Auteur se réserve le droit d'exercer tout recours, notamment en cessation et
+en réparation du préjudice subi.
+
+Le Titulaire peut retrouver le bénéfice de la licence en rétablissant la
+mention d'attribution, sous réserve de l'accord écrit de l'Auteur.
+
+
+6. ABSENCE DE GARANTIE
+
+LE LOGICIEL EST FOURNI « EN L'ÉTAT », SANS GARANTIE D'AUCUNE SORTE, EXPRESSE
+OU IMPLICITE, NOTAMMENT SANS GARANTIE DE QUALITÉ MARCHANDE, D'ADÉQUATION À UN
+USAGE PARTICULIER OU D'ABSENCE DE CONTREFAÇON.
+
+L'AUTEUR NE SAURAIT ÊTRE TENU RESPONSABLE D'UN QUELCONQUE DOMMAGE, DIRECT OU
+INDIRECT, RÉSULTANT DE L'UTILISATION DU LOGICIEL. L'AUTEUR N'ASSURE AUCUNE
+MAINTENANCE NI AUCUN SUPPORT.
+
+
+7. DROIT APPLICABLE
+
+La présente licence est régie par le droit français. Tout litige relatif à sa
+validité, son interprétation ou son exécution relève de la compétence des
+juridictions françaises.

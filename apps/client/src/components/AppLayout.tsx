@@ -46,6 +46,7 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { ImportantAnnouncementPopup } from '@/components/ImportantAnnouncementPopup';
 import { GuidedTour, type TourStep } from '@/components/GuidedTour';
 import { MenuOrganizer } from '@/components/MenuOrganizer';
+import { Credit } from '@/components/Credit';
 
 function buildCompanyTour(slug: string | null | undefined): TourStep[] {
   const dash = slug ? `[data-tour="nav:/entreprise/${slug}"]` : undefined;
@@ -585,7 +586,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1 overflow-auto">{children}</main>
+      <main className="min-w-0 flex-1 overflow-auto">
+        {children}
+        <Credit />
+      </main>
 
       {inCompany && !location.pathname.includes('/m/') && (
         <button

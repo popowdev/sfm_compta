@@ -5,6 +5,13 @@ Chaque entreprise du serveur dispose de son espace privé, piloté par un espace
 IRS qui voit l'ensemble. Les accès sont adossés aux jobs in-game via une
 ressource de synchronisation ESX.
 
+## Attribution obligatoire
+
+L'usage de ce logiciel est conditionné au maintien d'une mention visible
+« Développé par Surf Smart » avec un lien vers https://surfsmart.fr sur chaque
+page publiquement accessible. La mention est déjà en place : `apps/client/src/components/Credit.tsx`, rendu par `AppLayout` et par la page de connexion.
+Son retrait résilie la licence. Voir `LICENSE` et `NOTICE`.
+
 ## Pile technique
 
 - `apps/client` — React 18, Vite, TypeScript, Tailwind

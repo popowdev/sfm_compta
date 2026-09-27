@@ -1,3 +1,4 @@
+import { Credit } from '@/components/Credit';
 import { Button } from '@/components/ui/button';
 
 export default function Login() {
@@ -12,7 +13,7 @@ export default function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
       <div className="w-full max-w-sm rounded-xl border bg-card p-8 text-center shadow">
-                <h1 className="text-xl font-bold tracking-tight">RP Compta</h1>
+        <h1 className="text-xl font-bold tracking-tight">RP Compta</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Connecte-toi pour accéder à la plateforme.
         </p>
@@ -24,6 +25,7 @@ export default function Login() {
         <a href="/api/auth/discord" className="mt-6 block">
           <Button className="w-full">Connexion avec Discord</Button>
         </a>
+        <Credit />
       </div>
     </div>
   );
