@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/toast';
 import { getMyCompanies } from '@/lib/me';
 import { getFiscalConfig } from '@/lib/fiscal';
+import { mondayOf, addDays, frDay } from '@/lib/bizWeek';
 import {
   getMyDeclarations,
   submitDeclaration,
@@ -28,8 +29,22 @@ const STATUS: Record<Declaration['status'], { label: string; cls: string }> = {
   cancelled: { label: 'annulée', cls: 'bg-destructive/10 text-destructive' },
 };
 
+const WEEK_CHOICES = Array.from({ length: 9 }, (_, i) => -i);
+
+function weekChoiceLabel(offset: number): string {
+  const monday = mondayOf(new Date(), offset);
+  const range = `${frDay(monday)} → ${frDay(addDays(monday, 6))}`;
+  if (offset === 0) return `Semaine en cours (${range})`;
+  if (offset === -1) return `Semaine dernière (${range})`;
+  return `Semaine du ${range}`;
+}
+
 const EMPTY = {
+  offset: '',
+  weekStart: '',
   weekLabel: '',
+  source: '',
+  nonDeductible: '',
   declarantName: '',
   caNet: '',
   charges: '',
@@ -64,7 +79,7 @@ export default function Declarations() {
   const submit = useMutation({
     mutationFn: () =>
       submitDeclaration(companyId, {
-        weekLabel: form.weekLabel.trim(),
+        weekStart: form.weekStart,
         declarantName: form.declarantName.trim(),
         caNet: Number(form.caNet) || 0,
         charges: Number(form.charges) || 0,
@@ -82,7 +97,9 @@ export default function Declarations() {
       toast(
         code === 'week_exists'
           ? 'Une déclaration existe déjà pour cette semaine.'
-          : "Échec de l'envoi de la déclaration.",
+          : code === 'bad_week'
+            ? 'Semaine invalide.'
+            : "Échec de l'envoi de la déclaration.",
         'error',
       );
     },
@@ -90,13 +107,18 @@ export default function Declarations() {
 
   const prefill = useMutation({
     mutationFn: (offset: number) => getDeclarationPrefill(companyId, offset),
-    onSuccess: (d) => {
+    onSuccess: (d, offset) => {
       setForm((f) => ({
         ...f,
+        offset: String(offset),
+        weekStart: d.weekStart,
         weekLabel: d.weekLabel,
+        source: d.source,
+        nonDeductible: String(d.nonDeductible),
         caNet: String(d.caNet),
         charges: String(d.charges),
         benefit: String(d.benefit),
+        dividends: String(d.dividends),
       }));
     },
     onError: () => toast('Échec du préremplissage.', 'error'),
@@ -107,7 +129,9 @@ export default function Declarations() {
 
   const benefit = Math.round(((Number(form.caNet) || 0) - (Number(form.charges) || 0)) * 100) / 100;
   const dividends = Number(form.dividends) || 0;
-  const corpTax = computeCorporateTax(benefit, fiscal.data?.brackets ?? []);
+  const nonDeductible = Number(form.nonDeductible) || 0;
+  const taxable = Math.round(Math.max(0, benefit + nonDeductible) * 100) / 100;
+  const corpTax = computeCorporateTax(taxable, fiscal.data?.brackets ?? []);
   const divRate = fiscal.data?.dividendTaxRate ?? 0;
   const divTax = Math.round(((dividends * divRate) / 100) * 100) / 100;
   const total = Math.round((corpTax + divTax) * 100) / 100;
@@ -214,30 +238,43 @@ export default function Declarations() {
               className="p-5"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (form.weekLabel.trim() && form.declarantName.trim()) submit.mutate();
+                if (form.weekStart && form.declarantName.trim() && !prefill.isPending) submit.mutate();
               }}
             >
-              <div className="mb-1 flex flex-wrap items-center justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => prefill.mutate(-1)} disabled={prefill.isPending}>
-                  Pré-remplir (semaine dernière)
-                </Button>
-                <Button type="button" variant="outline" onClick={() => prefill.mutate(0)} disabled={prefill.isPending}>
-                  {prefill.isPending ? 'Calcul…' : 'Pré-remplir (semaine en cours)'}
-                </Button>
-              </div>
               <p className="mb-4 text-xs text-muted-foreground">
-                Le préremplissage calcule le CA (ventes Caisse), les charges (dépenses + salaires
-                badgeuse) et le bénéfice de la semaine. Vérifie, ajuste si besoin, puis envoie.
+                Choisis la semaine : le CA (tous modules), les charges (dépenses, salaires, coûts de
+                production) et les dividendes sont repris de l'exercice de la semaine s'il existe,
+                sinon calculés. Vérifie, ajuste si besoin, puis envoie.
               </p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="text-sm">
                   <span className="mb-1 block text-muted-foreground">Semaine déclarée</span>
-                  <input
+                  <select
                     className={inputCls}
-                    placeholder="ex. semaine 24 (16/06 → 22/06)"
-                    value={form.weekLabel}
-                    onChange={(e) => set('weekLabel', e.target.value)}
-                  />
+                    value={form.offset}
+                    disabled={prefill.isPending}
+                    onChange={(e) => {
+                      if (e.target.value !== '') prefill.mutate(Number(e.target.value));
+                    }}
+                  >
+                    <option value="" disabled>
+                      Choisir une semaine…
+                    </option>
+                    {WEEK_CHOICES.map((o) => (
+                      <option key={o} value={String(o)}>
+                        {weekChoiceLabel(o)}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="mt-1 block text-[11px] text-muted-foreground">
+                    {prefill.isPending
+                      ? 'Calcul…'
+                      : form.source === 'exercice'
+                        ? "Chiffres repris de l'exercice de la semaine."
+                        : form.source === 'live'
+                          ? "Pas d'exercice pour cette semaine : chiffres calculés."
+                          : ''}
+                  </span>
                 </label>
                 <label className="text-sm">
                   <span className="mb-1 block text-muted-foreground">Déclarant (nom/prénom)</span>
@@ -303,6 +340,12 @@ export default function Declarations() {
                 </label>
               </div>
 
+              {nonDeductible > 0 && (
+                <p className="mt-4 text-xs text-muted-foreground">
+                  Base imposable : {fmtMoney(taxable)} $ (bénéfice + {fmtMoney(nonDeductible)} $ de
+                  dépenses non déductibles).
+                </p>
+              )}
               <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg border bg-background p-4 sm:grid-cols-3">
                 <div>
                   <div className="text-xs text-muted-foreground">Impôt société (barème)</div>
@@ -324,7 +367,7 @@ export default function Declarations() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={!form.weekLabel.trim() || !form.declarantName.trim() || submit.isPending}
+                  disabled={!form.weekStart || !form.declarantName.trim() || submit.isPending || prefill.isPending}
                 >
                   {submit.isPending ? 'Envoi…' : 'Soumettre la déclaration'}
                 </Button>

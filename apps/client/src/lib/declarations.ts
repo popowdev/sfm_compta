@@ -4,10 +4,12 @@ export interface Declaration {
   id: number;
   companyId: number;
   weekLabel: string;
+  weekStart: string | null;
   declarantName: string;
   caNet: number;
   charges: number;
   benefit: number;
+  taxableBenefit: number | null;
   corporateTax: number;
   dividends: number;
   dividendTax: number;
@@ -22,7 +24,7 @@ export interface Declaration {
 }
 
 export interface SubmitDeclarationInput {
-  weekLabel: string;
+  weekStart: string;
   declarantName: string;
   caNet: number;
   charges: number;
@@ -45,11 +47,15 @@ export const submitDeclaration = (companyId: number, body: SubmitDeclarationInpu
 
 export interface DeclarationPrefill {
   weekLabel: string;
+  weekStart: string;
   caNet: number;
   expenses: number;
   payroll: number;
   charges: number;
   benefit: number;
+  nonDeductible: number;
+  dividends: number;
+  source: 'exercice' | 'live';
 }
 
 export const getDeclarationPrefill = (companyId: number, offset = 0) =>

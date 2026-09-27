@@ -393,6 +393,13 @@
       "when": 1788882252433,
       "tag": "0055_wzn_articles",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "5",
+      "when": 1790500000000,
+      "tag": "0056_declarations_week_taxable",
+      "breakpoints": true
     }
   ]
 }

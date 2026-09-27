@@ -1,5 +1,5 @@
 import { and, eq, gte, inArray, isNotNull, lte, ne, sql, type AnyColumn, type SQL } from 'drizzle-orm';
-import { moduleConfigBool, moduleConfigNumber, salaryTierCap } from '@rp-compta/shared';
+import { moduleConfigBool, moduleConfigNumber, salaryTierCap, EXPENSE_DEDUCTION_CAPS, type ExpenseCategory } from '@rp-compta/shared';
 import { db } from '../db';
 import {
   companyModules, companyExpenses, companyEmployees, companyRoles, salaryGrid, timeEntries,
@@ -18,6 +18,7 @@ export interface WeeklyCharges {
   payroll: number;
   charges: number;
   benefit: number;
+  nonDeductible: number;
 }
 
 // Miroir du calcul financier de l'exercice comptable (routes/exercices.ts) pour une
@@ -55,7 +56,7 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
     runsCommRows, runsRevRow, taxiC, taxiCo, taxiV, pawnSell, chasseSell, concessionRows,
     repByUser, custByUser, rawPeak,
   ] = await Promise.all([
-    db.select({ total: sql<string>`COALESCE(SUM(${companyExpenses.amount}),0)` }).from(companyExpenses).where(and(eq(companyExpenses.companyId, companyId), ne(companyExpenses.category, 'salary'), gte(companyExpenses.expenseDate, start), lte(companyExpenses.expenseDate, end))),
+    db.select({ category: companyExpenses.category, total: sql<string>`COALESCE(SUM(${companyExpenses.amount}),0)`, deductible: sql<string>`COALESCE(SUM(CASE WHEN ${companyExpenses.taxDeductible} THEN ${companyExpenses.amount} ELSE 0 END),0)` }).from(companyExpenses).where(and(eq(companyExpenses.companyId, companyId), ne(companyExpenses.category, 'salary'), gte(companyExpenses.expenseDate, start), lte(companyExpenses.expenseDate, end))).groupBy(companyExpenses.category),
     db.select({ gross: sql<string>`COALESCE(SUM(${sales.subtotal}),0)`, discount: sql<string>`COALESCE(SUM(${sales.discount}),0)`, cost: sql<string>`COALESCE(SUM(${sales.productionCost}),0)` }).from(sales).where(and(eq(sales.companyId, companyId), inDay(sales.createdAt))),
     db.select({ empId: sales.employeeId, ca: sql<string>`COALESCE(SUM(${sales.total}),0)` }).from(sales).where(and(eq(sales.companyId, companyId), inDay(sales.createdAt))).groupBy(sales.employeeId),
     db.select({ employeeId: companyEmployees.id, companyRoleId: companyEmployees.companyRoleId, gradeName: companyRoles.name, gradeManage: companyRoles.canManage, active: companyEmployees.active, hourlyRate: companyEmployees.hourlyRate, commissionRate: companyEmployees.commissionRate, workedMin: sql<string>`COALESCE(SUM(GREATEST(0, TIMESTAMPDIFF(MINUTE, ${timeEntries.clockIn}, ${timeEntries.clockOut}) - ${timeEntries.pauseMinutes})), 0)` }).from(companyEmployees).leftJoin(timeEntries, and(eq(timeEntries.employeeId, companyEmployees.id), eq(timeEntries.companyId, companyId), isNotNull(timeEntries.clockOut), inDay(timeEntries.clockIn))).leftJoin(companyRoles, eq(companyEmployees.companyRoleId, companyRoles.id)).where(eq(companyEmployees.companyId, companyId)).groupBy(companyEmployees.id),
@@ -187,9 +188,16 @@ export async function computeWeeklyCharges(companyId: number, start: string, end
   const salesDiscount = Number(salesAgg[0]?.discount ?? 0);
   const caGross = round2(salesGross + garageRevenueTotal + moduleRevenue);
   const caNet = round2(caGross - salesDiscount);
-  const expenses = round2(Number(expRow[0]?.total ?? 0) + Number(cargaisonRevRow[0]?.importCost ?? 0));
+  const expensesRaw = expRow.reduce((s, r) => s + Number(r.total), 0);
+  const expensesDeductibleRaw = expRow.reduce((s, r) => {
+    const cap = EXPENSE_DEDUCTION_CAPS[r.category as ExpenseCategory];
+    const ded = Number(r.deductible);
+    return s + (cap != null ? Math.min(ded, cap) : ded);
+  }, 0);
+  const expenses = round2(expensesRaw + Number(cargaisonRevRow[0]?.importCost ?? 0));
   const payroll = round2(payrollTotal);
   const charges = round2(expenses + round2(payrollCompany) + productionCost);
   const benefit = round2(caNet - charges);
-  return { caNet, expenses, payroll, charges, benefit };
+  const nonDeductible = round2(Math.max(0, expensesRaw - expensesDeductibleRaw));
+  return { caNet, expenses, payroll, charges, benefit, nonDeductible };
 }

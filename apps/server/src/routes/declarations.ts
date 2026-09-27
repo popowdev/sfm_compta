@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { and, desc, eq, gte, isNotNull, isNull, lte, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, ne, or } from 'drizzle-orm';
 import { db } from '../db';
 import {
   declarations,
@@ -23,6 +23,14 @@ import { recordAudit } from '../services/audit';
 import { bizWeek } from '../services/bizTime';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+const MAX_WEEKS_BACK = 8;
+
+async function weekFigures(companyId: number, start: string, end: string) {
+  const fromExercice = await exerciceWeekFigures(companyId, start, end);
+  if (fromExercice) return { ...fromExercice, source: 'exercice' as const };
+  const live = await computeWeeklyCharges(companyId, start, end);
+  return { ...live, dividends: 0, source: 'live' as const };
+}
 
 function parseId(value: string | undefined): number | null {
   const n = Number(value);
@@ -38,10 +46,12 @@ function serialize(d: typeof declarations.$inferSelect) {
     id: d.id,
     companyId: d.companyId,
     weekLabel: d.weekLabel,
+    weekStart: d.weekStart,
     declarantName: d.declarantName,
     caNet: num(d.caNet),
     charges: num(d.charges),
     benefit: num(d.benefit),
+    taxableBenefit: d.taxableBenefit == null ? null : num(d.taxableBenefit),
     corporateTax: num(d.corporateTax),
     dividends: num(d.dividends),
     dividendTax: num(d.dividendTax),
@@ -86,17 +96,16 @@ meDeclarationsRouter.get(
     if (!acc.enabled || acc.blocked) return res.status(403).json({ error: 'module_unavailable' });
     if (!acc.canView) return res.status(403).json({ error: 'forbidden' });
 
-    const offset = Number.isFinite(Number(req.query.offset)) ? Number(req.query.offset) : 0;
+    const rawOffset = Math.trunc(Number(req.query.offset));
+    const offset = Number.isFinite(rawOffset) ? Math.min(0, Math.max(-MAX_WEEKS_BACK, rawOffset)) : 0;
     const { monday: start, sunday: end, label: weekLabel } = bizWeek(new Date(), offset);
-
-    const fromExercice = await exerciceWeekFigures(companyId, start, end);
-    const { caNet, expenses, payroll, charges, benefit } = fromExercice ?? (await computeWeeklyCharges(companyId, start, end));
-    res.json({ weekLabel, caNet, expenses, payroll, charges, benefit, source: fromExercice ? 'exercice' : 'live' });
+    const f = await weekFigures(companyId, start, end);
+    res.json({ weekLabel, weekStart: start, ...f });
   }),
 );
 
 const submitSchema = z.object({
-  weekLabel: z.string().trim().min(1).max(60),
+  weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   declarantName: z.string().trim().min(1).max(120),
   caNet: z.number().nonnegative().finite().max(999_999_999_999.99),
   charges: z.number().nonnegative().finite().max(999_999_999_999.99),
@@ -118,35 +127,49 @@ meDeclarationsRouter.post(
     const parsed = submitSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
     const d = parsed.data;
-    const dup = await db
-      .select({ id: declarations.id })
-      .from(declarations)
-      .where(
-        and(
-          eq(declarations.companyId, companyId),
-          eq(declarations.weekLabel, d.weekLabel),
-          isNull(declarations.archivedAt),
-        ),
-      )
-      .limit(1);
-    if (dup[0]) return res.status(409).json({ error: 'week_exists' });
-    const benefit = Math.round((d.caNet - d.charges) * 100) / 100;
-    const taxes = await computeTaxes(benefit, d.dividends);
-    await db.insert(declarations).values({
-      companyId,
-      weekLabel: d.weekLabel,
-      declarantName: d.declarantName,
-      caNet: String(d.caNet),
-      charges: String(d.charges),
-      benefit: String(benefit),
-      corporateTax: String(taxes.corporateTax),
-      dividends: String(d.dividends),
-      dividendTax: String(taxes.dividendTax),
-      totalTax: String(taxes.totalTax),
-      declaredByUserId: req.user!.id,
-      email: d.email ? d.email : null,
-      notes: d.notes ?? null,
+    const week = bizWeek(new Date(`${d.weekStart}T12:00:00Z`));
+    const current = bizWeek();
+    if (week.monday !== d.weekStart || d.weekStart > current.monday || d.weekStart < bizWeek(new Date(), -MAX_WEEKS_BACK).monday) {
+      return res.status(400).json({ error: 'bad_week' });
+    }
+    const ref = await weekFigures(companyId, week.monday, week.sunday);
+    const benefit = round2(d.caNet - d.charges);
+    const taxableBenefit = round2(Math.max(0, benefit + ref.nonDeductible));
+    const taxes = await computeTaxes(taxableBenefit, d.dividends);
+    const created = await db.transaction(async (tx) => {
+      await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)).for('update');
+      const dup = await tx
+        .select({ id: declarations.id })
+        .from(declarations)
+        .where(
+          and(
+            eq(declarations.companyId, companyId),
+            or(eq(declarations.weekStart, week.monday), eq(declarations.weekLabel, week.label)),
+            isNull(declarations.archivedAt),
+          ),
+        )
+        .limit(1);
+      if (dup[0]) return false;
+      await tx.insert(declarations).values({
+        companyId,
+        weekLabel: week.label,
+        weekStart: week.monday,
+        declarantName: d.declarantName,
+        caNet: String(d.caNet),
+        charges: String(d.charges),
+        benefit: String(benefit),
+        taxableBenefit: String(taxableBenefit),
+        corporateTax: String(taxes.corporateTax),
+        dividends: String(d.dividends),
+        dividendTax: String(taxes.dividendTax),
+        totalTax: String(taxes.totalTax),
+        declaredByUserId: req.user!.id,
+        email: d.email ? d.email : null,
+        notes: d.notes ?? null,
+      });
+      return true;
     });
+    if (!created) return res.status(409).json({ error: 'week_exists' });
     invalidateDeclaration(companyId);
     res.status(201).json({ ok: true });
   }),
@@ -202,6 +225,7 @@ async function loadDeclaration(id: number) {
     .select({
       companyId: declarations.companyId,
       weekLabel: declarations.weekLabel,
+      weekStart: declarations.weekStart,
       archivedAt: declarations.archivedAt,
       companyName: companies.name,
     })
@@ -252,7 +276,9 @@ irsDeclarationsRouter.post(
       .where(
         and(
           eq(declarations.companyId, existing.companyId),
-          eq(declarations.weekLabel, existing.weekLabel),
+          existing.weekStart
+            ? or(eq(declarations.weekStart, existing.weekStart), eq(declarations.weekLabel, existing.weekLabel))
+            : eq(declarations.weekLabel, existing.weekLabel),
           isNull(declarations.archivedAt),
           ne(declarations.id, id),
         ),

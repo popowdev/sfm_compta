@@ -262,10 +262,12 @@ export const declarations = mysqlTable('declarations', {
     .notNull()
     .references(() => companies.id, { onDelete: 'cascade' }),
   weekLabel: varchar('week_label', { length: 60 }).notNull(),
+  weekStart: date('week_start', { mode: 'string' }),
   declarantName: varchar('declarant_name', { length: 120 }).notNull(),
   caNet: decimal('ca_net', { precision: 14, scale: 2 }).notNull(),
   charges: decimal('charges', { precision: 14, scale: 2 }).notNull(),
   benefit: decimal('benefit', { precision: 14, scale: 2 }).notNull(),
+  taxableBenefit: decimal('taxable_benefit', { precision: 14, scale: 2 }),
   corporateTax: decimal('corporate_tax', { precision: 14, scale: 2 }).notNull(),
   dividends: decimal('dividends', { precision: 14, scale: 2 }).notNull(),
   dividendTax: decimal('dividend_tax', { precision: 14, scale: 2 }).notNull(),

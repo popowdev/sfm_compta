@@ -1008,6 +1008,8 @@ export async function exerciceWeekFigures(companyId: number, start: string, end:
     payroll: summary.payrollTotal,
     charges: summary.charges,
     benefit: summary.benefit,
+    nonDeductible: Math.max(0, round2(summary.charges - summary.salaryDeductible - summary.expensesDeductible - summary.productionCost)),
+    dividends: summary.dividends,
   };
 }
 
