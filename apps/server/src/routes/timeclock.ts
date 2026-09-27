@@ -18,9 +18,7 @@ function parseId(value: string | undefined): number | null {
 }
 
 function nowStr(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return new Date().toISOString().slice(0, 19).replace('T', ' ');
 }
 
 function weekBounds(): { from: string; to: string } {
@@ -60,8 +58,8 @@ async function weekWorkedHours(companyId: number, employeeId: number): Promise<n
 
 function minutesBetween(a: string, b: string | null): number | null {
   if (!b) return null;
-  const x = new Date(a.replace(' ', 'T')).getTime();
-  const y = new Date(b.replace(' ', 'T')).getTime();
+  const x = new Date(`${a.replace(' ', 'T')}Z`).getTime();
+  const y = new Date(`${b.replace(' ', 'T')}Z`).getTime();
   if (Number.isNaN(x) || Number.isNaN(y)) return null;
   return Math.max(0, Math.round((y - x) / 60000));
 }

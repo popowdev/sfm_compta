@@ -17,6 +17,7 @@ import { asyncHandler } from '../middleware/asyncHandler';
 import { getModuleAccess } from '../services/access';
 import { computeTaxes } from '../services/declarations';
 import { computeWeeklyCharges } from '../services/weeklyCharges';
+import { exerciceWeekFigures } from './exercices';
 import { emitInvalidate } from '../realtime/socket';
 import { recordAudit } from '../services/audit';
 import { bizWeek } from '../services/bizTime';
@@ -88,8 +89,9 @@ meDeclarationsRouter.get(
     const offset = Number.isFinite(Number(req.query.offset)) ? Number(req.query.offset) : 0;
     const { monday: start, sunday: end, label: weekLabel } = bizWeek(new Date(), offset);
 
-    const { caNet, expenses, payroll, charges, benefit } = await computeWeeklyCharges(companyId, start, end);
-    res.json({ weekLabel, caNet, expenses, payroll, charges, benefit });
+    const fromExercice = await exerciceWeekFigures(companyId, start, end);
+    const { caNet, expenses, payroll, charges, benefit } = fromExercice ?? (await computeWeeklyCharges(companyId, start, end));
+    res.json({ weekLabel, caNet, expenses, payroll, charges, benefit, source: fromExercice ? 'exercice' : 'live' });
   }),
 );
 

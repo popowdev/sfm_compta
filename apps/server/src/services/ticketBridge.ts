@@ -19,7 +19,7 @@ function ticketLink(ref: string): string {
   return `/support/${ref}`;
 }
 function nowFr(): string {
-  return new Date().toLocaleString('fr-FR');
+  return new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
 }
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -112,7 +112,7 @@ function buildTranscript(
 ): string {
   const rows = msgs
     .map((m) => {
-      const when = m.createdAt ? new Date(m.createdAt).toLocaleString('fr-FR') : '';
+      const when = m.createdAt ? new Date(m.createdAt).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }) : '';
       const tag = m.internal ? '<span class="tag interne">Note interne</span>' : m.fromDiscord ? '<span class="tag discord">Discord</span>' : '';
       return `<div class="msg${m.internal ? ' int' : ''}"><div class="meta"><b>${esc(m.name ?? '—')}</b> ${tag} <span class="when">${esc(when)}</span></div><div class="body">${esc(m.body).replace(/\n/g, '<br>')}</div></div>`;
     })

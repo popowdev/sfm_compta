@@ -984,6 +984,33 @@ async function buildExerciceDetail(companyId: number, id: number) {
     return { exRow: exRows[0], detailBase };
 }
 
+type ExerciceSummary = NonNullable<Awaited<ReturnType<typeof buildExerciceDetail>>>['detailBase']['summary'];
+
+export async function exerciceWeekFigures(companyId: number, start: string, end: string) {
+  const rows = await db
+    .select({ id: exercices.id, status: exercices.status, snapshot: exercices.snapshot })
+    .from(exercices)
+    .where(and(eq(exercices.companyId, companyId), eq(exercices.startDate, start), eq(exercices.endDate, end)))
+    .orderBy(desc(exercices.id))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  let summary: ExerciceSummary | null = null;
+  if (row.status === 'closed' && row.snapshot != null) {
+    const snap = (typeof row.snapshot === 'string' ? JSON.parse(row.snapshot) : row.snapshot) as { summary?: ExerciceSummary };
+    summary = snap.summary ?? null;
+  }
+  if (!summary) summary = (await buildExerciceDetail(companyId, row.id))?.detailBase.summary ?? null;
+  if (!summary) return null;
+  return {
+    caNet: summary.caNet,
+    expenses: summary.expensesTotal,
+    payroll: summary.payrollTotal,
+    charges: summary.charges,
+    benefit: summary.benefit,
+  };
+}
+
 export async function snapshotExerciceIfClosed(companyId: number, id: number) {
   const built = await buildExerciceDetail(companyId, id);
   if (!built || built.exRow.status !== 'closed') return;
