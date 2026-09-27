@@ -100,7 +100,6 @@ fivemRouter.post(
   }),
 );
 
-// Annuaire des noms de personnages — lecture serveur-a-serveur (token partage), pour un service tiers.
 fivemRouter.get(
   '/directory',
   asyncHandler(async (req, res) => {

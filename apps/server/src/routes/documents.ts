@@ -39,8 +39,6 @@ async function cleanupReqFile(req: Request): Promise<void> {
   if (req.file) await unlink(req.file.path).catch(() => {});
 }
 
-// Best-effort: remove the file from disk for a stored /uploads/documents/<name> url,
-// guarding against path traversal (only the basename inside DOC_DIR is unlinked).
 async function unlinkStored(url: string): Promise<void> {
   const base = path.basename(url);
   if (!base || base === '.' || base === '..') return;
@@ -61,8 +59,6 @@ async function ensureFolder(companyId: number, name: string | null): Promise<voi
   if (!name) return;
   await db.insert(companyDocFolders).values({ companyId, name }).onDuplicateKeyUpdate({ set: { name } });
 }
-
-// ---------- Company documents ----------
 
 export const meDocumentsRouter = Router({ mergeParams: true });
 meDocumentsRouter.use(requireAuth);
@@ -272,8 +268,6 @@ meDocumentsRouter.delete(
     res.json({ ok: true });
   }),
 );
-
-// ---------- IRS documents ----------
 
 export const irsDocumentsRouter = Router();
 irsDocumentsRouter.use(requireAuth, requireAppRole('irs'));

@@ -17,9 +17,6 @@ const DEFAULT_GRADES: DefaultGrade[] = [
   { name: 'Employé', rank: 3, canManage: false },
 ];
 
-// Modules accessibles par défaut à un simple employé (en lecture seule).
-// Tout le reste (RH, stats, dividendes, actionnaires, déclarations, exercices…)
-// est masqué par défaut ; seul un grade « gérant » (canManage) voit/gère tout.
 export const BASIC_MODULES: ModuleKey[] = ['caisse', 'garage', 'badgeuse'];
 
 export function defaultModulePerms(canManage: boolean, key: ModuleKey) {

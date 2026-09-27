@@ -1,7 +1,7 @@
 local ESX = exports['es_extended']:getSharedObject()
 
-local pending = {} -- [discord] = payload à envoyer
-local cache = {}   -- [src] = dernier snapshot connu (pour marquer offline au drop)
+local pending = {}
+local cache = {}
 local sending = false
 
 local function getDiscord(src)
@@ -55,7 +55,6 @@ local function jobsCatalog()
   return out
 end
 
--- Events ESX -> on marque juste le joueur "à sync" (AUCUNE requête ici : c'est ça l'anti-spam)
 AddEventHandler('esx:playerLoaded', function(src) mark(src, true) end)
 AddEventHandler('esx:setJob', function(src) mark(src, true) end)
 AddEventHandler('playerDropped', function()
@@ -68,7 +67,6 @@ AddEventHandler('playerDropped', function()
   end
 end)
 
--- Flush groupé : 1 requête max / FlushInterval, uniquement s'il y a du changement.
 CreateThread(function()
   while true do
     Wait(Config.FlushInterval)
@@ -80,7 +78,6 @@ CreateThread(function()
       PerformHttpRequest(Config.SyncUrl, function(status)
         sending = false
         if status ~= 200 and status ~= 204 then
-          -- échec réseau : on remet en file pour le prochain tick (aucune perte, pas de blocage)
           for _, p in ipairs(batch) do
             if pending[p.discord] == nil then pending[p.discord] = p end
           end
@@ -90,7 +87,6 @@ CreateThread(function()
   end
 end)
 
--- Réconciliation complète (au démarrage + toutes les 5 min) : recale l'état, rattrape tout event manqué.
 CreateThread(function()
   while true do
     local players = {}

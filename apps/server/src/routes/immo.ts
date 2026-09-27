@@ -43,7 +43,6 @@ async function gate(req: Request, companyId: number, moduleKey: ModuleKey) {
   return { ok: true as const, canWrite: acc.canWrite, canManage: acc.canDelete };
 }
 
-// Ensemble des n° de propriété qui ont une parcelle sur la carte (pour le lien fiche → carte).
 async function parcelRefSet(companyId: number, refs: string[]): Promise<Set<string>> {
   const uniq = [...new Set(refs)];
   if (!uniq.length) return new Set();
@@ -62,8 +61,6 @@ async function clientInCompany(clientId: number, companyId: number): Promise<boo
     .limit(1);
   return !!rows[0];
 }
-
-// ---------------- LOCATIONS ----------------
 
 export const meImmoRentalsRouter = Router({ mergeParams: true });
 meImmoRentalsRouter.use(requireAuth);
@@ -190,7 +187,6 @@ meImmoRentalsRouter.get(
   }),
 );
 
-// Toutes les factures de loyer impayées de l'entreprise (vue globale).
 meImmoRentalsRouter.get(
   '/unpaid',
   asyncHandler(async (req, res) => {
@@ -316,8 +312,6 @@ meImmoRentalsRouter.delete(
   }),
 );
 
-// --- loyers (échéances) d'une location ---
-
 meImmoRentalsRouter.get(
   '/:id/invoices',
   asyncHandler(async (req, res) => {
@@ -425,8 +419,6 @@ meImmoRentalsRouter.patch(
     res.json({ ok: true });
   }),
 );
-
-// ---------------- VENTES ----------------
 
 export const meImmoSalesRouter = Router({ mergeParams: true });
 meImmoSalesRouter.use(requireAuth);
@@ -606,8 +598,6 @@ meImmoSalesRouter.delete(
   }),
 );
 
-// ---------------- CARTE (parcelles) ----------------
-
 export const meImmoParcelsRouter = Router({ mergeParams: true });
 meImmoParcelsRouter.use(requireAuth);
 
@@ -638,7 +628,6 @@ meImmoParcelsRouter.get(
       .where(eq(immoParcels.companyId, companyId))
       .orderBy(desc(immoParcels.id));
 
-    // Lien vers la fiche : on rattache la parcelle à la location ou la vente de même n°.
     const refs = [...new Set(rows.map((r) => r.propertyRef))];
     const [rentalMatches, saleMatches] = refs.length
       ? await Promise.all([

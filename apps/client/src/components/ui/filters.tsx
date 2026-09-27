@@ -60,7 +60,6 @@ export function FilterSelect({
   );
 }
 
-// Build distinct, sorted filter options from a list of (possibly repeated) labels.
 export function distinctOptions(values: (string | null | undefined)[]): FilterOption[] {
   const set = new Set<string>();
   for (const v of values) if (v) set.add(v);

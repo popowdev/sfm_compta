@@ -82,9 +82,6 @@ export function fmtClock(seconds: number): string {
   return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`;
 }
 
-// Le serveur stocke et renvoie les pointages en UTC, au format "YYYY-MM-DD HH:MM:SS",
-// sans marqueur de fuseau : sans le "Z" le navigateur les lirait comme des heures
-// locales et afficherait 11h30 pour un service pris a 13h30.
 const PARIS = 'Europe/Paris';
 
 function utcDate(dt: string): Date {

@@ -12,8 +12,7 @@ export default function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
       <div className="w-full max-w-sm rounded-xl border bg-card p-8 text-center shadow">
-        <img src="/logo.png" alt="RP Compta" className="mx-auto mb-6 h-16 w-auto" />
-        <h1 className="text-xl font-bold tracking-tight">RP Compta</h1>
+                <h1 className="text-xl font-bold tracking-tight">RP Compta</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Connecte-toi pour accéder à la plateforme.
         </p>

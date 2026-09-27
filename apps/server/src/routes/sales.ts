@@ -286,8 +286,6 @@ meSalesRouter.post(
         const lineRecipe = recipeByItem.get(c.id) ?? [];
         let lineUnitCost = 0;
         if (c.stockItemId) {
-          // Produit fini stocké : on décrémente SON stock. Les matières premières ont déjà
-          // été consommées lors du craft, on ne les redécompte pas à la vente.
           lineUnitCost = costById.get(c.stockItemId) ?? 0;
           if (lineUnitCost === 0 && lineRecipe.length) {
             lineUnitCost = lineRecipe.reduce((sum, r) => sum + Number(r.quantity) * (costById.get(r.stockItemId) ?? 0), 0);
@@ -296,7 +294,6 @@ meSalesRouter.post(
             consume.set(c.stockItemId, (consume.get(c.stockItemId) ?? 0) + qty);
           }
         } else {
-          // Produit fabriqué à la volée : on décompte ses matières premières directement.
           for (const r of lineRecipe) {
             lineUnitCost += Number(r.quantity) * (costById.get(r.stockItemId) ?? 0);
             if (cfg.stockLink && c.type === 'product') {

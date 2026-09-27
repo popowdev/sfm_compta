@@ -27,8 +27,6 @@ meFivemRouter.get(
     const discord = req.user!.discordId;
     const [result, selected] = await Promise.all([fetchGameCharacters(discord), selectedName(discord)]);
     if (!result.ok) {
-      // API du jeu injoignable → repli sur les personnages déjà synchronisés en base,
-      // pour que le sélecteur reste utilisable (affichage) même serveur de jeu down.
       const stored = await db
         .select()
         .from(fivemCharacters)

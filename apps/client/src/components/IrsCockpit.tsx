@@ -196,5 +196,5 @@ function Row({
 }
 
 function Done() {
-  return <p className="px-1 py-2 text-xs text-muted-foreground">Rien à traiter pour le moment. 👌</p>;
+  return <p className="px-1 py-2 text-xs text-muted-foreground">Rien à traiter pour le moment.</p>;
 }

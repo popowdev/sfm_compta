@@ -44,8 +44,6 @@ export const setGradePermission = (
     body: JSON.stringify({ canView, canWrite }),
   });
 
-// --- Patron-scoped (fine per-action) ---
-
 export interface GradePermFine {
   canView: boolean;
   canWrite: boolean;
@@ -115,8 +113,6 @@ export const setMyGradeSpecialPermission = (
     `/api/me/companies/${companyId}/grades/${rid}/special/${moduleKey}/${actionKey}`,
     { method: 'PUT', body: JSON.stringify({ granted }) },
   );
-
-// --- Patron-scoped member assignment ---
 
 export interface CompanyMember {
   membershipId: number;

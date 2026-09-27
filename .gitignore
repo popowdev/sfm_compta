@@ -1,27 +1,21 @@
-# dependencies
 node_modules/
 .pnpm-store/
 
-# builds
 dist/
 build/
 *.tsbuildinfo
 
-# env & secrets
 .env
 .env.*
 !.env.example
 
-# logs
 *.log
 logs/
 npm-debug.log*
 pnpm-debug.log*
 
-# drizzle
 apps/server/drizzle/meta/_journal.json.lock
 
-# misc
 .DS_Store
 coverage/
 .vite/
@@ -29,6 +23,12 @@ coverage/
 .vscode/*
 !.vscode/extensions.json
 
-# runtime uploads & generated map tiles (data, not source)
 uploads/
 tiles/
+
+scripts/set-discord-token.sh
+scripts/post-changelog.mjs
+
+*.sql.gz
+*.dump
+*.bak

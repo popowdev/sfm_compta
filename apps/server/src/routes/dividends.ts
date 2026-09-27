@@ -130,8 +130,6 @@ meDividendsRouter.delete(
   }),
 );
 
-// --- IRS registry (all companies) ---
-
 export const irsDividendsRouter = Router();
 irsDividendsRouter.use(requireAuth, requireAppRole('irs'));
 

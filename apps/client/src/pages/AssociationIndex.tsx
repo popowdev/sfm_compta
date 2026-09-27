@@ -4,7 +4,6 @@ import { Kpi } from '@/components/ui/kpi';
 import { AssocPage } from '@/components/AssocPage';
 import { fmtMoney } from '@/lib/declarations';
 
-
 export default function AssociationIndex() {
   return (
     <AssocPage title="Tableau de bord">

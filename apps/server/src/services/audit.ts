@@ -10,7 +10,6 @@ interface AuditInput {
   detail?: string | null;
 }
 
-// Fire-and-forget audit trail for IRS/staff actions. Never throws into the request path.
 export async function recordAudit(a: AuditInput): Promise<void> {
   try {
     await db.insert(auditLog).values({
@@ -22,6 +21,5 @@ export async function recordAudit(a: AuditInput): Promise<void> {
       detail: a.detail ? a.detail.slice(0, 300) : null,
     });
   } catch {
-    // auditing must never break the underlying action
   }
 }

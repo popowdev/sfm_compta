@@ -62,8 +62,6 @@ export default function Dashboard() {
   });
 
   const all = companies ?? [];
-  // Un joueur ne voit que l'entreprise de son personnage sélectionné (+ ses entreprises
-  // manuelles) ; le staff voit tout. fivemActive est calculé côté serveur.
   const list = isStaff ? all : all.filter((c) => c.fivemActive);
   const single = list.length === 1 ? list[0] : null;
 

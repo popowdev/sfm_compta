@@ -12,9 +12,6 @@ import {
 } from '../db/schema';
 import { isModuleBlocked } from './modules';
 
-// Staff "omniscience" (voit toutes les entreprises, bypass des permissions) est
-// débrayable par l'utilisateur via users.staff_mode. Le rôle staff lui-même
-// (requireAppRole) n'est PAS affecté : couper le mode masque juste la vue globale.
 export async function isStaff(userId: number): Promise<boolean> {
   const rows = await db
     .select({ role: userAppRoles.role, staffMode: users.staffMode })
@@ -158,8 +155,6 @@ export async function getModuleAccess(
     .limit(1);
   if (!mem[0]) return null;
 
-  // Un grade « gérant » (Patron / Co-patron) a accès complet à tous les modules,
-  // sans dépendre des rolePermissions.
   if (mem[0].canManage) {
     return {
       enabled,

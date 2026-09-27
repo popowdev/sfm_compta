@@ -94,13 +94,13 @@ function useCollections(token: string | undefined): Collections {
           .map((l) => ({ id: l.id, name: l.name, ids: l.ids.filter((x): x is number => typeof x === 'number') }));
         if (clean.length) return clean;
       }
-    } catch { /* ignore */ }
+    } catch { }
     return [{ id: 'l1', name: 'Ma wishlist', ids: [] }];
   });
   const [activeId, setActiveId] = useState<string>(() => lists[0]?.id ?? 'l1');
 
   useEffect(() => {
-    try { localStorage.setItem(key, JSON.stringify(lists)); } catch { /* quota / private mode */ }
+    try { localStorage.setItem(key, JSON.stringify(lists)); } catch { }
   }, [lists, key]);
   useEffect(() => {
     if (!lists.some((l) => l.id === activeId)) setActiveId(lists[0]?.id ?? 'l1');
@@ -276,7 +276,7 @@ export default function Showroom() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try { return localStorage.getItem('showroom-theme') === 'dark' ? 'dark' : 'light'; } catch { return 'light'; }
   });
-  useEffect(() => { try { localStorage.setItem('showroom-theme', theme); } catch { /* ignore */ } }, [theme]);
+  useEffect(() => { try { localStorage.setItem('showroom-theme', theme); } catch { } }, [theme]);
   const col = useCollections(token);
   const catalogRef = useRef<HTMLDivElement>(null);
 
@@ -452,8 +452,7 @@ function Hero({ company, featured, count, cats, onExplore }: { company: { name: 
   return (
     <header className="relative z-10 mx-auto flex min-h-[92vh] max-w-[1400px] flex-col px-5 sm:px-8">
       <div className="flex items-center gap-2.5 pt-8">
-        <img src="/logo.png" alt="RP Compta" className="h-9 w-9 rounded-xl object-contain" />
-        <div className="text-lg font-black tracking-tight text-[var(--tx)]">RP Compta</div>
+                <div className="text-lg font-black tracking-tight text-[var(--tx)]">RP Compta</div>
       </div>
 
       <div className="grid flex-1 items-center gap-6 lg:grid-cols-2">

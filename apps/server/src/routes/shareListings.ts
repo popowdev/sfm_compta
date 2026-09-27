@@ -29,8 +29,6 @@ async function manageableCompanyIds(userId: number, staff: boolean): Promise<Set
   return new Set(rows.map((r) => r.companyId));
 }
 
-// ---------------- Marketplace (all authenticated) ----------------
-
 export const meShareListingsRouter = Router();
 meShareListingsRouter.use(requireAuth);
 
@@ -200,9 +198,6 @@ async function decideRequest(req: Request, accept: boolean) {
     const reqParts = Number(rq.parts);
     if (l.status !== 'open' || reqParts > Number(l.parts)) return { ok: false as const, status: 400, error: 'unavailable' };
 
-    // Transfer from the seller shareholder to the buyer (cap table stays zero-sum).
-    // A valid seller is REQUIRED: if the seller shareholder was deleted (FK set null),
-    // reject the accept — otherwise crediting the buyer would mint shares from nothing.
     if (!l.sellerShareholderId) {
       return { ok: false as const, status: 409, error: 'seller_gone' };
     }
@@ -274,8 +269,6 @@ meShareListingsRouter.post(
     res.json({ ok: true });
   }),
 );
-
-// ---------------- IRS oversight (read-only registry) ----------------
 
 export const irsShareListingsRouter = Router();
 irsShareListingsRouter.use(requireAuth, requireAppRole('irs'));

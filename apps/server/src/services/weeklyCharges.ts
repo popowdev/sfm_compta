@@ -21,9 +21,6 @@ export interface WeeklyCharges {
   nonDeductible: number;
 }
 
-// Miroir du calcul financier de l'exercice comptable (routes/exercices.ts) pour une
-// semaine SANS exercice : hoursCap = 0, pas de plafond salaire, pas d'ajustements
-// (prime/retenue). À GARDER EN PHASE avec la paie de exercices.ts.
 export async function computeWeeklyCharges(companyId: number, start: string, end: string): Promise<WeeklyCharges> {
   const inDay = (col: AnyColumn | SQL) => and(gte(bizDate(col), start), lte(bizDate(col), end));
 

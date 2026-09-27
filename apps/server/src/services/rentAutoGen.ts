@@ -7,14 +7,10 @@ import { emitInvalidate } from '../realtime/socket';
 import { sendDiscordDM, buildRentReminderEmbed, buildRentOverdueEmbed } from './discordBot';
 import { bizWeek } from './bizTime';
 
-// Lundi (00:00) de la semaine courante, au format YYYY-MM-DD.
 function currentWeekMonday(): string {
   return bizWeek().monday;
 }
 
-// Génère le loyer de la semaine courante pour toutes les locations en auto-génération.
-// Idempotent (contrainte UNIQUE(rental_id, week_start)) : un loyer n'est créé qu'une fois par semaine.
-// Envoie le rappel Discord RP uniquement quand un NOUVEAU loyer est réellement créé.
 export async function runRentAutoGeneration(): Promise<{ created: number; reminders: number }> {
   const weekStart = currentWeekMonday();
   const rows = await db
@@ -48,7 +44,7 @@ export async function runRentAutoGeneration(): Promise<{ created: number; remind
       });
       inserted = true;
     } catch {
-      continue; // loyer déjà généré cette semaine
+      continue;
     }
     if (!inserted) continue;
     created += 1;
@@ -81,8 +77,6 @@ export async function runRentAutoGeneration(): Promise<{ created: number; remind
 
 const RELANCE_THROTTLE_DAYS = 3;
 
-// Relance les locataires dont un ou plusieurs loyers de semaines PASSÉES sont encore impayés.
-// Throttlé à 1 relance / 3 jours par location. Nécessite le bot Discord (sinon no-op).
 export async function runRentReminders(): Promise<{ sent: number }> {
   if (!env.DISCORD_BOT_TOKEN) return { sent: 0 };
   const monday = currentWeekMonday();
@@ -110,7 +104,6 @@ export async function runRentReminders(): Promise<{ sent: number }> {
 
   let sent = 0;
   for (const r of rentals) {
-    // loyers en retard = impayés d'une semaine strictement antérieure à la semaine courante
     const overdue = await db
       .select({ weekStart: immoRentInvoices.weekStart, amount: immoRentInvoices.amount })
       .from(immoRentInvoices)
@@ -135,7 +128,6 @@ export async function runRentReminders(): Promise<{ sent: number }> {
         oldestWeek: overdue[0]!.weekStart as unknown as string,
       }),
     );
-    // On throttle même si l'envoi échoue (MP fermés) pour éviter les tentatives en boucle.
     await db.update(immoRentals).set({ lastReminderAt: sql`NOW()` }).where(eq(immoRentals.id, r.id));
     if (ok) sent += 1;
   }

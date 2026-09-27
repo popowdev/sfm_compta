@@ -8,7 +8,7 @@ export interface CalEvent {
   ownerId: number | null;
   ownerName: string;
   ownerSlug: string | null;
-  startAt: string; // "YYYY-MM-DD HH:MM:SS"
+  startAt: string;
   endAt: string;
   canManage: boolean;
 }
@@ -25,7 +25,7 @@ export interface CreateEventInput {
   category?: string;
   ownerType: 'company' | 'association';
   ownerId: number;
-  date: string; // "YYYY-MM-DD"
+  date: string;
   slot: 1 | 2;
 }
 

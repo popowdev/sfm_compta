@@ -13,7 +13,6 @@ const clientErrSchema = z.object({
   path: z.string().max(255).optional(),
 });
 
-// Public (rate-limité par /api) : un crash côté client remonte ici et reçoit un code.
 export const errorsRouter = Router();
 
 errorsRouter.post(
@@ -36,7 +35,6 @@ errorsRouter.post(
   }),
 );
 
-// Staff : coller un code → détails de la panne (message, stack, route, user, heure).
 export const adminErrorsRouter = Router();
 adminErrorsRouter.use(requireAuth, requireAppRole('staff'));
 

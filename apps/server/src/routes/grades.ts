@@ -118,8 +118,6 @@ gradesRouter.delete(
 
 const permSchema = z.object({ canView: z.boolean(), canWrite: z.boolean() });
 
-// --- Patron-scoped grades management (gated by canManageCompany) ---
-
 export const meGradesRouter = Router({ mergeParams: true });
 meGradesRouter.use(requireAuth);
 meGradesRouter.use(

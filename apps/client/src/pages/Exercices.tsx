@@ -1008,7 +1008,7 @@ function ExerciceDetailView({
       <div className="rounded-xl border bg-card p-5 md:p-6" data-tour="ex-pnl">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="text-lg font-bold tracking-tight">Le parcours de l'argent 💸</h3>
+            <h3 className="text-lg font-bold tracking-tight">Le parcours de l'argent</h3>
             <p className="text-sm text-muted-foreground">Ce qui rentre, ce qui sort, ce qu'il reste — puis les impôts.</p>
           </div>
           <div className="flex gap-2">

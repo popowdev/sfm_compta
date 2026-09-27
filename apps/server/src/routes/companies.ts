@@ -16,7 +16,6 @@ export const companiesRouter = Router();
 
 companiesRouter.use(requireAuth, requireAppRole('irs'));
 
-
 function parseId(value: string | undefined): number | null {
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : null;

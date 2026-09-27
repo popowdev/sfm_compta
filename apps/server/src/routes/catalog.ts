@@ -60,7 +60,6 @@ function toItemRow(d: z.infer<typeof itemSchema>) {
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-// Gère le stock propre d'un produit : crée/maj un article de stock dédié, ou le délie.
 async function syncOwnStock(
   tx: Tx,
   companyId: number,
@@ -86,7 +85,6 @@ async function syncOwnStock(
         .where(eq(catalogItems.id, catalogItemId));
     }
   } else if (currentStockId) {
-    // On délie (on garde l'article de stock pour l'historique).
     await tx.update(catalogItems).set({ stockItemId: null }).where(eq(catalogItems.id, catalogItemId));
   }
 }
@@ -165,7 +163,6 @@ meCatalogRouter.get(
           lineCost: stocksVisible ? round2(qty * unitCost) : null,
         };
       });
-      // Produit stocké directement (produit fini, sans matière première) : son coût = coût unitaire de son article de stock.
       const directStock = it.stockItemId ? stockById.get(it.stockItemId) : null;
       if (directStock) costSum += Number(directStock.unitCost);
       const price = Number(it.price);
@@ -358,8 +355,6 @@ const craftSchema = z.object({
     .max(50),
 });
 
-// Craft : fabrique des produits finis. Retire les matières premières (recette × qté)
-// et ajoute la quantité produite au stock du produit fini (son article de stock lié).
 meCatalogRouter.post(
   '/craft',
   asyncHandler(async (req, res) => {
@@ -374,7 +369,6 @@ meCatalogRouter.post(
     const parsed = craftSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'bad_request' });
 
-    // Agrège les quantités par produit (au cas où le même produit apparaît 2 fois).
     const wanted = new Map<number, number>();
     for (const l of parsed.data.lines) {
       wanted.set(l.catalogItemId, round3((wanted.get(l.catalogItemId) ?? 0) + l.quantity));
@@ -398,14 +392,12 @@ meCatalogRouter.post(
       recipeByItem.set(r.catalogItemId, arr);
     }
 
-    // Chaque produit craftable doit avoir une recette ET un article de stock produit fini.
     for (const it of items) {
       if (it.type !== 'product' || !it.stockItemId || (recipeByItem.get(it.id) ?? []).length === 0) {
         return res.status(400).json({ error: 'not_craftable', item: it.name });
       }
     }
 
-    // Consommation nette de matières premières sur l'ensemble du craft.
     const consume = new Map<number, number>();
     for (const it of items) {
       const n = wanted.get(it.id)!;
@@ -413,7 +405,6 @@ meCatalogRouter.post(
         consume.set(r.stockItemId, round3((consume.get(r.stockItemId) ?? 0) + Number(r.quantity) * n));
       }
     }
-    // Production ajoutée au stock des produits finis.
     const produce = new Map<number, number>();
     for (const it of items) produce.set(it.stockItemId!, round3(wanted.get(it.id)!));
 
@@ -424,7 +415,6 @@ meCatalogRouter.post(
       .where(and(eq(stockItems.companyId, companyId), inArray(stockItems.id, stockIds)));
     const byId = new Map(stocks.map((s) => [s.id, s]));
 
-    // Coût de fabrication unitaire de chaque produit fini = somme(recette x coût matière).
     const craftCost = new Map<number, number>();
     for (const it of items) {
       const unitCost = (recipeByItem.get(it.id) ?? []).reduce(
@@ -434,7 +424,6 @@ meCatalogRouter.post(
       craftCost.set(it.stockItemId!, Math.round(unitCost * 100) / 100);
     }
 
-    // Vérifie qu'on a assez de matières premières AVANT de rien modifier.
     const short: string[] = [];
     for (const [sid, amount] of consume) {
       const cur = byId.get(sid);
@@ -486,7 +475,6 @@ meCatalogRouter.post(
 
 const stockAdjustSchema = z.object({ delta: z.number().finite().refine((n) => n !== 0, 'delta non nul') });
 
-// Ajuste le stock propre d'un article (+ ajoute / − retire). Crée l'article de stock au 1er ajout.
 meCatalogRouter.post(
   '/:id/stock',
   asyncHandler(async (req, res) => {

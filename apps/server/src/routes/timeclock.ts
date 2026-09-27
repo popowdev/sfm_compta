@@ -110,8 +110,6 @@ async function openEntry(employeeId: number) {
     .from(timeEntries)
     .where(and(eq(timeEntries.employeeId, employeeId), isNull(timeEntries.clockOut)))
     .orderBy(desc(timeEntries.clockIn));
-  // Self-heal a concurrency race: at most one open entry per employee.
-  // Close any orphan opens at zero duration (clockOut = clockIn).
   for (const r of rows.slice(1)) {
     await db
       .update(timeEntries)
@@ -120,8 +118,6 @@ async function openEntry(employeeId: number) {
   }
   return rows[0] ?? null;
 }
-
-// --- Self-service (requires canView) ---
 
 meTimeclockRouter.get(
   '/me',
@@ -228,8 +224,6 @@ meTimeclockRouter.post(
     });
   }),
 );
-
-// --- Team view (requires canWrite) ---
 
 meTimeclockRouter.get(
   '/',

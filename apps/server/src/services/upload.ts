@@ -4,11 +4,6 @@ import { randomBytes } from 'node:crypto';
 import multer from 'multer';
 import { env } from '../env';
 
-// Canonical extension derived from the (allow-listed) MIME type — NEVER from the
-// client-supplied filename. This guarantees only inert extensions ever hit disk,
-// so nginx (which derives Content-Type from the extension) can never serve an
-// uploaded blob as text/html or image/svg+xml. Defends against stored XSS even if
-// the multipart Content-Type header is spoofed.
 const MIME_EXT: Record<string, string> = {
   'image/png': '.png',
   'image/jpeg': '.jpg',

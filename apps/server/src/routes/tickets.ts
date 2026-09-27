@@ -168,8 +168,6 @@ async function toggleReaction(ticketId: number, messageId: number, userId: numbe
   return 'added' as const;
 }
 
-// ---------- côté joueur ----------
-
 export const meTicketsRouter = Router();
 meTicketsRouter.use(requireAuth);
 
@@ -243,7 +241,6 @@ meTicketsRouter.post(
     emitInvalidate(['staff', 'irs'], [['support-tickets']]);
     emitInvalidate([`user:${req.user!.id}`], [['my-tickets']]);
 
-    // Ping Discord sans bloquer la réponse : un webhook KO ne doit jamais faire échouer un ticket.
     void notifyTicketCreated({
       ref,
       type: parsed.data.type,
@@ -362,8 +359,6 @@ meTicketsRouter.post(
   }),
 );
 
-// ---------- pièces jointes (accès : auteur du ticket ou staff) ----------
-
 export const ticketFilesRouter = Router();
 ticketFilesRouter.use(requireAuth);
 
@@ -395,8 +390,6 @@ ticketFilesRouter.get(
     res.sendFile(ticketFilePath(a.path));
   }),
 );
-
-// ---------- côté staff ----------
 
 export const supportTicketsRouter = Router();
 supportTicketsRouter.use(requireAuth, requireAppRole('staff'));
@@ -479,7 +472,6 @@ supportTicketsRouter.get(
   }),
 );
 
-// `internal` arrive en booléen (JSON) ou en chaîne "true"/"false" (multipart).
 const staffReplySchema = z.object({
   body: z.string().trim().min(1).max(5000),
   internal: z
@@ -612,8 +604,6 @@ supportTicketsRouter.patch(
     res.json({ ok: true });
   }),
 );
-
-// ---------- journal des tickets (accès dev uniquement) ----------
 
 export const devTicketLogsRouter = Router();
 devTicketLogsRouter.use(requireAuth, requireDev);

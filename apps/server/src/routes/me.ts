@@ -109,7 +109,6 @@ meRouter.get(
       entries = rows.map((r) => ({ ...r, canManage: r.canManage ?? false }));
     }
 
-    // Perso sélectionné (affichage) → son job décide quelle entreprise FiveM est "active".
     let selectedJob: string | null = null;
     if (!staff) {
       const sel = await db

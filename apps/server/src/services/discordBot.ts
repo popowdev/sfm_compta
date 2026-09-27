@@ -4,9 +4,6 @@ import { logger } from '../logger';
 
 const API = 'https://discord.com/api/v10';
 
-// Envoie un message privé (MP) à un utilisateur Discord via le bot.
-// Nécessite DISCORD_BOT_TOKEN (le bot doit partager un serveur avec le joueur).
-// Retourne false silencieusement si le token est absent ou si l'envoi échoue.
 export async function sendDiscordDM(userId: string, embed: Record<string, unknown>): Promise<boolean> {
   const token = env.DISCORD_BOT_TOKEN;
   if (!token) {
@@ -50,7 +47,6 @@ export interface RentReminderInput {
   weekStart: string;
 }
 
-// Avis de loyer RP, style courrier officiel d'agence immobilière.
 export function buildRentReminderEmbed(i: RentReminderInput): Record<string, unknown> {
   const montant = new Intl.NumberFormat('fr-FR').format(Math.round(i.amount));
   const date = (() => {
@@ -87,7 +83,6 @@ export interface RentOverdueInput {
   oldestWeek: string;
 }
 
-// Relance RP pour un ou plusieurs loyers déjà en retard — ton plus ferme.
 export function buildRentOverdueEmbed(i: RentOverdueInput): Record<string, unknown> {
   const montant = new Intl.NumberFormat('fr-FR').format(Math.round(i.totalDue));
   const oldest = (() => {

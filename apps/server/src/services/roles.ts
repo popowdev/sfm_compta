@@ -4,8 +4,6 @@ import { db } from '../db';
 import { userAppRoles } from '../db/schema';
 import { env } from '../env';
 
-// Le role 'staff' n'est plus synchronise depuis Discord : il s'attribue uniquement
-// a la main depuis l'administration, pour garder la maitrise de qui l'obtient.
 const MANAGED_ROLES: AppRole[] = ['gouvernement'];
 
 export function computeManagedRoles(discordId: string, guildRoles: string[]): AppRole[] {

@@ -153,7 +153,7 @@ export default function EntrepriseIndex() {
                       </ul>
                     </div>
                   ) : (
-                    d.openExercices === 0 && <div className="text-xs text-muted-foreground">Rien à signaler. 👌</div>
+                    d.openExercices === 0 && <div className="text-xs text-muted-foreground">Rien à signaler.</div>
                   )}
                 </div>
               </div>

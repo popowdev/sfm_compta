@@ -67,8 +67,6 @@ export function securityWatch(req: Request, res: Response, next: NextFunction): 
   const ua = String(req.headers['user-agent'] ?? '').slice(0, 300) || null;
   res.on('finish', () => {
     const userId = req.user?.id ?? null;
-    // Le serveur a repondu en succes a un compte authentifie : les gardes de
-    // permission ont valide l acces, ce n est pas une intrusion.
     if (hit.kind === 'admin_probe' && userId != null && res.statusCode < 400) return;
     void record({ ip, hit, method, path, ua, userId, status: res.statusCode });
   });
@@ -145,7 +143,6 @@ async function alertOwner(
       attacker = a[0] ?? null;
     }
   } catch {
-    /* l'alerte ne doit jamais casser la requête */
   }
 
   let recent = 0;
@@ -156,7 +153,6 @@ async function alertOwner(
       .where(and(eq(securityEvents.ip, p.ip), gt(securityEvents.createdAt, since)));
     recent = Number(c[0]?.n ?? 0);
   } catch {
-    /* ignore */
   }
 
   const fields = [
@@ -212,7 +208,6 @@ async function alertOwner(
         body: JSON.stringify(payload),
       });
     } catch {
-      /* réseau indisponible : on n'insiste pas */
     }
   }
 }

@@ -10,16 +10,16 @@ const envSchema = z.object({
 
   DB_HOST: z.string().default('127.0.0.1'),
   DB_PORT: z.coerce.number().int().positive().default(3306),
-  DB_USER: z.string().default('rp-compta'),
+  DB_USER: z.string().default('rp_compta'),
   DB_PASSWORD: z.string().default(''),
-  DB_NAME: z.string().default('rp-compta'),
+  DB_NAME: z.string().default('rp_compta'),
 
   SESSION_SECRET: z.string().min(16).default('dev-only-secret-change-me-please!'),
   INTERNAL_API_KEY: z.string().optional(),
   FIVEM_SYNC_TOKEN: z.string().optional(),
   FIVEM_PLAYER_API_URL: z.string().url().optional(),
   FIVEM_PLAYER_API_TOKEN: z.string().optional(),
-  UPLOAD_DIR: z.string().default('/var/www/rp-compta/uploads'),
+  UPLOAD_DIR: z.string().default('./uploads'),
 
   DISCORD_BOT_TOKEN: z.string().optional(),
   DISCORD_TICKET_WEBHOOK_URL: z.string().url().optional(),
@@ -42,7 +42,7 @@ const envSchema = z.object({
 
 const parsed = envSchema.safeParse(process.env);
 if (!parsed.success) {
-  console.error('❌ Variables d\'environnement invalides :', parsed.error.flatten().fieldErrors);
+  console.error('Variables d\'environnement invalides :', parsed.error.flatten().fieldErrors);
   process.exit(1);
 }
 

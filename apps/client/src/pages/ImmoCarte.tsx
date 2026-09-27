@@ -20,7 +20,7 @@ const inputCls = 'h-9 w-full rounded-md border border-input bg-background px-3 t
 const labelCls = 'mb-1 block text-xs font-medium text-muted-foreground';
 const STATUS_COLOR: Record<ParcelStatus, string> = { disponible: '#22c55e', vendu: '#ef4444', active: '#f59e0b' };
 const STATUS_LABEL: Record<ParcelStatus, string> = { disponible: 'Disponible', vendu: 'Vendu', active: 'Loué (actif)' };
-const EXTRA_ZOOM = 3; // niveaux de zoom digital au-delà du natif (plus profond que le NPU)
+const EXTRA_ZOOM = 3;
 
 interface MapMeta { w: number; h: number; maxZoom: number; hasTiles: boolean }
 
@@ -31,7 +31,7 @@ async function fetchMeta(): Promise<MapMeta> {
       const j = await r.json();
       if (j?.w && j?.h) return { w: j.w, h: j.h, maxZoom: j.maxZoom ?? Math.ceil(Math.log2(Math.max(j.w, j.h) / 256)), hasTiles: true };
     }
-  } catch { /* pas de tuiles */ }
+  } catch { }
   return { w: 2048, h: 2048, maxZoom: 3, hasTiles: false };
 }
 
@@ -95,7 +95,6 @@ export default function ImmoCarte() {
   });
   const remove = useMutation({ mutationFn: (id: number) => deleteParcel(companyId, id), onSuccess: invalidate, onError: () => toast('Échec.', 'error') });
 
-  // init map once meta chargée
   useEffect(() => {
     if (!containerRef.current || mapRef.current || !metaQ.data) return;
     const meta = metaQ.data;
@@ -135,7 +134,6 @@ export default function ImmoCarte() {
     return () => { map.remove(); mapRef.current = null; layerRef.current = null; };
   }, [metaQ.data, canWrite]);
 
-  // (re)dessin des parcelles
   useEffect(() => {
     const map = mapRef.current;
     const layer = layerRef.current;

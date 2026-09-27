@@ -89,7 +89,7 @@ export default function Calendrier() {
     onError: () => toast("Échec de l'annulation.", 'error'),
   });
 
-  const [booking, setBooking] = useState<string | null>(null); // date key prefill
+  const [booking, setBooking] = useState<string | null>(null);
 
   const days = view === 'jour' ? [anchor] : Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const today = parisMidnight();

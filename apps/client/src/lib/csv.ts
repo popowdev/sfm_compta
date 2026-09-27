@@ -1,4 +1,3 @@
-// Download a list as a CSV file. Uses ';' (FR Excel) + a UTF-8 BOM so accents render.
 export function downloadCsv(filename: string, headers: string[], rows: (string | number | null | undefined)[][]): void {
   const esc = (v: string | number | null | undefined) => {
     const s = String(v ?? '');

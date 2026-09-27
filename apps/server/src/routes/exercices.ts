@@ -258,7 +258,7 @@ meExercicesRouter.put(
     if (d.label !== undefined) set.label = d.label;
     if (d.status !== undefined) {
       set.status = d.status;
-      if (d.status === 'open') set.snapshot = null; // reopening unfreezes → recompute live
+      if (d.status === 'open') set.snapshot = null;
       if (d.status === 'closed') {
         const [ex] = await db
           .select({ endDate: exercices.endDate })

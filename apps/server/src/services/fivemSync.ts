@@ -53,7 +53,6 @@ async function resolveUserId(discordId: string, displayName: string): Promise<nu
   }
 }
 
-// Le jeu renvoie souvent un label de grade cassé ("Unknown") : on le remplace par "Grade N".
 function cleanGradeName(name: string | null | undefined, grade: number): string {
   const n = (name ?? '').trim();
   if (!n || /^(unknown|unemployed)$/i.test(n)) return `Grade ${grade}`;
@@ -85,8 +84,6 @@ async function ensureRolesForGrades(
   }
 }
 
-// Détecte un grade de direction par son libellé (le seul signal dispo en mode pull
-// par personnage, où l'on ne connaît pas la grille complète des grades du job).
 export function isManagerGrade(label: string | null | undefined): boolean {
   if (!label) return false;
   return /patron|boss|g[eé]rant|chief|\bchef\b|owner|dirigeant|directeur|pdg|responsable/i.test(label);
@@ -359,8 +356,6 @@ async function saveSelectedRoster(discord: string, char: SelectedChar | null): P
   }
 }
 
-// Provisionne TOUS les personnages du joueur : chaque perso rejoint l'entreprise de son job
-// (même s'il n'est pas le perso affiché). `selectedName` ne pilote QUE l'affichage côté site.
 export async function provisionAllCharacters(
   discord: string,
   characters: GameChar[],
@@ -428,8 +423,6 @@ export async function refreshSelectedCharacter(discord: string): Promise<number 
   return out.userId;
 }
 
-// Joueur absent du jeu (404) : on retire ses adhésions FiveM. Pas de création d'utilisateur.
-// Auto-réparateur : s'il revient, le prochain pull réussi le re-provisionne.
 async function deactivateFivemMembershipsForDiscord(discord: string): Promise<number> {
   const u = await db.select({ id: users.id }).from(users).where(eq(users.discordId, discord)).limit(1);
   if (!u[0]) return 0;
@@ -480,8 +473,6 @@ export interface JobGradeLabels {
   gradeLabel: (jobId: string, grade: number, fallback?: string | null) => string;
 }
 
-// Le jeu renvoie job.label="unemployed" et grade.label="Unknown" pour tout le monde (champ cassé).
-// On reconstruit les vrais libellés depuis job.id (→ entreprise) et le n° de grade (→ rôle).
 export async function resolveJobGradeLabels(
   chars: { jobId: string; grade: number }[],
 ): Promise<JobGradeLabels> {

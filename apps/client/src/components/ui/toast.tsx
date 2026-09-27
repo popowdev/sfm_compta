@@ -22,7 +22,6 @@ export function useToast(): Push {
   return useContext(ToastCtx);
 }
 
-// Pont pour pousser un toast hors React (ex. handler d'erreur global du QueryClient).
 let globalPush: Push | null = null;
 export function toast(message: string, kind: ToastKind = 'info'): void {
   globalPush?.(message, kind);

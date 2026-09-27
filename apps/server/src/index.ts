@@ -253,7 +253,6 @@ if (env.FIVEM_PLAYER_API_URL) {
   ).unref();
 }
 
-// Génération automatique des loyers (hebdo, idempotente) — vérifiée toutes les heures.
 {
   let rentGenRunning = false;
   const tick = () => {
@@ -265,6 +264,6 @@ if (env.FIVEM_PLAYER_API_URL) {
       .catch((err) => logger.error({ err }, 'auto-génération / relance loyers ou semaines échouée'))
       .finally(() => { rentGenRunning = false; });
   };
-  setTimeout(tick, 30 * 1000); // un passage peu après le démarrage
+  setTimeout(tick, 30 * 1000);
   setInterval(tick, 60 * 60 * 1000).unref();
 }

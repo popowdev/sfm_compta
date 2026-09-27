@@ -70,9 +70,7 @@ export async function notifyTicketCreated(t: TicketWebhookInput): Promise<void> 
   const roleId = env.DISCORD_TICKET_ROLE_ID;
   const payload = {
     username: 'RP Compta · Support',
-    // La mention doit être dans `content` : une mention dans un embed n'envoie aucune notification.
     ...(roleId ? { content: `<@&${roleId}>` } : {}),
-    // Verrouillage : seul ce rôle peut être mentionné, même si un joueur écrit @everyone dans son ticket.
     allowed_mentions: { parse: [] as string[], roles: roleId ? [roleId] : [] },
     embeds: [
       {
@@ -112,8 +110,6 @@ async function postWebhook(url: string, payload: unknown): Promise<void> {
   }
 }
 
-// Garde anti-spam : au plus MAX_PER_WINDOW alertes d'erreur par fenêtre, pour ne pas
-// noyer Discord (ni se faire rate-limiter) si un bug part en boucle.
 const ERR_WINDOW_MS = 60_000;
 const ERR_MAX_PER_WINDOW = 8;
 let errWindowStart = 0;
@@ -135,7 +131,6 @@ export async function notifyErrorDetected(e: ErrorWebhookInput): Promise<void> {
 
   const now = Date.now();
   if (now - errWindowStart > ERR_WINDOW_MS) {
-    // Nouvelle fenêtre : si des erreurs ont été étouffées, on le signale.
     if (errSuppressed > 0) {
       void postWebhook(url, {
         username: 'RP Compta · Erreurs',

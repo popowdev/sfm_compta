@@ -153,8 +153,6 @@ export function CatalogManager({
           try {
             await setCatalogRecipe(companyId, created.id, { lines });
           } catch {
-            // Article créé mais recette échouée : on bascule en édition pour qu'un
-            // nouvel essai modifie l'article existant au lieu d'en recréer un.
             setEditingId(created.id);
             invalidate();
             throw new Error('recipe_failed');

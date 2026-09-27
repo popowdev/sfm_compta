@@ -92,8 +92,6 @@ function serializeAssociation(a: typeof associations.$inferSelect) {
   };
 }
 
-// ---------------- IRS registry ----------------
-
 export const irsAssociationsRouter = Router();
 irsAssociationsRouter.use(requireAuth, requireAppRole('irs'));
 
@@ -168,8 +166,6 @@ irsAssociationsRouter.delete(
     res.json({ ok: true });
   }),
 );
-
-// ---------------- Member-facing space ----------------
 
 export const meAssociationsRouter = Router({ mergeParams: true });
 meAssociationsRouter.use(requireAuth);
@@ -248,8 +244,6 @@ async function gate(req: Request, id: number) {
   if (!acc) return { ok: false as const, status: 403, error: 'forbidden' };
   return { ok: true as const, acc };
 }
-
-// ----- members -----
 
 meAssociationsRouter.get(
   '/:id/members',
@@ -345,8 +339,6 @@ meAssociationsRouter.delete(
     res.json({ ok: true });
   }),
 );
-
-// ----- transactions -----
 
 meAssociationsRouter.get(
   '/:id/transactions',
@@ -448,8 +440,6 @@ meAssociationsRouter.delete(
   }),
 );
 
-// ----- documents -----
-
 function canWriteDocs(acc: { isStaff: boolean; role: string | null }): boolean {
   return acc.isStaff || acc.role === 'president' || acc.role === 'tresorier' || acc.role === 'secretaire';
 }
@@ -533,8 +523,6 @@ meAssociationsRouter.delete(
     res.json({ ok: true });
   }),
 );
-
-// ----- logo (président or staff) -----
 
 meAssociationsRouter.post(
   '/:id/logo',

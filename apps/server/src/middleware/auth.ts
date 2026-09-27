@@ -15,7 +15,6 @@ const DEV_DISCORD_IDS = new Set(
     .filter(Boolean),
 );
 
-// Le « dev » (toi) : identifié par son Discord ID, indépendant des rôles staff/irs.
 export function isDevUser(user: Pick<User, 'discordId'> | null | undefined): boolean {
   return !!user && DEV_DISCORD_IDS.has(user.discordId);
 }

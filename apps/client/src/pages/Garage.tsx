@@ -35,7 +35,6 @@ export default function Garage() {
   const { company: mine, companyId, isLoading } = useCompany();
   const [tab, setTab] = useState<Tab>('repairs');
   const [showSettings, setShowSettings] = useState(false);
-  // Formulaires levés au parent → conservés en mémoire quand on change d'onglet
   const [repairForm, setRepairForm] = useState<RepairForm>(EMPTY_REP);
   const [customForm, setCustomForm] = useState<CustomForm>(EMPTY_CUS);
 

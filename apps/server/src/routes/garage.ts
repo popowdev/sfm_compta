@@ -80,7 +80,6 @@ async function ownsVehicle(companyId: number, id: number): Promise<boolean> {
 export const meGarageRouter = Router({ mergeParams: true });
 meGarageRouter.use(requireAuth);
 
-// ---- Config (paramètres + types + packs) ----
 meGarageRouter.get('/config', asyncHandler(async (req, res) => {
   const companyId = parseId(req.params.companyId);
   if (!companyId) return res.status(400).json({ error: 'bad_request' });
@@ -306,7 +305,6 @@ meGarageRouter.delete('/packs/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// ---- Contrats ----
 const contractSchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(2000).optional(),
@@ -392,7 +390,6 @@ meGarageRouter.delete('/contracts/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// ---- Véhicules ----
 meGarageRouter.get('/vehicles', asyncHandler(async (req, res) => {
   const companyId = parseId(req.params.companyId);
   if (!companyId) return res.status(400).json({ error: 'bad_request' });
@@ -445,7 +442,6 @@ meGarageRouter.delete('/vehicles/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// ---- Base de modèles de véhicules (globale, partagée) ----
 meGarageRouter.get('/models', asyncHandler(async (req, res) => {
   const companyId = parseId(req.params.companyId);
   if (!companyId) return res.status(400).json({ error: 'bad_request' });
@@ -491,7 +487,6 @@ meGarageRouter.delete('/models/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// ---- Réparations ----
 function parseItemsCol(v: unknown): { name: string; price: number }[] | null {
   if (Array.isArray(v)) return v as { name: string; price: number }[];
   if (typeof v === 'string' && v.trim()) {
@@ -646,7 +641,6 @@ meGarageRouter.delete('/repairs/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// ---- Customs ----
 meGarageRouter.get('/customs', asyncHandler(async (req, res) => {
   const companyId = parseId(req.params.companyId);
   if (!companyId) return res.status(400).json({ error: 'bad_request' });

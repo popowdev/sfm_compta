@@ -62,7 +62,6 @@ export const craftItems = (companyId: number, lines: CraftLine[]) =>
     body: JSON.stringify({ lines }),
   });
 
-// Ajuste le stock propre d'un article (+ ajoute / − retire). Crée le stock au 1er ajout.
 export const adjustCatalogStock = (companyId: number, id: number, delta: number) =>
   apiFetch<{ ok: boolean; quantity: number }>(`/api/me/companies/${companyId}/catalog/${id}/stock`, {
     method: 'POST',

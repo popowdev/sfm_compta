@@ -116,7 +116,6 @@ export default function Immobilier() {
   const saleStats = statsQ.data?.sale;
   const statusOptions = tab === 'locations' ? IMMO_RENTAL_STATUSES : IMMO_SALE_STATUSES;
 
-  // Ouverture auto de la fiche quand on arrive depuis la carte (?ref=…).
   useEffect(() => {
     if (!autoOpen) return;
     if (tab === 'locations' && rentalsQ.data) {
@@ -541,7 +540,7 @@ function UnpaidModal({ companyId, canWrite, onClose, onChange }: { companyId: nu
           <button type="button" onClick={onClose} aria-label="Fermer" className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"><X className="h-4 w-4" /></button>
         </div>
         <div className="flex-1 space-y-1.5 overflow-y-auto p-5">
-          {q.isLoading ? <Skeleton className="h-16 rounded-lg" /> : invoices.length === 0 ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Aucun loyer impayé 🎉</div> : invoices.map((i) => (
+          {q.isLoading ? <Skeleton className="h-16 rounded-lg" /> : invoices.length === 0 ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Aucun loyer impayé</div> : invoices.map((i) => (
             <div key={i.id} className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3">
               <div><div className="text-sm font-medium">{i.propertyRef} · {i.tenant ?? '—'}</div><div className="text-xs text-muted-foreground">Semaine du {fmtDate(i.weekStart)} · {fmtMoney(i.amount)} $</div></div>
               {canWrite && <button type="button" disabled={pay.isPending} onClick={() => pay.mutate(i.id)} className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-300 disabled:opacity-60"><CheckCircle2 className="h-3.5 w-3.5" /> Marquer payé</button>}

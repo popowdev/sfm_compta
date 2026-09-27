@@ -82,7 +82,6 @@ async function multipart(url: string, fields: Record<string, string>, fileField:
   }
 }
 
-// member-facing
 export const getMyAssociations = () => apiFetch<AssociationListItem[]>('/api/me/associations');
 export const getAssociation = (slug: string) => apiFetch<AssociationDetail>(`/api/me/associations/${slug}`);
 
@@ -114,7 +113,6 @@ export const uploadAssociationLogo = (id: number, file: File) =>
 export const updateAssociationObjet = (id: number, objet: string) =>
   apiFetch<{ ok: boolean }>(`/api/me/associations/${id}/objet`, { method: 'PATCH', body: JSON.stringify({ objet }) });
 
-// IRS registry
 export const getAllAssociations = () =>
   apiFetch<(AssociationBase & { balance: number; memberCount: number })[]>('/api/associations');
 export const createAssociation = (body: { name: string; objet?: string }) =>

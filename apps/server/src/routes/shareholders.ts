@@ -17,7 +17,6 @@ function parseId(value: string | undefined): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-// Member-facing read-only cap table (anonymised names), gated by the actionnaires module.
 export const meShareholdersRouter = Router({ mergeParams: true });
 meShareholdersRouter.use(requireAuth);
 meShareholdersRouter.get(
@@ -63,7 +62,6 @@ meShareholdersRouter.get(
   }),
 );
 
-// ---- Member-side management (patron) : gated by canManageCompany ----
 const meShSchema = z.object({
   name: z.string().trim().min(1).max(120),
   percentage: z.number().min(0).max(100),

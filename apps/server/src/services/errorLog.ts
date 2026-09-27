@@ -4,7 +4,6 @@ import { db } from '../db';
 import { errorLog, users } from '../db/schema';
 import { notifyErrorDetected } from './discordWebhook';
 
-// Code court, lisible, à communiquer au staff pour retrouver la panne exacte.
 export function genErrorCode(): string {
   return randomBytes(4).toString('hex').toUpperCase();
 }
@@ -35,10 +34,8 @@ export async function recordError(p: {
       userId: p.userId ?? null,
     });
   } catch {
-    // le logging d'erreur ne doit jamais casser l'action sous-jacente
   }
 
-  // Alerte Discord (fire-and-forget) : ne doit jamais bloquer ni casser la requête.
   if (p.notify === false) return;
   void (async () => {
     let userName: string | null = null;
@@ -47,7 +44,6 @@ export async function recordError(p: {
         const u = await db.select({ n: users.displayName }).from(users).where(eq(users.id, p.userId)).limit(1);
         userName = u[0]?.n ?? null;
       } catch {
-        /* ignore */
       }
     }
     await notifyErrorDetected({

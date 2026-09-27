@@ -2,7 +2,7 @@
   "name": "rp-compta",
   "version": "0.0.0",
   "private": true,
-  "description": "RP Compta — plateforme de comptabilité fiscale centralisée (serveur RP FiveM)",
+  "description": "Plateforme de comptabilité fiscale centralisée pour serveur RP FiveM",
   "engines": {
     "node": ">=20"
   },

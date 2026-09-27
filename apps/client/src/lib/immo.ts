@@ -176,7 +176,6 @@ export const updateSale = (companyId: number, id: number, body: Partial<SaleInpu
 export const deleteSale = (companyId: number, id: number) =>
   apiFetch<{ ok: boolean }>(`/api/me/companies/${companyId}/immo-sales/${id}`, { method: 'DELETE' });
 
-// ---- Carte (parcelles) ----
 export type ParcelStatus = 'disponible' | 'vendu' | 'active';
 export interface ParcelGeometry {
   type: 'polygon' | 'rectangle' | 'marker';

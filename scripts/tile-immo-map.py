@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""Découpe une image en pyramide de tuiles 256px (même schéma que le tuileur NPU).
-Usage: python3 tile-immo-map.py <image_source> [dossier_sortie]
-  défaut sortie: /var/www/rp-compta/tiles/immo
-Produit: <out>/{z}/{x}/{y}.png  +  <out>/meta.json {w,h,maxZoom,tileSize,base}
-Puis: sudo chown -R www-data:www-data /var/www/rp-compta/tiles  (servi par nginx sur /immo-tiles/)
-"""
 import sys, os, json, math, shutil
 from PIL import Image
 
@@ -13,7 +7,7 @@ def main():
     if len(sys.argv) < 2:
         print("usage: tile-immo-map.py <image> [out_dir]"); sys.exit(1)
     src = sys.argv[1]
-    out = sys.argv[2] if len(sys.argv) > 2 else "/var/www/rp-compta/tiles/immo"
+    out = sys.argv[2] if len(sys.argv) > 2 else "./tiles/immo"
     img = Image.open(src).convert("RGBA")
     W, H = img.size
     maxz = max(0, math.ceil(math.log2(max(W, H) / TILE)))
@@ -34,7 +28,7 @@ def main():
     json.dump({"w": W, "h": H, "maxZoom": maxz, "tileSize": TILE, "base": "/immo-tiles"},
               open(f"{out}/meta.json", "w"))
     print(f"OK — {W}x{H}px, zoom 0→{maxz}. meta.json écrit dans {out}")
-    print("Pense à: sudo chown -R www-data:www-data /var/www/rp-compta/tiles")
+    print("Pense à: sudo chown -R www-data:www-data ./tiles")
 
 if __name__ == "__main__":
     main()

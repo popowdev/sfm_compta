@@ -207,8 +207,6 @@ membersRouter.delete(
   }),
 );
 
-// --- Patron-scoped member management (gated by canManageCompany) ---
-
 async function isLastManager(companyId: number, mid: number): Promise<boolean> {
   const rows = await db
     .select({ id: memberships.id })
